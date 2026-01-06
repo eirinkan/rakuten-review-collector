@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const spreadsheetLink = document.getElementById('spreadsheetLink');
   const downloadBtn = document.getElementById('downloadBtn');
   const clearDataBtn = document.getElementById('clearDataBtn');
+  const dataButtons = document.getElementById('dataButtons');
 
   const gasUrlInput = document.getElementById('gasUrl');
   const separateSheetsCheckbox = document.getElementById('separateSheets');
@@ -61,6 +62,10 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.sync.get(['gasUrl', 'separateSheets', 'spreadsheetUrl'], (result) => {
       if (result.gasUrl) {
         gasUrlInput.value = result.gasUrl;
+        // スプレッドシートモードの場合、CSV/クリアボタンを非表示
+        dataButtons.style.display = 'none';
+      } else {
+        dataButtons.style.display = 'flex';
       }
       separateSheetsCheckbox.checked = result.separateSheets !== false;
 
@@ -86,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function loadQueue() {
     chrome.storage.local.get(['queue'], (result) => {
       const queue = result.queue || [];
-      queueRemaining.textContent = queue.length;
+      queueRemaining.textContent = `${queue.length}件`;
       startQueueBtn.disabled = queue.length === 0;
 
       if (queue.length === 0) {
@@ -145,7 +150,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
+      // スプレッドシートモードかどうかでボタン表示を切り替え
       if (gasUrl) {
+        dataButtons.style.display = 'none';
         // 接続テスト
         showStatus(settingsStatus, 'info', '接続テスト中...');
         try {
@@ -166,8 +173,9 @@ document.addEventListener('DOMContentLoaded', () => {
           showStatus(settingsStatus, 'success', '保存しました');
         }
       } else {
-        showStatus(settingsStatus, 'success', '保存しました（CSVモード）');
+        dataButtons.style.display = 'flex';
         spreadsheetLink.style.display = 'none';
+        showStatus(settingsStatus, 'success', '保存しました（CSVモード）');
       }
     });
   }
@@ -248,6 +256,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     showStatus(rankingStatus, 'info', `ランキングを取得中...`);
+    addRankingBtn.disabled = true;
 
     try {
       // バックグラウンドでランキングを取得
@@ -256,6 +265,7 @@ document.addEventListener('DOMContentLoaded', () => {
         url: url,
         count: count
       }, (response) => {
+        addRankingBtn.disabled = false;
         if (response && response.success) {
           showStatus(rankingStatus, 'success', `${response.addedCount}件追加しました`);
           loadQueue();
@@ -265,6 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     } catch (e) {
+      addRankingBtn.disabled = false;
       showStatus(rankingStatus, 'error', '取得に失敗しました');
     }
   }

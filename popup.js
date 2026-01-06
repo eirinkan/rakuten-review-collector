@@ -6,25 +6,33 @@ document.addEventListener('DOMContentLoaded', () => {
   const pageWarning = document.getElementById('pageWarning');
   const message = document.getElementById('message');
   const statusText = document.getElementById('statusText');
-  const reviewCount = document.getElementById('reviewCount');
-  const pageCount = document.getElementById('pageCount');
-  const queueCount = document.getElementById('queueCount');
+  const normalMode = document.getElementById('normalMode');
+  const rankingMode = document.getElementById('rankingMode');
   const startBtn = document.getElementById('startBtn');
   const stopBtn = document.getElementById('stopBtn');
   const queueBtn = document.getElementById('queueBtn');
   const settingsBtn = document.getElementById('settingsBtn');
+  const addRankingBtn = document.getElementById('addRankingBtn');
+  const rankingCountInput = document.getElementById('rankingCount');
 
   init();
 
   async function init() {
     // 現在のタブを確認
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
     const isRakutenPage = tab.url && (
       tab.url.includes('review.rakuten.co.jp') ||
       tab.url.includes('item.rakuten.co.jp')
     );
+    const isRankingPage = tab.url && tab.url.includes('ranking.rakuten.co.jp');
 
-    if (!isRakutenPage) {
+    if (isRankingPage) {
+      // ランキングページの場合
+      normalMode.style.display = 'none';
+      rankingMode.style.display = 'block';
+    } else if (!isRakutenPage) {
+      // 楽天以外のページ
       pageWarning.style.display = 'block';
       startBtn.disabled = true;
       queueBtn.disabled = true;
@@ -33,14 +41,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // 状態を復元
     restoreState();
 
-    // キュー件数を更新
-    updateQueueCount();
-
     // イベントリスナー
     startBtn.addEventListener('click', startCollection);
     stopBtn.addEventListener('click', stopCollection);
     queueBtn.addEventListener('click', addToQueue);
     settingsBtn.addEventListener('click', openSettings);
+    addRankingBtn.addEventListener('click', addRankingToQueue);
 
     // バックグラウンドからのメッセージ
     chrome.runtime.onMessage.addListener(handleMessage);
@@ -53,22 +59,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function updateQueueCount() {
-    chrome.storage.local.get(['queue'], (result) => {
-      const queue = result.queue || [];
-      queueCount.textContent = `${queue.length} 件`;
-    });
-  }
-
   function updateUI(state) {
-    reviewCount.textContent = state.reviewCount || 0;
-
-    const current = state.pageCount || 0;
-    const total = state.totalPages || 0;
-    pageCount.textContent = `${current} / ${total}`;
-
     if (state.isRunning) {
-      statusText.textContent = '収集中...';
+      const current = state.pageCount || 0;
+      const total = state.totalPages || 0;
+      statusText.textContent = `収集中... ${state.reviewCount || 0}件 (${current}/${total}ページ)`;
       statusText.classList.add('running');
       startBtn.style.display = 'none';
       stopBtn.style.display = 'block';
@@ -152,8 +147,30 @@ document.addEventListener('DOMContentLoaded', () => {
       queue.push(productInfo);
       chrome.storage.local.set({ queue: queue }, () => {
         showMessage('キューに追加しました', 'success');
-        updateQueueCount();
       });
+    });
+  }
+
+  async function addRankingToQueue() {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const count = parseInt(rankingCountInput.value) || 10;
+
+    addRankingBtn.disabled = true;
+    addRankingBtn.textContent = '追加中...';
+
+    chrome.runtime.sendMessage({
+      action: 'fetchRanking',
+      url: tab.url,
+      count: count
+    }, (response) => {
+      addRankingBtn.disabled = false;
+      addRankingBtn.textContent = '追加';
+
+      if (response && response.success) {
+        showMessage(`${response.addedCount}件追加しました`, 'success');
+      } else {
+        showMessage(response?.error || '追加に失敗しました', 'error');
+      }
     });
   }
 
@@ -173,12 +190,9 @@ document.addEventListener('DOMContentLoaded', () => {
         statusText.classList.remove('running');
         startBtn.style.display = 'block';
         stopBtn.style.display = 'none';
-        if (msg.state) updateUI(msg.state);
-        showMessage(`${msg.state?.reviewCount || 0}件収集完了`, 'success');
-        updateQueueCount();
-        break;
-      case 'queueUpdated':
-        updateQueueCount();
+        if (msg.state) {
+          showMessage(`${msg.state?.reviewCount || 0}件収集完了`, 'success');
+        }
         break;
     }
   }

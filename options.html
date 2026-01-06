@@ -64,6 +64,20 @@
       grid-column: 1 / -1;
     }
 
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .card-header h2 {
+      font-size: 14px;
+      color: #333;
+    }
+
     .card h2 {
       font-size: 14px;
       color: #333;
@@ -122,12 +136,12 @@
     }
 
     .btn-primary {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: #28a745;
       color: white;
     }
 
     .btn-primary:hover {
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      background: #218838;
     }
 
     .btn-success {
@@ -155,6 +169,11 @@
 
     .btn-secondary:hover {
       background: #e0e0e0;
+    }
+
+    .btn-sm {
+      padding: 4px 10px;
+      font-size: 11px;
     }
 
     .btn:disabled {
@@ -197,7 +216,7 @@
     /* 統計 */
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(2, 1fr);
       gap: 12px;
       margin-bottom: 16px;
     }
@@ -222,8 +241,31 @@
     }
 
     /* キュー一覧 */
+    .queue-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .queue-header h2 {
+      font-size: 14px;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      border: none;
+    }
+
+    .queue-count {
+      font-size: 12px;
+      color: #667eea;
+      font-weight: 600;
+    }
+
     .queue-list {
-      max-height: 250px;
+      max-height: 300px;
       overflow-y: auto;
       margin-bottom: 12px;
     }
@@ -232,11 +274,12 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px;
+      padding: 8px 10px;
       border: 1px solid #eee;
       border-radius: 6px;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       background: #fafafa;
+      gap: 8px;
     }
 
     .queue-item:last-child {
@@ -246,6 +289,7 @@
     .queue-item-info {
       flex: 1;
       min-width: 0;
+      overflow: hidden;
     }
 
     .queue-item-title {
@@ -272,6 +316,7 @@
       cursor: pointer;
       padding: 4px 8px;
       font-size: 14px;
+      flex-shrink: 0;
     }
 
     .queue-item-remove:hover {
@@ -287,31 +332,50 @@
     }
 
     /* ログ */
+    .log-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .log-header h2 {
+      font-size: 14px;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      border: none;
+    }
+
     .log-container {
-      max-height: 200px;
+      max-height: 400px;
       overflow-y: auto;
-      background: #1e1e1e;
+      background: #f8f9fa;
       border-radius: 6px;
-      padding: 10px;
+      padding: 12px;
       font-family: 'Consolas', 'Monaco', monospace;
       font-size: 11px;
-      color: #d4d4d4;
+      color: #333;
+      border: 1px solid #eee;
     }
 
     .log-entry {
-      margin-bottom: 2px;
+      margin-bottom: 4px;
+      line-height: 1.4;
     }
 
     .log-entry .time {
-      color: #6a9955;
+      color: #667eea;
     }
 
     .log-entry.error {
-      color: #f48771;
+      color: #dc3545;
     }
 
     .log-entry.success {
-      color: #89d185;
+      color: #28a745;
     }
 
     /* リンク */
@@ -338,6 +402,15 @@
       margin-top: 8px;
     }
 
+    .help-text a {
+      color: #667eea;
+      text-decoration: none;
+    }
+
+    .help-text a:hover {
+      text-decoration: underline;
+    }
+
     .divider {
       border-top: 1px solid #eee;
       margin: 12px 0;
@@ -361,6 +434,85 @@
     .ranking-input input[type="number"] {
       width: 80px;
     }
+
+    /* 説明折りたたみ */
+    .collapsible {
+      cursor: pointer;
+      font-size: 11px;
+      color: #667eea;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .collapsible:hover {
+      text-decoration: underline;
+    }
+
+    .collapsible-content {
+      display: none;
+      margin-top: 10px;
+      padding: 12px;
+      background: #f8f9fa;
+      border-radius: 6px;
+      font-size: 11px;
+      color: #666;
+      line-height: 1.6;
+    }
+
+    .collapsible-content.show {
+      display: block;
+    }
+
+    .collapsible-content ol {
+      margin-left: 20px;
+    }
+
+    .collapsible-content li {
+      margin-bottom: 6px;
+    }
+
+    .collapsible-content code {
+      background: #e9ecef;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+
+    /* ヘルプセクション */
+    .help-section {
+      font-size: 13px;
+      line-height: 1.8;
+      color: #444;
+    }
+
+    .help-section h3 {
+      font-size: 13px;
+      color: #667eea;
+      margin: 16px 0 8px 0;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .help-section h3:first-child {
+      margin-top: 0;
+    }
+
+    .help-section ol,
+    .help-section ul {
+      margin-left: 20px;
+      margin-bottom: 8px;
+    }
+
+    .help-section li {
+      margin-bottom: 8px;
+    }
+
+    .help-section p {
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: #666;
+    }
   </style>
 </head>
 <body>
@@ -383,18 +535,11 @@
             <div id="currentPage" class="stat-value">0/0</div>
             <div class="stat-label">ページ</div>
           </div>
-          <div class="stat-item">
-            <div id="queueRemaining" class="stat-value">0</div>
-            <div class="stat-label">キュー残り</div>
-          </div>
         </div>
 
-        <div class="btn-group">
-          <a id="spreadsheetLink" href="#" target="_blank" class="spreadsheet-link" style="display: none;">
-            スプレッドシート
-          </a>
-          <button id="downloadBtn" class="btn btn-secondary" disabled>CSV</button>
-          <button id="clearDataBtn" class="btn btn-danger" disabled>クリア</button>
+        <div id="dataButtons" class="btn-group">
+          <button id="downloadBtn" class="btn btn-secondary" disabled>CSVダウンロード</button>
+          <button id="clearDataBtn" class="btn btn-danger" disabled>データクリア</button>
         </div>
       </div>
 
@@ -413,21 +558,45 @@
 
         <div class="btn-group" style="margin-top: 12px;">
           <button id="saveSettingsBtn" class="btn btn-primary">保存</button>
+          <a id="spreadsheetLink" href="#" target="_blank" class="spreadsheet-link" style="display: none;">
+            スプレッドシートを開く
+          </a>
         </div>
 
         <div id="settingsStatus" class="status-message"></div>
-        <p class="help-text">空欄 = CSVモード</p>
+
+        <p class="help-text">空欄の場合はCSVモードで動作します</p>
+
+        <div class="collapsible" onclick="toggleHelp()">
+          ▶ GAS Web App URLの取得方法
+        </div>
+        <div id="gasHelp" class="collapsible-content">
+          <ol>
+            <li>Googleスプレッドシートを作成</li>
+            <li>拡張機能 → Apps Script を開く</li>
+            <li>以下のコードを貼り付け:
+              <br><code>gas/Code.gs</code> の内容をコピー
+            </li>
+            <li>デプロイ → 新しいデプロイ</li>
+            <li>種類: ウェブアプリ</li>
+            <li>アクセスできるユーザー: 全員</li>
+            <li>デプロイ後のURLをコピーして上記に貼り付け</li>
+          </ol>
+        </div>
       </div>
 
       <!-- キュー管理 -->
       <div class="card">
-        <h2>キュー管理</h2>
+        <div class="queue-header">
+          <h2>キュー管理</h2>
+          <span id="queueRemaining" class="queue-count">0件</span>
+        </div>
         <div id="queueList" class="queue-list">
           <div class="queue-empty">キューは空です</div>
         </div>
         <div class="btn-group">
           <button id="startQueueBtn" class="btn btn-success" disabled>一括収集開始</button>
-          <button id="clearQueueBtn" class="btn btn-secondary">クリア</button>
+          <button id="clearQueueBtn" class="btn btn-secondary">キュークリア</button>
         </div>
       </div>
 
@@ -456,15 +625,61 @@
 
       <!-- ログ -->
       <div class="card full-width">
-        <h2>ログ</h2>
+        <div class="log-header">
+          <h2>ログ</h2>
+          <button id="clearLogBtn" class="btn btn-secondary btn-sm">クリア</button>
+        </div>
         <div id="logContainer" class="log-container">
           <div class="log-entry"><span class="time">[--:--:--]</span> 待機中...</div>
         </div>
-        <button id="clearLogBtn" class="btn btn-secondary" style="margin-top: 10px;">ログクリア</button>
+      </div>
+
+      <!-- ヘルプ -->
+      <div class="card full-width">
+        <h2>使い方</h2>
+        <div class="help-section">
+          <h3>基本的な使い方</h3>
+          <ol>
+            <li><strong>単一商品のレビュー収集:</strong>
+              <br>楽天市場の商品ページまたはレビューページを開き、拡張機能アイコンをクリック → 「収集開始」ボタンを押す
+            </li>
+            <li><strong>複数商品の一括収集:</strong>
+              <br>各商品ページで「キューに追加」→ この画面で「一括収集開始」
+            </li>
+            <li><strong>ランキングから一括追加:</strong>
+              <br>楽天ランキングページのURLを入力 → 上位N商品を指定 → 「追加」
+              <br>または、ランキングページで拡張機能アイコンをクリック → 商品数を指定して追加
+            </li>
+          </ol>
+
+          <h3>データの保存方法</h3>
+          <ul>
+            <li><strong>CSVモード（デフォルト）:</strong> GAS URLが空の場合、CSVファイルとしてダウンロード</li>
+            <li><strong>スプレッドシートモード:</strong> GAS Web App URLを設定すると、自動でGoogleスプレッドシートに保存</li>
+          </ul>
+
+          <h3>収集できるデータ</h3>
+          <p>レビュー日、商品管理番号、商品名、商品URL、評価、タイトル、本文、投稿者、年代、性別、注文日、バリエーション、用途、贈り先、購入回数、購入情報、参考になった数、ショップ名、ページURL、収集日時</p>
+
+          <h3>注意事項</h3>
+          <ul>
+            <li>収集中はタブを閉じないでください</li>
+            <li>楽天市場のサーバー負荷軽減のため、ページ間に3〜6秒の待機時間が入ります</li>
+            <li>大量のレビューを収集する場合は時間がかかります</li>
+          </ul>
+        </div>
       </div>
     </div>
   </div>
 
+  <script>
+    function toggleHelp() {
+      const content = document.getElementById('gasHelp');
+      content.classList.toggle('show');
+      const toggle = document.querySelector('.collapsible');
+      toggle.textContent = content.classList.contains('show') ? '▼ GAS Web App URLの取得方法' : '▶ GAS Web App URLの取得方法';
+    }
+  </script>
   <script src="options.js"></script>
 </body>
 </html>

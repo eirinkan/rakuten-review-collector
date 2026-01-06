@@ -576,64 +576,56 @@
    * 次のページリンクを探す
    */
   function findNextPageLink() {
-    // 楽天の新しいUI構造に対応したセレクター
-    const allLinks = document.querySelectorAll('a');
+    const currentPage = getCurrentPageNumber();
+    const totalPages = getTotalPages();
 
-    // 「次へ」「>」「»」などのテキストを含むリンクを探す
+    log(`現在のページ: ${currentPage} / ${totalPages}`);
+
+    // 最終ページに到達している場合
+    if (currentPage >= totalPages) {
+      return null;
+    }
+
+    // 方法1: 「次へ」リンクを探す
+    const allLinks = document.querySelectorAll('a');
     for (const link of allLinks) {
       const text = link.textContent.trim();
       if ((text === '次へ' || text === '>' || text === '»' || text === '次' || text.includes('次のページ')) && link.href) {
-        // 同じページへのリンクでないことを確認
         if (link.href !== window.location.href && link.href.includes('review.rakuten.co.jp')) {
           return link.href;
         }
       }
     }
 
-    // CSSセレクターで探す
-    const nextSelectors = [
-      'a[rel="next"]',
-      '.pagination a.next',
-      '.pager a.next',
-      '.page-next a',
-      '.pagination li.next a',
-      '[class*="pagination"] a[class*="next"]',
-      '[class*="pager"] a[class*="next"]'
-    ];
-
-    for (const selector of nextSelectors) {
-      try {
-        const elem = document.querySelector(selector);
-        if (elem && elem.href && elem.href !== window.location.href) {
-          return elem.href;
-        }
-      } catch (e) {
-        // セレクターエラーは無視
+    // 方法2: 次のページ番号のリンクを探す
+    const nextPageNum = currentPage + 1;
+    for (const link of allLinks) {
+      const text = link.textContent.trim();
+      if (text === String(nextPageNum) && link.href && link.href.includes('review.rakuten.co.jp')) {
+        return link.href;
       }
     }
 
-    // ページ番号から次を探す
-    const currentPage = getCurrentPageNumber();
-    if (currentPage) {
-      const pageLinks = document.querySelectorAll('a');
-      for (const link of pageLinks) {
-        const text = link.textContent.trim();
-        const pageNum = parseInt(text, 10);
-        if (pageNum === currentPage + 1 && link.href && link.href.includes('review.rakuten.co.jp')) {
-          return link.href;
-        }
-      }
+    // 方法3: URLパラメータで次のページを構築
+    // 楽天レビューページのURL形式: /item/1/SHOP_ID/ITEM_ID/PAGE.SORT/
+    const currentUrl = window.location.href;
 
-      // URLパラメータで次のページを構築
-      const url = new URL(window.location.href);
-      const nextPage = currentPage + 1;
-      url.searchParams.set('page', nextPage);
+    // URL形式1: /1.1/ → /2.1/ のパターン
+    const pagePattern = /\/(\d+)\.(\d+)\/?(\?.*)?$/;
+    const pageMatch = currentUrl.match(pagePattern);
+    if (pageMatch) {
+      const pageNum = parseInt(pageMatch[1], 10);
+      const sortNum = pageMatch[2];
+      const query = pageMatch[3] || '';
+      const nextUrl = currentUrl.replace(pagePattern, `/${pageNum + 1}.${sortNum}/${query}`);
+      return nextUrl;
+    }
 
-      // 次のページが存在するか確認（ページネーション要素があれば存在する可能性が高い）
-      const paginationExists = document.querySelector('[class*="pagination"], [class*="pager"], [class*="page-nav"]');
-      if (paginationExists) {
-        return url.toString();
-      }
+    // URL形式2: ?page=X パラメータ
+    const url = new URL(currentUrl);
+    if (url.searchParams.has('page')) {
+      url.searchParams.set('page', nextPageNum);
+      return url.toString();
     }
 
     return null;
@@ -643,18 +635,41 @@
    * 現在のページ番号を取得
    */
   function getCurrentPageNumber() {
-    // URLから取得
-    const urlMatch = window.location.href.match(/[?&]page=(\d+)/);
-    if (urlMatch) {
-      return parseInt(urlMatch[1], 10);
+    const url = window.location.href;
+
+    // 楽天レビューページのURL形式: /PAGE.SORT/ (例: /1.1/, /2.1/)
+    const pagePattern = /\/(\d+)\.\d+\/?(\?.*)?$/;
+    const pageMatch = url.match(pagePattern);
+    if (pageMatch) {
+      return parseInt(pageMatch[1], 10);
+    }
+
+    // ?page=X パラメータ
+    const urlParamMatch = url.match(/[?&]page=(\d+)/);
+    if (urlParamMatch) {
+      return parseInt(urlParamMatch[1], 10);
     }
 
     // アクティブなページネーション要素から取得
-    const activePageElem = document.querySelector('.pagination .active, .pager .current, [class*="page"].active');
-    if (activePageElem) {
-      const num = parseInt(activePageElem.textContent.trim(), 10);
-      if (!isNaN(num)) {
-        return num;
+    const activeSelectors = [
+      '[class*="pagination"] [class*="active"]',
+      '[class*="pagination"] [class*="current"]',
+      '[class*="pager"] [class*="active"]',
+      '.pagination .active',
+      '.pager .current'
+    ];
+
+    for (const selector of activeSelectors) {
+      try {
+        const elem = document.querySelector(selector);
+        if (elem) {
+          const num = parseInt(elem.textContent.trim(), 10);
+          if (!isNaN(num) && num > 0) {
+            return num;
+          }
+        }
+      } catch (e) {
+        // セレクターエラーは無視
       }
     }
 
@@ -665,28 +680,52 @@
    * 総ページ数を取得
    */
   function getTotalPages() {
-    // ページネーション内のリンクから最大ページ番号を探す
-    const pageLinks = document.querySelectorAll('a');
     let maxPage = 1;
 
+    // 方法1: レビュー件数から計算（1ページあたり約15件）
+    const reviewCountText = document.body.textContent;
+    const reviewCountMatch = reviewCountText.match(/(\d+)件/);
+    if (reviewCountMatch) {
+      const totalReviews = parseInt(reviewCountMatch[1], 10);
+      if (totalReviews > 0) {
+        const calculatedPages = Math.ceil(totalReviews / 15);
+        if (calculatedPages > maxPage) {
+          maxPage = calculatedPages;
+        }
+      }
+    }
+
+    // 方法2: ページネーションリンクから最大ページを探す
+    const pageLinks = document.querySelectorAll('a');
     for (const link of pageLinks) {
+      if (!link.href || !link.href.includes('review.rakuten.co.jp')) continue;
+
       const text = link.textContent.trim();
-      const num = parseInt(text, 10);
-      // 数字のみのリンクでページ番号らしいもの
-      if (!isNaN(num) && num > 0 && num <= 1000 && link.href && link.href.includes('review.rakuten.co.jp')) {
-        if (num > maxPage) {
+      // 数字のみのリンク
+      if (/^\d+$/.test(text)) {
+        const num = parseInt(text, 10);
+        if (num > maxPage && num <= 1000) {
+          maxPage = num;
+        }
+      }
+
+      // URLからページ番号を抽出 (/N.1/ 形式)
+      const urlPageMatch = link.href.match(/\/(\d+)\.\d+\/?(\?.*)?$/);
+      if (urlPageMatch) {
+        const num = parseInt(urlPageMatch[1], 10);
+        if (num > maxPage && num <= 1000) {
           maxPage = num;
         }
       }
     }
 
-    // ページネーション要素内のテキストからも探す
-    const paginationElems = document.querySelectorAll('[class*="pagination"], [class*="pager"], [class*="page-nav"]');
-    for (const elem of paginationElems) {
-      const matches = elem.textContent.match(/(\d+)/g);
-      if (matches) {
-        for (const match of matches) {
-          const num = parseInt(match, 10);
+    // 方法3: 「最後」「最終」リンクのURLから取得
+    for (const link of pageLinks) {
+      const text = link.textContent.trim();
+      if ((text === '最後' || text === '最終' || text === '»»' || text.includes('最終ページ')) && link.href) {
+        const lastPageMatch = link.href.match(/\/(\d+)\.\d+\/?(\?.*)?$/);
+        if (lastPageMatch) {
+          const num = parseInt(lastPageMatch[1], 10);
           if (num > maxPage && num <= 1000) {
             maxPage = num;
           }

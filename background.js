@@ -280,6 +280,7 @@ async function processNextInQueue() {
 
 /**
  * ランキングから商品を取得してキューに追加
+ * Service WorkerではDOMParserが使えないため、正規表現でパース
  */
 async function fetchRankingProducts(url, count) {
   try {
@@ -287,50 +288,42 @@ async function fetchRankingProducts(url, count) {
     const response = await fetch(url);
     const html = await response.text();
 
-    // HTMLをパースして商品URLを抽出
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-
     const products = [];
-
-    // ランキングの商品リンクを探す
-    const productLinks = doc.querySelectorAll('a[href*="item.rakuten.co.jp"]');
-
     const seenUrls = new Set();
 
-    for (const link of productLinks) {
-      if (products.length >= count) break;
+    // 正規表現でitem.rakuten.co.jpへのリンクを抽出
+    // パターン: href="https://item.rakuten.co.jp/ショップ名/商品ID/"
+    const linkPattern = /href="(https?:\/\/item\.rakuten\.co\.jp\/[^"]+)"/g;
+    let match;
 
-      let href = link.href;
-
-      // 相対URLの場合は絶対URLに変換
-      if (href.startsWith('/')) {
-        href = 'https://ranking.rakuten.co.jp' + href;
-      }
-
-      // item.rakuten.co.jpを含むURLのみ
-      if (!href.includes('item.rakuten.co.jp')) continue;
+    while ((match = linkPattern.exec(html)) !== null && products.length < count) {
+      let href = match[1];
 
       // クエリパラメータを除去してURLを正規化
-      const url = new URL(href);
-      const cleanUrl = `${url.origin}${url.pathname}`;
+      try {
+        const urlObj = new URL(href);
+        const cleanUrl = `${urlObj.origin}${urlObj.pathname}`;
 
-      // 重複チェック
-      if (seenUrls.has(cleanUrl)) continue;
-      seenUrls.add(cleanUrl);
+        // 重複チェック
+        if (seenUrls.has(cleanUrl)) continue;
+        seenUrls.add(cleanUrl);
 
-      // 商品名を取得
-      let title = link.textContent.trim();
-      if (!title || title.length < 3) {
-        const img = link.querySelector('img');
-        title = img ? img.alt : '商品';
+        // URLからショップ名と商品IDを取得してタイトルにする
+        const pathMatch = cleanUrl.match(/item\.rakuten\.co\.jp\/([^\/]+)\/([^\/]+)/);
+        let title = '商品';
+        if (pathMatch) {
+          title = `${pathMatch[1]} - ${pathMatch[2]}`;
+        }
+
+        products.push({
+          url: cleanUrl,
+          title: title.substring(0, 100),
+          addedAt: new Date().toISOString()
+        });
+      } catch (e) {
+        // URL解析エラーは無視
+        continue;
       }
-
-      products.push({
-        url: cleanUrl,
-        title: title.substring(0, 100),
-        addedAt: new Date().toISOString()
-      });
     }
 
     if (products.length === 0) {

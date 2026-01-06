@@ -20,48 +20,32 @@
     .header {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
-      padding: 12px 16px;
-      text-align: center;
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
 
     .header h1 {
       font-size: 14px;
     }
 
+    .header-btn {
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      color: white;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .header-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
     .content {
       padding: 12px;
-    }
-
-    .status-card {
-      background: white;
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 10px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-    }
-
-    .status-row {
-      display: flex;
-      justify-content: space-between;
-      font-size: 12px;
-      margin-bottom: 6px;
-    }
-
-    .status-row:last-child {
-      margin-bottom: 0;
-    }
-
-    .status-label {
-      color: #666;
-    }
-
-    .status-value {
-      font-weight: 600;
-      color: #333;
-    }
-
-    .status-value.running {
-      color: #2e7d32;
     }
 
     .btn {
@@ -81,13 +65,14 @@
     }
 
     .btn-start {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: #28a745;
       color: white;
     }
 
     .btn-start:hover {
+      background: #218838;
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
     }
 
     .btn-stop {
@@ -100,21 +85,12 @@
     }
 
     .btn-queue {
-      background: #28a745;
+      background: #17a2b8;
       color: white;
     }
 
     .btn-queue:hover {
-      background: #218838;
-    }
-
-    .btn-settings {
-      background: #f0f0f0;
-      color: #666;
-    }
-
-    .btn-settings:hover {
-      background: #e0e0e0;
+      background: #138496;
     }
 
     .btn:disabled {
@@ -132,16 +108,6 @@
       font-size: 11px;
       text-align: center;
       margin-bottom: 10px;
-    }
-
-    .queue-badge {
-      display: inline-block;
-      background: #ff9800;
-      color: white;
-      padding: 2px 8px;
-      border-radius: 10px;
-      font-size: 11px;
-      margin-left: 6px;
     }
 
     .message {
@@ -163,11 +129,48 @@
       color: #2e7d32;
       display: block;
     }
+
+    .ranking-input {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 10px;
+      font-size: 13px;
+      color: #666;
+    }
+
+    .ranking-input input {
+      width: 60px;
+      padding: 6px 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      text-align: center;
+      font-size: 13px;
+    }
+
+    .ranking-input input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .status-text {
+      text-align: center;
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 10px;
+    }
+
+    .status-text.running {
+      color: #28a745;
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
   <div class="header">
     <h1>楽天レビュー収集</h1>
+    <button id="settingsBtn" class="header-btn">管理</button>
   </div>
 
   <div class="content">
@@ -177,29 +180,23 @@
       楽天の商品ページを開いてください
     </div>
 
-    <div class="status-card">
-      <div class="status-row">
-        <span class="status-label">状態</span>
-        <span id="statusText" class="status-value">待機中</span>
-      </div>
-      <div class="status-row">
-        <span class="status-label">レビュー数</span>
-        <span id="reviewCount" class="status-value">0</span>
-      </div>
-      <div class="status-row">
-        <span class="status-label">ページ</span>
-        <span id="pageCount" class="status-value">0 / 0</span>
-      </div>
-      <div class="status-row">
-        <span class="status-label">キュー</span>
-        <span id="queueCount" class="status-value">0 件</span>
-      </div>
+    <!-- 通常モード（商品・レビューページ） -->
+    <div id="normalMode">
+      <div id="statusText" class="status-text">待機中</div>
+      <button id="startBtn" class="btn btn-start">収集開始</button>
+      <button id="stopBtn" class="btn btn-stop" style="display: none;">収集停止</button>
+      <button id="queueBtn" class="btn btn-queue">キューに追加</button>
     </div>
 
-    <button id="startBtn" class="btn btn-start">収集開始</button>
-    <button id="stopBtn" class="btn btn-stop" style="display: none;">収集停止</button>
-    <button id="queueBtn" class="btn btn-queue">キューに追加</button>
-    <button id="settingsBtn" class="btn btn-settings">設定・キュー管理</button>
+    <!-- ランキングモード -->
+    <div id="rankingMode" style="display: none;">
+      <div class="ranking-input">
+        <label>上位</label>
+        <input type="number" id="rankingCount" value="10" min="1" max="100">
+        <label>商品をキューに追加</label>
+      </div>
+      <button id="addRankingBtn" class="btn btn-queue">追加</button>
+    </div>
   </div>
 
   <script src="popup.js"></script>
