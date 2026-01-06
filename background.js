@@ -225,11 +225,9 @@ async function handleCollectionComplete() {
  */
 function forwardToPopup(message) {
   // ポップアップが開いているかは不明なので、エラーは無視
-  try {
-    chrome.runtime.sendMessage(message);
-  } catch (e) {
+  chrome.runtime.sendMessage(message).catch(() => {
     // ポップアップが閉じている場合はエラーになるが無視
-  }
+  });
 }
 
 /**

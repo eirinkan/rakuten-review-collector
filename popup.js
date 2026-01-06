@@ -206,24 +206,31 @@ document.addEventListener('DOMContentLoaded', () => {
    * バックグラウンドからのメッセージを処理
    */
   function handleMessage(message, sender, sendResponse) {
+    if (!message || !message.action) return;
+
     switch (message.action) {
       case 'updateProgress':
-        updateUI(message.state);
+        if (message.state) {
+          updateUI(message.state);
+        }
         break;
       case 'collectionComplete':
         startBtn.style.display = 'block';
         stopBtn.style.display = 'none';
         progressText.textContent = '収集完了';
-        showSuccess(`${message.state.reviewCount}件のレビューを収集しました`);
-        updateUI(message.state);
+        const count = message.state?.reviewCount || 0;
+        showSuccess(`${count}件のレビューを収集しました`);
+        if (message.state) {
+          updateUI(message.state);
+        }
         break;
       case 'collectionError':
         startBtn.style.display = 'block';
         stopBtn.style.display = 'none';
-        showError(message.error);
+        showError(message.error || 'エラーが発生しました');
         break;
       case 'log':
-        addLog(message.text, message.type);
+        addLog(message.text || '', message.type || '');
         break;
     }
   }
