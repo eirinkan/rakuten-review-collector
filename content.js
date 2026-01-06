@@ -10,13 +10,43 @@
   let isCollecting = false;
   let shouldStop = false;
 
+  // ページタイプを判定
+  const isReviewPage = window.location.hostname === 'review.rakuten.co.jp';
+  const isItemPage = window.location.hostname === 'item.rakuten.co.jp';
+
   // メッセージリスナー
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     switch (message.action) {
       case 'startCollection':
         if (!isCollecting) {
-          startCollection();
-          sendResponse({ success: true });
+          if (isItemPage) {
+            // 商品ページの場合、レビューページに遷移
+            const reviewUrl = findReviewPageUrl();
+            if (reviewUrl) {
+              log('レビューページに移動します');
+              // 収集状態を設定してからリダイレクト
+              chrome.storage.local.get(['collectionState'], (result) => {
+                const state = result.collectionState || {
+                  isRunning: false,
+                  reviewCount: 0,
+                  pageCount: 0,
+                  reviews: [],
+                  logs: []
+                };
+                state.isRunning = true;
+                chrome.storage.local.set({ collectionState: state }, () => {
+                  window.location.href = reviewUrl;
+                });
+              });
+              sendResponse({ success: true, redirecting: true });
+            } else {
+              sendResponse({ success: false, error: 'レビューページが見つかりません' });
+            }
+          } else {
+            // レビューページの場合、収集開始
+            startCollection();
+            sendResponse({ success: true });
+          }
         } else {
           sendResponse({ success: false, error: '既に収集中です' });
         }
@@ -31,6 +61,30 @@
     }
     return true;
   });
+
+  /**
+   * 商品ページからレビューページのURLを取得
+   */
+  function findReviewPageUrl() {
+    // review.rakuten.co.jp へのリンクを探す
+    const reviewLinks = document.querySelectorAll('a[href*="review.rakuten.co.jp/item"]');
+    for (const link of reviewLinks) {
+      // レビューページへの直接リンクを優先
+      if (link.href.includes('/item/') && !link.href.includes('/wd/')) {
+        return link.href;
+      }
+    }
+
+    // 見つからない場合、全てのreview.rakuten.co.jpリンクから探す
+    const allReviewLinks = document.querySelectorAll('a[href*="review.rakuten.co.jp"]');
+    for (const link of allReviewLinks) {
+      if (link.href.includes('/item/')) {
+        return link.href;
+      }
+    }
+
+    return null;
+  }
 
   /**
    * 収集を開始
@@ -472,14 +526,16 @@
     });
   }
 
-  // ページ読み込み時に収集状態を確認し、自動再開
-  chrome.storage.local.get(['collectionState'], (result) => {
-    const state = result.collectionState;
-    if (state && state.isRunning && !isCollecting) {
-      // 前のページからの続きで自動的に収集を再開
-      log('収集を再開します');
-      startCollection();
-    }
-  });
+  // ページ読み込み時に収集状態を確認し、自動再開（レビューページのみ）
+  if (isReviewPage) {
+    chrome.storage.local.get(['collectionState'], (result) => {
+      const state = result.collectionState;
+      if (state && state.isRunning && !isCollecting) {
+        // 前のページからの続きで自動的に収集を再開
+        log('収集を再開します');
+        startCollection();
+      }
+    });
+  }
 
 })();

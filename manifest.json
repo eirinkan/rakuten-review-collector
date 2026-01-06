@@ -11,6 +11,7 @@
   ],
   "host_permissions": [
     "https://review.rakuten.co.jp/*",
+    "https://item.rakuten.co.jp/*",
     "https://script.google.com/*"
   ],
   "action": {
@@ -27,7 +28,10 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://review.rakuten.co.jp/*"],
+      "matches": [
+        "https://review.rakuten.co.jp/*",
+        "https://item.rakuten.co.jp/*"
+      ],
       "js": ["content.js"],
       "run_at": "document_idle"
     }

@@ -37,8 +37,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // 現在のタブを確認
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const isReviewPage = tab.url && tab.url.includes('review.rakuten.co.jp');
+    const isItemPage = tab.url && tab.url.includes('item.rakuten.co.jp');
+    const isRakutenPage = isReviewPage || isItemPage;
 
-    if (!isReviewPage) {
+    if (!isRakutenPage) {
       pageWarning.style.display = 'block';
       mainContent.style.display = 'none';
       return;
