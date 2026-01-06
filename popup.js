@@ -1,6 +1,6 @@
 /**
  * ポップアップUIのスクリプト
- * 収集の開始/停止、進捗表示、データダウンロードを制御
+ * 収集の開始/停止、進捗表示、データダウンロード、設定を制御
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const pageWarning = document.getElementById('pageWarning');
   const mainContent = document.getElementById('mainContent');
   const modeIndicator = document.getElementById('modeIndicator');
-  const spreadsheetLink = document.getElementById('spreadsheetLink');
   const spreadsheetSection = document.getElementById('spreadsheetSection');
   const spreadsheetLinkBottom = document.getElementById('spreadsheetLinkBottom');
   const progressBar = document.getElementById('progressBar');
@@ -24,6 +23,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const logSection = document.getElementById('logSection');
   const logContainer = document.getElementById('logContainer');
 
+  // 設定関連の要素
+  const settingsToggle = document.getElementById('settingsToggle');
+  const settingsSection = document.getElementById('settingsSection');
+  const gasUrlInput = document.getElementById('gasUrl');
+  const separateSheetsCheckbox = document.getElementById('separateSheets');
+  const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+  const testConnectionBtn = document.getElementById('testConnectionBtn');
+  const settingsStatus = document.getElementById('settingsStatus');
+  const currentSpreadsheet = document.getElementById('currentSpreadsheet');
+  const currentSpreadsheetLink = document.getElementById('currentSpreadsheetLink');
+
   // 初期化
   init();
 
@@ -34,6 +44,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // スプレッドシートリンクは常に確認・表示（どのページでも）
     checkSpreadsheetLink();
 
+    // 設定を読み込む
+    loadSettings();
+
     // 現在のタブを確認
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const isReviewPage = tab.url && tab.url.includes('review.rakuten.co.jp');
@@ -43,7 +56,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!isRakutenPage) {
       pageWarning.style.display = 'block';
       mainContent.style.display = 'none';
-      return;
     }
 
     // 保存モードを確認
@@ -57,6 +69,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // バックグラウンドからのメッセージを受信
     chrome.runtime.onMessage.addListener(handleMessage);
+  }
+
+  /**
+   * 設定を読み込む
+   */
+  function loadSettings() {
+    chrome.storage.sync.get(['gasUrl', 'separateSheets'], (result) => {
+      if (result.gasUrl) {
+        gasUrlInput.value = result.gasUrl;
+      }
+      if (separateSheetsCheckbox) {
+        separateSheetsCheckbox.checked = result.separateSheets !== false; // デフォルトはtrue
+      }
+    });
   }
 
   /**
@@ -81,16 +107,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (result.gasUrl) {
         modeIndicator.className = 'mode-indicator spreadsheet';
         modeIndicator.innerHTML = '<span class="icon">📊</span><span>スプレッドシート自動保存</span>';
-
-        // スプレッドシートリンクを表示
-        if (result.spreadsheetUrl) {
-          spreadsheetLink.href = result.spreadsheetUrl;
-          spreadsheetLink.style.display = 'block';
-        }
       } else {
         modeIndicator.className = 'mode-indicator csv';
         modeIndicator.innerHTML = '<span class="icon">📄</span><span>CSVダウンロード</span>';
-        spreadsheetLink.style.display = 'none';
       }
     });
   }
@@ -120,6 +139,133 @@ document.addEventListener('DOMContentLoaded', () => {
     stopBtn.addEventListener('click', stopCollection);
     downloadBtn.addEventListener('click', downloadCSV);
     clearBtn.addEventListener('click', clearData);
+
+    // 設定トグル
+    settingsToggle.addEventListener('click', toggleSettings);
+    saveSettingsBtn.addEventListener('click', saveSettings);
+    testConnectionBtn.addEventListener('click', testConnection);
+  }
+
+  /**
+   * 設定セクションの表示/非表示を切り替え
+   */
+  function toggleSettings() {
+    settingsSection.classList.toggle('open');
+    settingsToggle.textContent = settingsSection.classList.contains('open') ? '閉じる' : '設定';
+  }
+
+  /**
+   * 設定を保存
+   */
+  function saveSettings() {
+    const gasUrl = gasUrlInput.value.trim();
+    const separateSheets = separateSheetsCheckbox ? separateSheetsCheckbox.checked : true;
+
+    // URLの簡易バリデーション
+    if (gasUrl && !isValidGasUrl(gasUrl)) {
+      showSettingsStatus('error', 'URLの形式が正しくありません');
+      return;
+    }
+
+    chrome.storage.sync.set({ gasUrl, separateSheets }, () => {
+      if (chrome.runtime.lastError) {
+        showSettingsStatus('error', '保存に失敗しました');
+      } else {
+        if (gasUrl) {
+          showSettingsStatus('success', '保存しました（スプレッドシートモード）');
+        } else {
+          showSettingsStatus('success', '保存しました（CSVモード）');
+        }
+        checkSaveMode();
+        checkSpreadsheetLink();
+      }
+    });
+  }
+
+  /**
+   * GAS URLの簡易バリデーション
+   */
+  function isValidGasUrl(url) {
+    return url.startsWith('https://script.google.com/macros/s/') && url.includes('/exec');
+  }
+
+  /**
+   * GASへの接続テスト
+   */
+  async function testConnection() {
+    const gasUrl = gasUrlInput.value.trim();
+
+    if (!gasUrl) {
+      showSettingsStatus('error', 'URLを入力してください');
+      return;
+    }
+
+    if (!isValidGasUrl(gasUrl)) {
+      showSettingsStatus('error', 'URLの形式が正しくありません');
+      return;
+    }
+
+    showSettingsStatus('testing', 'テスト中...');
+    currentSpreadsheet.style.display = 'none';
+
+    try {
+      // GETリクエストでスプレッドシート情報を取得
+      const response = await fetch(gasUrl, {
+        method: 'GET',
+        mode: 'cors'
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        showSettingsStatus('success', '接続成功');
+
+        // スプレッドシートURLを表示・保存
+        if (data.spreadsheetUrl) {
+          currentSpreadsheetLink.href = data.spreadsheetUrl;
+          currentSpreadsheetLink.textContent = '開く';
+          currentSpreadsheet.style.display = 'block';
+
+          chrome.storage.sync.set({ spreadsheetUrl: data.spreadsheetUrl }, () => {
+            checkSpreadsheetLink();
+          });
+        }
+      } else {
+        showSettingsStatus('error', '接続失敗: ' + (data.error || '不明なエラー'));
+      }
+    } catch (error) {
+      // GETが失敗した場合、POSTでno-corsモードを試す
+      try {
+        await fetch(gasUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            test: true,
+            timestamp: new Date().toISOString()
+          })
+        });
+        showSettingsStatus('success', '接続成功（レスポンス取得不可）');
+      } catch (postError) {
+        showSettingsStatus('error', '接続失敗');
+      }
+    }
+  }
+
+  /**
+   * 設定ステータスを表示
+   */
+  function showSettingsStatus(type, message) {
+    settingsStatus.textContent = message;
+    settingsStatus.className = 'settings-status ' + type;
+
+    if (type === 'success') {
+      setTimeout(() => {
+        settingsStatus.style.display = 'none';
+      }, 3000);
+    }
   }
 
   /**

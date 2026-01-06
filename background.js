@@ -42,11 +42,11 @@ async function handleSaveReviews(reviews) {
   await saveToLocalStorage(reviews);
 
   // GAS URLが設定されている場合はスプレッドシートにも送信
-  const { gasUrl } = await chrome.storage.sync.get(['gasUrl']);
+  const { gasUrl, separateSheets } = await chrome.storage.sync.get(['gasUrl', 'separateSheets']);
 
   if (gasUrl) {
     try {
-      await sendToGas(gasUrl, reviews);
+      await sendToGas(gasUrl, reviews, separateSheets !== false);
       log('スプレッドシートに保存しました', 'success');
     } catch (error) {
       log(`スプレッドシートへの保存に失敗: ${error.message}`, 'error');
@@ -86,7 +86,7 @@ async function saveToLocalStorage(reviews) {
 /**
  * GASにデータを送信
  */
-async function sendToGas(gasUrl, reviews) {
+async function sendToGas(gasUrl, reviews, separateSheets = true) {
   const response = await fetch(gasUrl, {
     method: 'POST',
     mode: 'no-cors', // CORSを回避
@@ -95,6 +95,7 @@ async function sendToGas(gasUrl, reviews) {
     },
     body: JSON.stringify({
       reviews: reviews,
+      separateSheets: separateSheets,
       timestamp: new Date().toISOString()
     })
   });

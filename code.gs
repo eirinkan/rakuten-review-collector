@@ -42,8 +42,11 @@ function doPost(e) {
       });
     }
 
+    // 商品ごとにシートを分けるかどうか（デフォルトはtrue）
+    const separateSheets = data.separateSheets !== false;
+
     // スプレッドシートに保存
-    const savedCount = saveReviews(data.reviews);
+    const savedCount = saveReviews(data.reviews, separateSheets);
 
     return createResponse({
       success: true,
@@ -76,15 +79,91 @@ function doGet(e) {
 
 /**
  * レビューをスプレッドシートに保存
+ * @param {Array} reviews - レビューデータの配列
+ * @param {boolean} separateSheets - 商品ごとにシートを分けるかどうか
  */
-function saveReviews(reviews) {
+function saveReviews(reviews, separateSheets = true) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  if (separateSheets) {
+    // 商品ごとにシートを分けて保存
+    return saveReviewsByProduct(ss, reviews);
+  } else {
+    // 1つのシートにすべて保存
+    return saveReviewsToSingleSheet(ss, reviews);
+  }
+}
+
+/**
+ * 商品ごとに別々のシートに保存
+ */
+function saveReviewsByProduct(ss, reviews) {
+  let totalSaved = 0;
+
+  // 商品名ごとにレビューをグループ化
+  const reviewsByProduct = {};
+  reviews.forEach(review => {
+    const productName = review.productName || '不明な商品';
+    if (!reviewsByProduct[productName]) {
+      reviewsByProduct[productName] = [];
+    }
+    reviewsByProduct[productName].push(review);
+  });
+
+  // 各商品のシートに保存
+  for (const productName in reviewsByProduct) {
+    const productReviews = reviewsByProduct[productName];
+
+    // シート名を作成（31文字以内、特殊文字を除去）
+    let sheetName = sanitizeSheetName(productName);
+
+    // シートを取得または作成
+    let sheet = ss.getSheetByName(sheetName);
+    if (!sheet) {
+      sheet = ss.insertSheet(sheetName);
+      addHeader(sheet);
+    }
+
+    // ヘッダーがなければ追加
+    if (sheet.getLastRow() === 0) {
+      addHeader(sheet);
+    }
+
+    // レビューデータを行に変換して追加
+    const rows = productReviews.map(review => [
+      review.collectedAt || new Date().toISOString(),
+      review.productName || '',
+      review.productUrl || '',
+      review.rating || '',
+      review.title || '',
+      review.body || '',
+      review.author || '',
+      review.reviewDate || '',
+      review.purchaseInfo || '',
+      review.helpfulCount || 0,
+      review.pageUrl || ''
+    ]);
+
+    // データを追加
+    if (rows.length > 0) {
+      const lastRow = sheet.getLastRow();
+      sheet.getRange(lastRow + 1, 1, rows.length, rows[0].length).setValues(rows);
+      totalSaved += rows.length;
+    }
+  }
+
+  return totalSaved;
+}
+
+/**
+ * 1つのシートにすべて保存
+ */
+function saveReviewsToSingleSheet(ss, reviews) {
   let sheet = ss.getSheetByName('レビュー');
 
   // シートがなければ作成
   if (!sheet) {
     sheet = ss.insertSheet('レビュー');
-    // ヘッダーを追加
     addHeader(sheet);
   }
 
@@ -115,6 +194,26 @@ function saveReviews(reviews) {
   }
 
   return rows.length;
+}
+
+/**
+ * シート名をサニタイズ（特殊文字除去、31文字以内）
+ */
+function sanitizeSheetName(name) {
+  // 使用できない文字を除去: * ? : \ / [ ]
+  let sanitized = name.replace(/[*?:\\/\[\]]/g, '');
+
+  // 31文字以内に切り詰め
+  if (sanitized.length > 31) {
+    sanitized = sanitized.substring(0, 31);
+  }
+
+  // 空文字になった場合
+  if (!sanitized.trim()) {
+    sanitized = '不明な商品';
+  }
+
+  return sanitized;
 }
 
 /**
@@ -190,7 +289,7 @@ function testAddReview() {
     ]
   };
 
-  const result = saveReviews(testData.reviews);
+  const result = saveReviews(testData.reviews, true);
   Logger.log('保存件数: ' + result);
 }
 
@@ -217,52 +316,56 @@ function resetSheet() {
  */
 function removeDuplicates() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('レビュー');
+  const sheets = ss.getSheets();
 
-  if (!sheet || sheet.getLastRow() <= 1) {
-    Logger.log('データがありません');
-    return;
-  }
+  let totalRemoved = 0;
 
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const rows = data.slice(1);
+  sheets.forEach(sheet => {
+    if (sheet.getLastRow() <= 1) {
+      return; // ヘッダーのみ or データなし
+    }
 
-  // 重複をチェック（本文 + 投稿者 をキーとする）
-  const seen = new Set();
-  const uniqueRows = [];
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const rows = data.slice(1);
 
-  rows.forEach(row => {
-    const body = row[5] || ''; // 本文
-    const author = row[6] || ''; // 投稿者
-    const key = body.substring(0, 100) + '|' + author;
+    // 重複をチェック（本文 + 投稿者 をキーとする）
+    const seen = new Set();
+    const uniqueRows = [];
 
-    if (!seen.has(key)) {
-      seen.add(key);
-      uniqueRows.push(row);
+    rows.forEach(row => {
+      const body = row[5] || ''; // 本文
+      const author = row[6] || ''; // 投稿者
+      const key = body.substring(0, 100) + '|' + author;
+
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueRows.push(row);
+      }
+    });
+
+    const removedCount = rows.length - uniqueRows.length;
+
+    if (removedCount > 0) {
+      // シートをクリアして、ヘッダーとユニークなデータを再挿入
+      sheet.clear();
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+      if (uniqueRows.length > 0) {
+        sheet.getRange(2, 1, uniqueRows.length, uniqueRows[0].length).setValues(uniqueRows);
+      }
+
+      // ヘッダーのスタイルを再適用
+      const headerRange = sheet.getRange(1, 1, 1, headers.length);
+      headerRange.setBackground('#4285f4');
+      headerRange.setFontColor('#ffffff');
+      headerRange.setFontWeight('bold');
+      sheet.setFrozenRows(1);
+
+      totalRemoved += removedCount;
+      Logger.log(sheet.getName() + ': ' + removedCount + '件の重複を削除');
     }
   });
 
-  const removedCount = rows.length - uniqueRows.length;
-
-  if (removedCount > 0) {
-    // シートをクリアして、ヘッダーとユニークなデータを再挿入
-    sheet.clear();
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-
-    if (uniqueRows.length > 0) {
-      sheet.getRange(2, 1, uniqueRows.length, uniqueRows[0].length).setValues(uniqueRows);
-    }
-
-    // ヘッダーのスタイルを再適用
-    const headerRange = sheet.getRange(1, 1, 1, headers.length);
-    headerRange.setBackground('#4285f4');
-    headerRange.setFontColor('#ffffff');
-    headerRange.setFontWeight('bold');
-    sheet.setFrozenRows(1);
-
-    Logger.log(removedCount + '件の重複を削除しました');
-  } else {
-    Logger.log('重複はありませんでした');
-  }
+  Logger.log('合計: ' + totalRemoved + '件の重複を削除しました');
 }
