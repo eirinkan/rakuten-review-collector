@@ -9,6 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const mainContent = document.getElementById('mainContent');
   const modeIndicator = document.getElementById('modeIndicator');
   const spreadsheetLink = document.getElementById('spreadsheetLink');
+  const spreadsheetSection = document.getElementById('spreadsheetSection');
+  const spreadsheetLinkBottom = document.getElementById('spreadsheetLinkBottom');
   const progressBar = document.getElementById('progressBar');
   const progressText = document.getElementById('progressText');
   const reviewCount = document.getElementById('reviewCount');
@@ -29,6 +31,9 @@ document.addEventListener('DOMContentLoaded', () => {
    * 初期化処理
    */
   async function init() {
+    // スプレッドシートリンクは常に確認・表示（どのページでも）
+    checkSpreadsheetLink();
+
     // 現在のタブを確認
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const isReviewPage = tab.url && tab.url.includes('review.rakuten.co.jp');
@@ -50,6 +55,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // バックグラウンドからのメッセージを受信
     chrome.runtime.onMessage.addListener(handleMessage);
+  }
+
+  /**
+   * スプレッドシートリンクを確認して表示（常に実行）
+   */
+  function checkSpreadsheetLink() {
+    chrome.storage.sync.get(['gasUrl', 'spreadsheetUrl'], (result) => {
+      if (result.gasUrl && result.spreadsheetUrl) {
+        spreadsheetSection.style.display = 'block';
+        spreadsheetLinkBottom.href = result.spreadsheetUrl;
+      } else {
+        spreadsheetSection.style.display = 'none';
+      }
+    });
   }
 
   /**

@@ -282,6 +282,38 @@
     .spreadsheet-link:hover {
       background: #bbdefb;
     }
+
+    .always-visible {
+      padding: 0 20px;
+    }
+
+    .spreadsheet-section {
+      margin-bottom: 10px;
+    }
+
+    .spreadsheet-link-large {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
+      color: white;
+      text-decoration: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+
+    .spreadsheet-link-large:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 20px rgba(76, 175, 80, 0.4);
+    }
+
+    .spreadsheet-link-large .icon {
+      font-size: 18px;
+    }
   </style>
 </head>
 <body>
@@ -351,6 +383,16 @@
       <div id="logSection" class="log-section" style="display: none;">
         <div id="logContainer"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- 常に表示されるセクション -->
+  <div class="always-visible">
+    <div id="spreadsheetSection" class="spreadsheet-section" style="display: none;">
+      <a id="spreadsheetLinkBottom" href="#" target="_blank" class="spreadsheet-link-large">
+        <span class="icon">📊</span>
+        <span>スプレッドシートを開く</span>
+      </a>
     </div>
   </div>
 
