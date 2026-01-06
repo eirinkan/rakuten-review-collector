@@ -13,85 +13,112 @@
 
     body {
       font-family: 'Segoe UI', 'Hiragino Sans', 'Yu Gothic', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: #f5f5f5;
       min-height: 100vh;
-      padding: 40px 20px;
+      padding: 20px;
     }
 
     .container {
-      max-width: 600px;
+      max-width: 900px;
       margin: 0 auto;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      margin-bottom: 4px;
+    }
+
+    .header p {
+      font-size: 12px;
+      opacity: 0.9;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 768px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
       background: white;
-      border-radius: 16px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-      padding: 40px;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
     }
 
-    h1 {
-      color: #333;
-      font-size: 24px;
-      margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
+    .card.full-width {
+      grid-column: 1 / -1;
     }
 
-    .subtitle {
-      color: #666;
+    .card h2 {
       font-size: 14px;
-      margin-bottom: 30px;
+      color: #333;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #eee;
     }
 
     .form-group {
-      margin-bottom: 25px;
+      margin-bottom: 12px;
     }
 
-    label {
+    .form-group label {
       display: block;
-      font-weight: 600;
-      color: #444;
-      margin-bottom: 8px;
-      font-size: 14px;
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 4px;
     }
 
-    input[type="text"] {
+    .form-group input[type="text"],
+    .form-group input[type="number"] {
       width: 100%;
-      padding: 14px 16px;
-      border: 2px solid #e0e0e0;
-      border-radius: 10px;
-      font-size: 14px;
-      transition: all 0.3s ease;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
     }
 
-    input[type="text"]:focus {
+    .form-group input:focus {
       outline: none;
       border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
     }
 
-    .help-text {
-      margin-top: 10px;
-      padding: 15px;
-      background: #f8f9fa;
-      border-radius: 8px;
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
       font-size: 13px;
-      color: #666;
-      line-height: 1.6;
+      color: #444;
+      cursor: pointer;
     }
 
-    .help-text strong {
-      color: #333;
+    .checkbox-label input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
     }
 
     .btn {
-      display: inline-block;
-      padding: 14px 32px;
-      font-size: 16px;
+      padding: 10px 20px;
+      font-size: 13px;
       font-weight: 600;
       border: none;
-      border-radius: 10px;
+      border-radius: 6px;
       cursor: pointer;
-      transition: all 0.3s ease;
+      transition: all 0.2s ease;
     }
 
     .btn-primary {
@@ -100,128 +127,341 @@
     }
 
     .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-success {
+      background: #28a745;
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #218838;
+    }
+
+    .btn-danger {
+      background: #dc3545;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #c82333;
     }
 
     .btn-secondary {
       background: #f0f0f0;
       color: #666;
-      margin-left: 10px;
     }
 
     .btn-secondary:hover {
       background: #e0e0e0;
     }
 
-    .status {
-      margin-top: 20px;
-      padding: 12px 16px;
-      border-radius: 8px;
-      font-size: 14px;
+    .btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .status-message {
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      margin-top: 10px;
       display: none;
     }
 
-    .status.success {
-      background: #d4edda;
-      color: #155724;
+    .status-message.success {
+      background: #e8f5e9;
+      color: #2e7d32;
       display: block;
     }
 
-    .status.error {
-      background: #f8d7da;
-      color: #721c24;
+    .status-message.error {
+      background: #ffebee;
+      color: #c62828;
       display: block;
     }
 
-    .instructions {
-      margin-top: 30px;
-      padding: 20px;
-      background: #fff3cd;
-      border-radius: 10px;
-      border-left: 4px solid #ffc107;
+    .status-message.info {
+      background: #e3f2fd;
+      color: #1565c0;
+      display: block;
     }
 
-    .instructions h3 {
-      color: #856404;
-      font-size: 16px;
+    /* 統計 */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .stat-item {
+      text-align: center;
+      padding: 12px;
+      background: #f8f9fa;
+      border-radius: 6px;
+    }
+
+    .stat-value {
+      font-size: 20px;
+      font-weight: 700;
+      color: #667eea;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: #888;
+      margin-top: 4px;
+    }
+
+    /* キュー一覧 */
+    .queue-list {
+      max-height: 250px;
+      overflow-y: auto;
       margin-bottom: 12px;
     }
 
-    .instructions ol {
-      margin-left: 20px;
-      color: #856404;
-      font-size: 13px;
-      line-height: 1.8;
-    }
-
-    .button-group {
-      margin-top: 25px;
-    }
-
-    .spreadsheet-link {
-      margin-top: 20px;
-      padding: 15px;
-      background: #e8f5e9;
-      border-radius: 10px;
-      border-left: 4px solid #4caf50;
-    }
-
-    .spreadsheet-link h3 {
-      color: #2e7d32;
-      font-size: 14px;
+    .queue-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px;
+      border: 1px solid #eee;
+      border-radius: 6px;
       margin-bottom: 8px;
+      background: #fafafa;
     }
 
-    .spreadsheet-link a {
-      color: #1976d2;
+    .queue-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .queue-item-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .queue-item-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #333;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .queue-item-url {
+      font-size: 10px;
+      color: #888;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .queue-item-remove {
+      background: none;
+      border: none;
+      color: #dc3545;
+      cursor: pointer;
+      padding: 4px 8px;
+      font-size: 14px;
+    }
+
+    .queue-item-remove:hover {
+      background: #ffebee;
+      border-radius: 4px;
+    }
+
+    .queue-empty {
+      text-align: center;
+      color: #888;
+      font-size: 12px;
+      padding: 20px;
+    }
+
+    /* ログ */
+    .log-container {
+      max-height: 200px;
+      overflow-y: auto;
+      background: #1e1e1e;
+      border-radius: 6px;
+      padding: 10px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 11px;
+      color: #d4d4d4;
+    }
+
+    .log-entry {
+      margin-bottom: 2px;
+    }
+
+    .log-entry .time {
+      color: #6a9955;
+    }
+
+    .log-entry.error {
+      color: #f48771;
+    }
+
+    .log-entry.success {
+      color: #89d185;
+    }
+
+    /* リンク */
+    .spreadsheet-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
+      color: white;
       text-decoration: none;
+      border-radius: 6px;
       font-size: 13px;
-      word-break: break-all;
+      font-weight: 600;
     }
 
-    .spreadsheet-link a:hover {
-      text-decoration: underline;
+    .spreadsheet-link:hover {
+      box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+    }
+
+    .help-text {
+      font-size: 11px;
+      color: #888;
+      margin-top: 8px;
+    }
+
+    .divider {
+      border-top: 1px solid #eee;
+      margin: 12px 0;
+    }
+
+    /* ランキング */
+    .ranking-input {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+
+    .ranking-input .form-group {
+      margin-bottom: 0;
+    }
+
+    .ranking-input .form-group:first-child {
+      flex: 1;
+    }
+
+    .ranking-input input[type="number"] {
+      width: 80px;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>設定</h1>
-    <p class="subtitle">楽天市場レビュー収集拡張機能の設定を行います</p>
+    <div class="header">
+      <h1>楽天レビュー収集</h1>
+      <p>設定・キュー管理</p>
+    </div>
 
-    <div class="form-group">
-      <label for="gasUrl">Google Apps Script Web App URL</label>
-      <input type="text" id="gasUrl" placeholder="https://script.google.com/macros/s/xxxxx/exec">
-      <div class="help-text">
-        <strong>スプレッドシートに自動保存したい場合</strong>は、専用のGAS URLをここに貼り付けてください。<br>
-        <strong>空欄の場合</strong>は、CSVファイルとしてダウンロードされます。
+    <div class="grid">
+      <!-- 収集状況 -->
+      <div class="card">
+        <h2>収集状況</h2>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div id="totalReviews" class="stat-value">0</div>
+            <div class="stat-label">レビュー数</div>
+          </div>
+          <div class="stat-item">
+            <div id="currentPage" class="stat-value">0/0</div>
+            <div class="stat-label">ページ</div>
+          </div>
+          <div class="stat-item">
+            <div id="queueRemaining" class="stat-value">0</div>
+            <div class="stat-label">キュー残り</div>
+          </div>
+        </div>
+
+        <div class="btn-group">
+          <a id="spreadsheetLink" href="#" target="_blank" class="spreadsheet-link" style="display: none;">
+            スプレッドシート
+          </a>
+          <button id="downloadBtn" class="btn btn-secondary" disabled>CSV</button>
+          <button id="clearDataBtn" class="btn btn-danger" disabled>クリア</button>
+        </div>
       </div>
-    </div>
 
-    <div class="button-group">
-      <button id="saveBtn" class="btn btn-primary">保存</button>
-      <button id="testBtn" class="btn btn-secondary">接続テスト</button>
-    </div>
+      <!-- スプレッドシート設定 -->
+      <div class="card">
+        <h2>スプレッドシート設定</h2>
+        <div class="form-group">
+          <label>GAS Web App URL</label>
+          <input type="text" id="gasUrl" placeholder="https://script.google.com/macros/s/xxx/exec">
+        </div>
 
-    <div id="status" class="status"></div>
+        <label class="checkbox-label">
+          <input type="checkbox" id="separateSheets" checked>
+          <span>商品ごとにシートを分ける</span>
+        </label>
 
-    <div id="spreadsheetLink" class="spreadsheet-link" style="display: none;">
-      <h3>接続先スプレッドシート</h3>
-      <a id="spreadsheetUrl" href="#" target="_blank"></a>
-    </div>
+        <div class="btn-group" style="margin-top: 12px;">
+          <button id="saveSettingsBtn" class="btn btn-primary">保存</button>
+        </div>
 
-    <div class="instructions">
-      <h3>GAS Web Appの設定方法</h3>
-      <ol>
-        <li>Googleスプレッドシートを新規作成</li>
-        <li>拡張機能 → Apps Script を開く</li>
-        <li>提供された code.gs のコードを貼り付け</li>
-        <li>デプロイ → 新しいデプロイ → ウェブアプリ を選択</li>
-        <li>アクセスできるユーザーを「全員」に設定</li>
-        <li>デプロイしてURLをコピー</li>
-        <li>上記の入力欄にURLを貼り付けて保存</li>
-      </ol>
+        <div id="settingsStatus" class="status-message"></div>
+        <p class="help-text">空欄 = CSVモード</p>
+      </div>
+
+      <!-- キュー管理 -->
+      <div class="card">
+        <h2>キュー管理</h2>
+        <div id="queueList" class="queue-list">
+          <div class="queue-empty">キューは空です</div>
+        </div>
+        <div class="btn-group">
+          <button id="startQueueBtn" class="btn btn-success" disabled>一括収集開始</button>
+          <button id="clearQueueBtn" class="btn btn-secondary">クリア</button>
+        </div>
+      </div>
+
+      <!-- ランキングから追加 -->
+      <div class="card">
+        <h2>ランキングから追加</h2>
+        <div class="form-group">
+          <label>楽天ランキングURL</label>
+          <input type="text" id="rankingUrl" placeholder="https://ranking.rakuten.co.jp/...">
+        </div>
+        <div class="ranking-input">
+          <div class="form-group">
+            <label>上位</label>
+          </div>
+          <div class="form-group">
+            <input type="number" id="rankingCount" value="10" min="1" max="100">
+          </div>
+          <div class="form-group">
+            <label>商品</label>
+          </div>
+          <button id="addRankingBtn" class="btn btn-primary">追加</button>
+        </div>
+        <div id="rankingStatus" class="status-message"></div>
+        <p class="help-text">ランキングページから上位商品をキューに追加</p>
+      </div>
+
+      <!-- ログ -->
+      <div class="card full-width">
+        <h2>ログ</h2>
+        <div id="logContainer" class="log-container">
+          <div class="log-entry"><span class="time">[--:--:--]</span> 待機中...</div>
+        </div>
+        <button id="clearLogBtn" class="btn btn-secondary" style="margin-top: 10px;">ログクリア</button>
+      </div>
     </div>
   </div>
 

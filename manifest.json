@@ -1,17 +1,19 @@
 {
   "manifest_version": 3,
   "name": "楽天市場レビュー収集",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "楽天市場の商品レビューを収集してスプレッドシートに保存またはCSVダウンロードします",
   "permissions": [
     "storage",
     "activeTab",
     "scripting",
-    "downloads"
+    "downloads",
+    "tabs"
   ],
   "host_permissions": [
     "https://review.rakuten.co.jp/*",
     "https://item.rakuten.co.jp/*",
+    "https://ranking.rakuten.co.jp/*",
     "https://script.google.com/*"
   ],
   "action": {
@@ -22,6 +24,7 @@
       "128": "icons/icon128.png"
     }
   },
+  "options_page": "options.html",
   "background": {
     "service_worker": "background.js"
   },

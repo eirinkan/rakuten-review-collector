@@ -1,151 +1,333 @@
 /**
  * 設定画面のスクリプト
- * GAS Web App URLの保存・読み込み・接続テストを行う
+ * キュー管理、ランキング追加、設定、ログ表示
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+  // DOM要素
+  const totalReviews = document.getElementById('totalReviews');
+  const currentPage = document.getElementById('currentPage');
+  const queueRemaining = document.getElementById('queueRemaining');
+  const spreadsheetLink = document.getElementById('spreadsheetLink');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const clearDataBtn = document.getElementById('clearDataBtn');
+
   const gasUrlInput = document.getElementById('gasUrl');
-  const saveBtn = document.getElementById('saveBtn');
-  const testBtn = document.getElementById('testBtn');
-  const statusDiv = document.getElementById('status');
-  const spreadsheetLinkDiv = document.getElementById('spreadsheetLink');
-  const spreadsheetUrlLink = document.getElementById('spreadsheetUrl');
+  const separateSheetsCheckbox = document.getElementById('separateSheets');
+  const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+  const settingsStatus = document.getElementById('settingsStatus');
 
-  // 保存済みの設定を読み込む
-  loadSettings();
+  const queueList = document.getElementById('queueList');
+  const startQueueBtn = document.getElementById('startQueueBtn');
+  const clearQueueBtn = document.getElementById('clearQueueBtn');
 
-  // 保存ボタンのクリックイベント
-  saveBtn.addEventListener('click', saveSettings);
+  const rankingUrl = document.getElementById('rankingUrl');
+  const rankingCount = document.getElementById('rankingCount');
+  const addRankingBtn = document.getElementById('addRankingBtn');
+  const rankingStatus = document.getElementById('rankingStatus');
 
-  // 接続テストボタンのクリックイベント
-  testBtn.addEventListener('click', testConnection);
+  const logContainer = document.getElementById('logContainer');
+  const clearLogBtn = document.getElementById('clearLogBtn');
 
-  /**
-   * 保存済みの設定を読み込む
-   */
+  // 初期化
+  init();
+
+  function init() {
+    loadSettings();
+    loadState();
+    loadQueue();
+    loadLogs();
+
+    // イベントリスナー
+    saveSettingsBtn.addEventListener('click', saveSettings);
+    downloadBtn.addEventListener('click', downloadCSV);
+    clearDataBtn.addEventListener('click', clearData);
+    startQueueBtn.addEventListener('click', startQueueCollection);
+    clearQueueBtn.addEventListener('click', clearQueue);
+    addRankingBtn.addEventListener('click', addFromRanking);
+    clearLogBtn.addEventListener('click', clearLogs);
+
+    // バックグラウンドからのメッセージ
+    chrome.runtime.onMessage.addListener(handleMessage);
+
+    // 定期更新
+    setInterval(() => {
+      loadState();
+      loadQueue();
+    }, 2000);
+  }
+
   function loadSettings() {
-    chrome.storage.sync.get(['gasUrl'], (result) => {
+    chrome.storage.sync.get(['gasUrl', 'separateSheets', 'spreadsheetUrl'], (result) => {
       if (result.gasUrl) {
         gasUrlInput.value = result.gasUrl;
       }
-    });
-  }
+      separateSheetsCheckbox.checked = result.separateSheets !== false;
 
-  /**
-   * 設定を保存する
-   */
-  function saveSettings() {
-    const gasUrl = gasUrlInput.value.trim();
-
-    // URLの簡易バリデーション
-    if (gasUrl && !isValidGasUrl(gasUrl)) {
-      showStatus('error', 'URLの形式が正しくありません。Google Apps ScriptのWeb App URLを入力してください。');
-      return;
-    }
-
-    chrome.storage.sync.set({ gasUrl }, () => {
-      if (chrome.runtime.lastError) {
-        showStatus('error', '保存に失敗しました: ' + chrome.runtime.lastError.message);
-      } else {
-        if (gasUrl) {
-          showStatus('success', '設定を保存しました。レビューはスプレッドシートに自動保存されます。');
-        } else {
-          showStatus('success', '設定を保存しました。レビューはCSVファイルとしてダウンロードされます。');
-        }
+      if (result.spreadsheetUrl) {
+        spreadsheetLink.href = result.spreadsheetUrl;
+        spreadsheetLink.style.display = 'inline-flex';
       }
     });
   }
 
-  /**
-   * GAS URLの簡易バリデーション
-   */
+  function loadState() {
+    chrome.storage.local.get(['collectionState'], (result) => {
+      const state = result.collectionState || {};
+      totalReviews.textContent = state.reviewCount || 0;
+      currentPage.textContent = `${state.pageCount || 0}/${state.totalPages || 0}`;
+
+      const hasData = (state.reviewCount || 0) > 0;
+      downloadBtn.disabled = !hasData;
+      clearDataBtn.disabled = !hasData;
+    });
+  }
+
+  function loadQueue() {
+    chrome.storage.local.get(['queue'], (result) => {
+      const queue = result.queue || [];
+      queueRemaining.textContent = queue.length;
+      startQueueBtn.disabled = queue.length === 0;
+
+      if (queue.length === 0) {
+        queueList.innerHTML = '<div class="queue-empty">キューは空です</div>';
+        return;
+      }
+
+      queueList.innerHTML = queue.map((item, index) => `
+        <div class="queue-item">
+          <div class="queue-item-info">
+            <div class="queue-item-title">${escapeHtml(item.title || '商品')}</div>
+            <div class="queue-item-url">${escapeHtml(item.url)}</div>
+          </div>
+          <button class="queue-item-remove" data-index="${index}">×</button>
+        </div>
+      `).join('');
+
+      // 削除ボタンのイベント
+      queueList.querySelectorAll('.queue-item-remove').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          removeFromQueue(parseInt(e.target.dataset.index));
+        });
+      });
+    });
+  }
+
+  function loadLogs() {
+    chrome.storage.local.get(['logs'], (result) => {
+      const logs = result.logs || [];
+      if (logs.length === 0) {
+        logContainer.innerHTML = '<div class="log-entry"><span class="time">[--:--:--]</span> 待機中...</div>';
+        return;
+      }
+
+      logContainer.innerHTML = logs.map(log => {
+        const typeClass = log.type ? ` ${log.type}` : '';
+        return `<div class="log-entry${typeClass}"><span class="time">[${log.time}]</span> ${escapeHtml(log.text)}</div>`;
+      }).join('');
+
+      logContainer.scrollTop = logContainer.scrollHeight;
+    });
+  }
+
+  async function saveSettings() {
+    const gasUrl = gasUrlInput.value.trim();
+    const separateSheets = separateSheetsCheckbox.checked;
+
+    if (gasUrl && !isValidGasUrl(gasUrl)) {
+      showStatus(settingsStatus, 'error', 'URLの形式が正しくありません');
+      return;
+    }
+
+    chrome.storage.sync.set({ gasUrl, separateSheets }, async () => {
+      if (chrome.runtime.lastError) {
+        showStatus(settingsStatus, 'error', '保存に失敗しました');
+        return;
+      }
+
+      if (gasUrl) {
+        // 接続テスト
+        showStatus(settingsStatus, 'info', '接続テスト中...');
+        try {
+          const response = await fetch(gasUrl, { method: 'GET', mode: 'cors' });
+          const data = await response.json();
+
+          if (data.success) {
+            showStatus(settingsStatus, 'success', '保存・接続成功');
+            if (data.spreadsheetUrl) {
+              chrome.storage.sync.set({ spreadsheetUrl: data.spreadsheetUrl });
+              spreadsheetLink.href = data.spreadsheetUrl;
+              spreadsheetLink.style.display = 'inline-flex';
+            }
+          } else {
+            showStatus(settingsStatus, 'error', '接続失敗');
+          }
+        } catch (e) {
+          showStatus(settingsStatus, 'success', '保存しました');
+        }
+      } else {
+        showStatus(settingsStatus, 'success', '保存しました（CSVモード）');
+        spreadsheetLink.style.display = 'none';
+      }
+    });
+  }
+
   function isValidGasUrl(url) {
     return url.startsWith('https://script.google.com/macros/s/') && url.includes('/exec');
   }
 
-  /**
-   * GASへの接続テスト
-   */
-  async function testConnection() {
-    const gasUrl = gasUrlInput.value.trim();
+  function downloadCSV() {
+    chrome.runtime.sendMessage({ action: 'downloadCSV' }, (response) => {
+      if (response && response.success) {
+        addLog('CSVダウンロード完了', 'success');
+      } else {
+        addLog('CSVダウンロード失敗: ' + (response?.error || ''), 'error');
+      }
+    });
+  }
 
-    if (!gasUrl) {
-      showStatus('error', 'URLを入力してください。');
+  function clearData() {
+    if (!confirm('収集したデータをすべて削除しますか？')) return;
+
+    chrome.storage.local.set({
+      collectionState: {
+        isRunning: false,
+        reviewCount: 0,
+        pageCount: 0,
+        totalPages: 0,
+        reviews: [],
+        logs: []
+      }
+    }, () => {
+      loadState();
+      addLog('データをクリアしました', 'success');
+    });
+  }
+
+  function removeFromQueue(index) {
+    chrome.storage.local.get(['queue'], (result) => {
+      const queue = result.queue || [];
+      queue.splice(index, 1);
+      chrome.storage.local.set({ queue }, () => {
+        loadQueue();
+      });
+    });
+  }
+
+  function clearQueue() {
+    if (!confirm('キューをクリアしますか？')) return;
+
+    chrome.storage.local.set({ queue: [] }, () => {
+      loadQueue();
+      addLog('キューをクリアしました');
+    });
+  }
+
+  function startQueueCollection() {
+    chrome.runtime.sendMessage({ action: 'startQueueCollection' }, (response) => {
+      if (response && response.success) {
+        addLog('キュー一括収集を開始しました', 'success');
+      } else {
+        addLog('開始に失敗: ' + (response?.error || ''), 'error');
+      }
+    });
+  }
+
+  async function addFromRanking() {
+    const url = rankingUrl.value.trim();
+    const count = parseInt(rankingCount.value) || 10;
+
+    if (!url) {
+      showStatus(rankingStatus, 'error', 'URLを入力してください');
       return;
     }
 
-    if (!isValidGasUrl(gasUrl)) {
-      showStatus('error', 'URLの形式が正しくありません。');
+    if (!url.includes('ranking.rakuten.co.jp')) {
+      showStatus(rankingStatus, 'error', '楽天ランキングのURLを入力してください');
       return;
     }
 
-    showStatus('', 'テスト中...');
-    statusDiv.style.display = 'block';
-    statusDiv.style.background = '#e2e3e5';
-    statusDiv.style.color = '#383d41';
-    spreadsheetLinkDiv.style.display = 'none';
+    showStatus(rankingStatus, 'info', `ランキングを取得中...`);
 
     try {
-      // GETリクエストでスプレッドシート情報を取得
-      const response = await fetch(gasUrl, {
-        method: 'GET',
-        mode: 'cors'
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        showStatus('success', '接続テスト成功。GASへの通信が確認できました。');
-
-        // スプレッドシートURLを表示
-        if (data.spreadsheetUrl) {
-          spreadsheetUrlLink.href = data.spreadsheetUrl;
-          spreadsheetUrlLink.textContent = data.spreadsheetUrl;
-          spreadsheetLinkDiv.style.display = 'block';
-
-          // スプレッドシートURLを保存
-          chrome.storage.sync.set({ spreadsheetUrl: data.spreadsheetUrl });
+      // バックグラウンドでランキングを取得
+      chrome.runtime.sendMessage({
+        action: 'fetchRanking',
+        url: url,
+        count: count
+      }, (response) => {
+        if (response && response.success) {
+          showStatus(rankingStatus, 'success', `${response.addedCount}件追加しました`);
+          loadQueue();
+          addLog(`ランキングから${response.addedCount}件をキューに追加`, 'success');
+        } else {
+          showStatus(rankingStatus, 'error', response?.error || '取得に失敗しました');
         }
-      } else {
-        showStatus('error', '接続テスト失敗: ' + (data.error || '不明なエラー'));
-      }
-    } catch (error) {
-      // GETが失敗した場合、POSTでno-corsモードを試す
-      try {
-        await fetch(gasUrl, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            test: true,
-            timestamp: new Date().toISOString()
-          })
-        });
-        showStatus('success', '接続テスト成功（レスポンス取得不可）。スプレッドシートURLは手動で確認してください。');
-      } catch (postError) {
-        showStatus('error', '接続テスト失敗: ' + error.message);
-      }
+      });
+    } catch (e) {
+      showStatus(rankingStatus, 'error', '取得に失敗しました');
     }
   }
 
-  /**
-   * ステータスメッセージを表示
-   */
-  function showStatus(type, message) {
-    statusDiv.textContent = message;
-    statusDiv.className = 'status';
-    if (type) {
-      statusDiv.classList.add(type);
-    }
-    statusDiv.style.display = 'block';
+  function clearLogs() {
+    chrome.storage.local.set({ logs: [] }, () => {
+      loadLogs();
+    });
+  }
 
-    // 成功メッセージは3秒後に消す
+  function handleMessage(msg) {
+    if (!msg || !msg.action) return;
+
+    switch (msg.action) {
+      case 'updateProgress':
+        loadState();
+        break;
+      case 'collectionComplete':
+        loadState();
+        loadQueue();
+        addLog('収集完了', 'success');
+        break;
+      case 'queueUpdated':
+        loadQueue();
+        break;
+      case 'log':
+        addLog(msg.text, msg.type);
+        break;
+    }
+  }
+
+  function addLog(text, type = '') {
+    const time = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    chrome.storage.local.get(['logs'], (result) => {
+      const logs = result.logs || [];
+      logs.push({ time, text, type });
+
+      // 最新100件のみ保持
+      if (logs.length > 100) {
+        logs.splice(0, logs.length - 100);
+      }
+
+      chrome.storage.local.set({ logs }, () => {
+        loadLogs();
+      });
+    });
+  }
+
+  function showStatus(element, type, message) {
+    element.textContent = message;
+    element.className = 'status-message ' + type;
+
     if (type === 'success') {
       setTimeout(() => {
-        statusDiv.style.display = 'none';
+        element.className = 'status-message';
       }, 3000);
     }
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 });

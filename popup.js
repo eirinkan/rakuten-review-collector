@@ -1,299 +1,103 @@
 /**
- * ポップアップUIのスクリプト
- * 収集の開始/停止、進捗表示、データダウンロード、設定を制御
+ * ポップアップUIのスクリプト（シンプル版）
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // DOM要素の取得
   const pageWarning = document.getElementById('pageWarning');
-  const mainContent = document.getElementById('mainContent');
-  const modeIndicator = document.getElementById('modeIndicator');
-  const spreadsheetSection = document.getElementById('spreadsheetSection');
-  const spreadsheetLinkBottom = document.getElementById('spreadsheetLinkBottom');
-  const progressBar = document.getElementById('progressBar');
-  const progressText = document.getElementById('progressText');
+  const message = document.getElementById('message');
+  const statusText = document.getElementById('statusText');
   const reviewCount = document.getElementById('reviewCount');
   const pageCount = document.getElementById('pageCount');
+  const queueCount = document.getElementById('queueCount');
   const startBtn = document.getElementById('startBtn');
   const stopBtn = document.getElementById('stopBtn');
-  const downloadBtn = document.getElementById('downloadBtn');
-  const clearBtn = document.getElementById('clearBtn');
-  const errorMessage = document.getElementById('errorMessage');
-  const successMessage = document.getElementById('successMessage');
-  const logSection = document.getElementById('logSection');
-  const logContainer = document.getElementById('logContainer');
+  const queueBtn = document.getElementById('queueBtn');
+  const settingsBtn = document.getElementById('settingsBtn');
 
-  // 設定関連の要素
-  const settingsToggle = document.getElementById('settingsToggle');
-  const settingsSection = document.getElementById('settingsSection');
-  const gasUrlInput = document.getElementById('gasUrl');
-  const separateSheetsCheckbox = document.getElementById('separateSheets');
-  const saveSettingsBtn = document.getElementById('saveSettingsBtn');
-  const testConnectionBtn = document.getElementById('testConnectionBtn');
-  const settingsStatus = document.getElementById('settingsStatus');
-  const currentSpreadsheet = document.getElementById('currentSpreadsheet');
-  const currentSpreadsheetLink = document.getElementById('currentSpreadsheetLink');
-
-  // 初期化
   init();
 
-  /**
-   * 初期化処理
-   */
   async function init() {
-    // スプレッドシートリンクは常に確認・表示（どのページでも）
-    checkSpreadsheetLink();
-
-    // 設定を読み込む
-    loadSettings();
-
     // 現在のタブを確認
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const isReviewPage = tab.url && tab.url.includes('review.rakuten.co.jp');
-    const isItemPage = tab.url && tab.url.includes('item.rakuten.co.jp');
-    const isRakutenPage = isReviewPage || isItemPage;
+    const isRakutenPage = tab.url && (
+      tab.url.includes('review.rakuten.co.jp') ||
+      tab.url.includes('item.rakuten.co.jp')
+    );
 
     if (!isRakutenPage) {
       pageWarning.style.display = 'block';
-      mainContent.style.display = 'none';
+      startBtn.disabled = true;
+      queueBtn.disabled = true;
     }
 
-    // 保存モードを確認
-    checkSaveMode();
-
-    // 収集状態を復元
+    // 状態を復元
     restoreState();
 
-    // イベントリスナーの設定
-    setupEventListeners();
+    // キュー件数を更新
+    updateQueueCount();
 
-    // バックグラウンドからのメッセージを受信
+    // イベントリスナー
+    startBtn.addEventListener('click', startCollection);
+    stopBtn.addEventListener('click', stopCollection);
+    queueBtn.addEventListener('click', addToQueue);
+    settingsBtn.addEventListener('click', openSettings);
+
+    // バックグラウンドからのメッセージ
     chrome.runtime.onMessage.addListener(handleMessage);
   }
 
-  /**
-   * 設定を読み込む
-   */
-  function loadSettings() {
-    chrome.storage.sync.get(['gasUrl', 'separateSheets'], (result) => {
-      if (result.gasUrl) {
-        gasUrlInput.value = result.gasUrl;
-      }
-      if (separateSheetsCheckbox) {
-        separateSheetsCheckbox.checked = result.separateSheets !== false; // デフォルトはtrue
-      }
-    });
-  }
-
-  /**
-   * スプレッドシートリンクを確認して表示（常に実行）
-   */
-  function checkSpreadsheetLink() {
-    chrome.storage.sync.get(['gasUrl', 'spreadsheetUrl'], (result) => {
-      if (result.gasUrl && result.spreadsheetUrl) {
-        spreadsheetSection.style.display = 'block';
-        spreadsheetLinkBottom.href = result.spreadsheetUrl;
-      } else {
-        spreadsheetSection.style.display = 'none';
-      }
-    });
-  }
-
-  /**
-   * 保存モードを確認して表示を更新
-   */
-  function checkSaveMode() {
-    chrome.storage.sync.get(['gasUrl', 'spreadsheetUrl'], (result) => {
-      if (result.gasUrl) {
-        modeIndicator.className = 'mode-indicator spreadsheet';
-        modeIndicator.innerHTML = '<span class="icon">📊</span><span>スプレッドシート自動保存</span>';
-      } else {
-        modeIndicator.className = 'mode-indicator csv';
-        modeIndicator.innerHTML = '<span class="icon">📄</span><span>CSVダウンロード</span>';
-      }
-    });
-  }
-
-  /**
-   * 状態を復元
-   */
   function restoreState() {
     chrome.storage.local.get(['collectionState'], (result) => {
-      const state = result.collectionState || {
-        isRunning: false,
-        reviewCount: 0,
-        pageCount: 0,
-        reviews: [],
-        logs: []
-      };
-
+      const state = result.collectionState || {};
       updateUI(state);
     });
   }
 
-  /**
-   * イベントリスナーの設定
-   */
-  function setupEventListeners() {
-    startBtn.addEventListener('click', startCollection);
-    stopBtn.addEventListener('click', stopCollection);
-    downloadBtn.addEventListener('click', downloadCSV);
-    clearBtn.addEventListener('click', clearData);
-
-    // 設定トグル
-    settingsToggle.addEventListener('click', toggleSettings);
-    saveSettingsBtn.addEventListener('click', saveSettings);
-    testConnectionBtn.addEventListener('click', testConnection);
-  }
-
-  /**
-   * 設定セクションの表示/非表示を切り替え
-   */
-  function toggleSettings() {
-    settingsSection.classList.toggle('open');
-    settingsToggle.textContent = settingsSection.classList.contains('open') ? '閉じる' : '設定';
-  }
-
-  /**
-   * 設定を保存
-   */
-  function saveSettings() {
-    const gasUrl = gasUrlInput.value.trim();
-    const separateSheets = separateSheetsCheckbox ? separateSheetsCheckbox.checked : true;
-
-    // URLの簡易バリデーション
-    if (gasUrl && !isValidGasUrl(gasUrl)) {
-      showSettingsStatus('error', 'URLの形式が正しくありません');
-      return;
-    }
-
-    chrome.storage.sync.set({ gasUrl, separateSheets }, () => {
-      if (chrome.runtime.lastError) {
-        showSettingsStatus('error', '保存に失敗しました');
-      } else {
-        if (gasUrl) {
-          showSettingsStatus('success', '保存しました（スプレッドシートモード）');
-        } else {
-          showSettingsStatus('success', '保存しました（CSVモード）');
-        }
-        checkSaveMode();
-        checkSpreadsheetLink();
-      }
+  function updateQueueCount() {
+    chrome.storage.local.get(['queue'], (result) => {
+      const queue = result.queue || [];
+      queueCount.textContent = `${queue.length} 件`;
     });
   }
 
-  /**
-   * GAS URLの簡易バリデーション
-   */
-  function isValidGasUrl(url) {
-    return url.startsWith('https://script.google.com/macros/s/') && url.includes('/exec');
-  }
+  function updateUI(state) {
+    reviewCount.textContent = state.reviewCount || 0;
 
-  /**
-   * GASへの接続テスト
-   */
-  async function testConnection() {
-    const gasUrl = gasUrlInput.value.trim();
+    const current = state.pageCount || 0;
+    const total = state.totalPages || 0;
+    pageCount.textContent = `${current} / ${total}`;
 
-    if (!gasUrl) {
-      showSettingsStatus('error', 'URLを入力してください');
-      return;
-    }
-
-    if (!isValidGasUrl(gasUrl)) {
-      showSettingsStatus('error', 'URLの形式が正しくありません');
-      return;
-    }
-
-    showSettingsStatus('testing', 'テスト中...');
-    currentSpreadsheet.style.display = 'none';
-
-    try {
-      // GETリクエストでスプレッドシート情報を取得
-      const response = await fetch(gasUrl, {
-        method: 'GET',
-        mode: 'cors'
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        showSettingsStatus('success', '接続成功');
-
-        // スプレッドシートURLを表示・保存
-        if (data.spreadsheetUrl) {
-          currentSpreadsheetLink.href = data.spreadsheetUrl;
-          currentSpreadsheetLink.textContent = '開く';
-          currentSpreadsheet.style.display = 'block';
-
-          chrome.storage.sync.set({ spreadsheetUrl: data.spreadsheetUrl }, () => {
-            checkSpreadsheetLink();
-          });
-        }
-      } else {
-        showSettingsStatus('error', '接続失敗: ' + (data.error || '不明なエラー'));
-      }
-    } catch (error) {
-      // GETが失敗した場合、POSTでno-corsモードを試す
-      try {
-        await fetch(gasUrl, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            test: true,
-            timestamp: new Date().toISOString()
-          })
-        });
-        showSettingsStatus('success', '接続成功（レスポンス取得不可）');
-      } catch (postError) {
-        showSettingsStatus('error', '接続失敗');
-      }
+    if (state.isRunning) {
+      statusText.textContent = '収集中...';
+      statusText.classList.add('running');
+      startBtn.style.display = 'none';
+      stopBtn.style.display = 'block';
+    } else {
+      statusText.textContent = '待機中';
+      statusText.classList.remove('running');
+      startBtn.style.display = 'block';
+      stopBtn.style.display = 'none';
     }
   }
 
-  /**
-   * 設定ステータスを表示
-   */
-  function showSettingsStatus(type, message) {
-    settingsStatus.textContent = message;
-    settingsStatus.className = 'settings-status ' + type;
-
-    if (type === 'success') {
-      setTimeout(() => {
-        settingsStatus.style.display = 'none';
-      }, 3000);
-    }
-  }
-
-  /**
-   * 収集開始
-   */
   async function startCollection() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-    // コンテンツスクリプトに収集開始を指示
     chrome.tabs.sendMessage(tab.id, { action: 'startCollection' }, (response) => {
       if (chrome.runtime.lastError) {
-        showError('ページとの通信に失敗しました。ページをリロードしてください。');
+        showMessage('ページをリロードしてください', 'error');
         return;
       }
 
       if (response && response.success) {
         startBtn.style.display = 'none';
         stopBtn.style.display = 'block';
-        progressText.textContent = '収集中...';
-        hideMessages();
-        addLog('収集を開始しました');
+        statusText.textContent = '収集中...';
+        statusText.classList.add('running');
       }
     });
   }
 
-  /**
-   * 収集停止
-   */
   async function stopCollection() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
@@ -301,169 +105,89 @@ document.addEventListener('DOMContentLoaded', () => {
       if (response && response.success) {
         startBtn.style.display = 'block';
         stopBtn.style.display = 'none';
-        progressText.textContent = '停止しました';
-        addLog('収集を停止しました');
+        statusText.textContent = '停止';
+        statusText.classList.remove('running');
       }
     });
   }
 
-  /**
-   * CSVダウンロード
-   */
-  function downloadCSV() {
-    chrome.runtime.sendMessage({ action: 'downloadCSV' }, (response) => {
-      if (response && response.success) {
-        showSuccess('CSVファイルをダウンロードしました');
-      } else {
-        showError(response?.error || 'ダウンロードに失敗しました');
-      }
-    });
-  }
+  async function addToQueue() {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-  /**
-   * データクリア
-   */
-  function clearData() {
-    if (!confirm('収集したデータをすべて削除しますか？')) {
+    if (!tab.url.includes('item.rakuten.co.jp') && !tab.url.includes('review.rakuten.co.jp')) {
+      showMessage('楽天の商品ページを開いてください', 'error');
       return;
     }
 
-    chrome.storage.local.set({
-      collectionState: {
-        isRunning: false,
-        reviewCount: 0,
-        pageCount: 0,
-        reviews: [],
-        logs: []
+    // 商品情報を取得してキューに追加
+    chrome.tabs.sendMessage(tab.id, { action: 'getProductInfo' }, (response) => {
+      if (chrome.runtime.lastError || !response) {
+        // content scriptが応答しない場合はURLから情報を取得
+        const productInfo = {
+          url: tab.url,
+          title: tab.title || 'Unknown',
+          addedAt: new Date().toISOString()
+        };
+        addProductToQueue(productInfo);
+        return;
       }
-    }, () => {
-      reviewCount.textContent = '0';
-      pageCount.textContent = '0';
-      progressBar.style.width = '0%';
-      progressText.textContent = '待機中';
-      downloadBtn.disabled = true;
-      clearBtn.disabled = true;
-      logContainer.innerHTML = '';
-      showSuccess('データをクリアしました');
+
+      if (response.success) {
+        addProductToQueue(response.productInfo);
+      }
     });
   }
 
-  /**
-   * バックグラウンドからのメッセージを処理
-   */
-  function handleMessage(message, sender, sendResponse) {
-    if (!message || !message.action) return;
+  function addProductToQueue(productInfo) {
+    chrome.storage.local.get(['queue'], (result) => {
+      const queue = result.queue || [];
 
-    switch (message.action) {
+      // 重複チェック
+      const exists = queue.some(item => item.url === productInfo.url);
+      if (exists) {
+        showMessage('既にキューに追加済みです', 'error');
+        return;
+      }
+
+      queue.push(productInfo);
+      chrome.storage.local.set({ queue: queue }, () => {
+        showMessage('キューに追加しました', 'success');
+        updateQueueCount();
+      });
+    });
+  }
+
+  function openSettings() {
+    chrome.runtime.openOptionsPage();
+  }
+
+  function handleMessage(msg) {
+    if (!msg || !msg.action) return;
+
+    switch (msg.action) {
       case 'updateProgress':
-        if (message.state) {
-          updateUI(message.state);
-        }
+        if (msg.state) updateUI(msg.state);
         break;
       case 'collectionComplete':
+        statusText.textContent = '完了';
+        statusText.classList.remove('running');
         startBtn.style.display = 'block';
         stopBtn.style.display = 'none';
-        progressText.textContent = '収集完了';
-        const count = message.state?.reviewCount || 0;
-        showSuccess(`${count}件のレビューを収集しました`);
-        if (message.state) {
-          updateUI(message.state);
-        }
+        if (msg.state) updateUI(msg.state);
+        showMessage(`${msg.state?.reviewCount || 0}件収集完了`, 'success');
+        updateQueueCount();
         break;
-      case 'collectionError':
-        startBtn.style.display = 'block';
-        stopBtn.style.display = 'none';
-        showError(message.error || 'エラーが発生しました');
-        break;
-      case 'log':
-        addLog(message.text || '', message.type || '');
+      case 'queueUpdated':
+        updateQueueCount();
         break;
     }
   }
 
-  /**
-   * UIを更新
-   */
-  function updateUI(state) {
-    reviewCount.textContent = state.reviewCount || 0;
-    pageCount.textContent = state.pageCount || 0;
-
-    // ボタンの有効/無効
-    const hasData = (state.reviewCount || 0) > 0;
-    downloadBtn.disabled = !hasData;
-    clearBtn.disabled = !hasData;
-
-    // 収集中かどうか
-    if (state.isRunning) {
-      startBtn.style.display = 'none';
-      stopBtn.style.display = 'block';
-      progressText.textContent = '収集中...';
-    } else {
-      startBtn.style.display = 'block';
-      stopBtn.style.display = 'none';
-    }
-
-    // ログセクションの表示
-    if (state.logs && state.logs.length > 0) {
-      logSection.style.display = 'block';
-      logContainer.innerHTML = state.logs.map(log =>
-        `<div class="log-entry ${log.type || ''}">${log.text}</div>`
-      ).join('');
-      logContainer.scrollTop = logContainer.scrollHeight;
-    }
-  }
-
-  /**
-   * ログを追加
-   */
-  function addLog(text, type = '') {
-    logSection.style.display = 'block';
-    const entry = document.createElement('div');
-    entry.className = `log-entry ${type}`;
-    entry.textContent = `${new Date().toLocaleTimeString()} - ${text}`;
-    logContainer.appendChild(entry);
-    logContainer.scrollTop = logContainer.scrollHeight;
-
-    // ストレージにも保存
-    chrome.storage.local.get(['collectionState'], (result) => {
-      const state = result.collectionState || { logs: [] };
-      state.logs = state.logs || [];
-      state.logs.push({ text: `${new Date().toLocaleTimeString()} - ${text}`, type });
-      // 最新50件のみ保持
-      if (state.logs.length > 50) {
-        state.logs = state.logs.slice(-50);
-      }
-      chrome.storage.local.set({ collectionState: state });
-    });
-  }
-
-  /**
-   * エラーメッセージを表示
-   */
-  function showError(text) {
-    errorMessage.textContent = text;
-    errorMessage.style.display = 'block';
-    successMessage.style.display = 'none';
-  }
-
-  /**
-   * 成功メッセージを表示
-   */
-  function showSuccess(text) {
-    successMessage.textContent = text;
-    successMessage.style.display = 'block';
-    errorMessage.style.display = 'none';
-
+  function showMessage(text, type) {
+    message.textContent = text;
+    message.className = 'message ' + type;
     setTimeout(() => {
-      successMessage.style.display = 'none';
+      message.className = 'message';
     }, 3000);
-  }
-
-  /**
-   * メッセージを非表示
-   */
-  function hideMessages() {
-    errorMessage.style.display = 'none';
-    successMessage.style.display = 'none';
   }
 });
