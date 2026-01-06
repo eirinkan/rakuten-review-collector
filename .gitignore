@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDEおよびエディタ
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ログ
+*.log
+npm-debug.log*
+
+# 一時ファイル
+*.tmp
+*.temp

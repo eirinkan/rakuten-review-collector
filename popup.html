@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>楽天レビュー収集</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      width: 360px;
+      font-family: 'Segoe UI', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+      background: #f5f5f5;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      margin-bottom: 5px;
+    }
+
+    .header p {
+      font-size: 12px;
+      opacity: 0.9;
+    }
+
+    .content {
+      padding: 20px;
+    }
+
+    .status-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 15px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    }
+
+    .status-card h2 {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 10px;
+    }
+
+    .mode-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .mode-indicator.spreadsheet {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .mode-indicator.csv {
+      background: #fff3e0;
+      color: #e65100;
+    }
+
+    .mode-indicator .icon {
+      font-size: 18px;
+    }
+
+    .progress-section {
+      margin-top: 15px;
+    }
+
+    .progress-bar-container {
+      background: #e0e0e0;
+      border-radius: 10px;
+      height: 10px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .progress-bar {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      height: 100%;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    .progress-text {
+      font-size: 12px;
+      color: #666;
+      text-align: center;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .stat-item {
+      background: #f8f9fa;
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .stat-item .value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #667eea;
+    }
+
+    .stat-item .label {
+      font-size: 11px;
+      color: #888;
+      margin-top: 4px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 600;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-start {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-start:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-stop {
+      background: #dc3545;
+      color: white;
+    }
+
+    .btn-stop:hover {
+      background: #c82333;
+    }
+
+    .btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .action-buttons .btn {
+      flex: 1;
+      padding: 10px;
+      font-size: 13px;
+    }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #666;
+    }
+
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+
+    .error-message {
+      background: #ffebee;
+      color: #c62828;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-top: 10px;
+      display: none;
+    }
+
+    .success-message {
+      background: #e8f5e9;
+      color: #2e7d32;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-top: 10px;
+      display: none;
+    }
+
+    .page-warning {
+      background: #fff8e1;
+      color: #f57c00;
+      padding: 15px;
+      border-radius: 8px;
+      font-size: 13px;
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    .footer {
+      padding: 15px 20px;
+      text-align: center;
+      border-top: 1px solid #eee;
+      background: white;
+    }
+
+    .footer a {
+      color: #667eea;
+      text-decoration: none;
+      font-size: 12px;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
+
+    .log-section {
+      margin-top: 15px;
+      max-height: 100px;
+      overflow-y: auto;
+      font-size: 11px;
+      color: #666;
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 10px;
+    }
+
+    .log-entry {
+      margin-bottom: 4px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .log-entry:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .log-entry.error {
+      color: #c62828;
+    }
+
+    .log-entry.success {
+      color: #2e7d32;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>楽天レビュー収集</h1>
+    <p>商品レビューを自動収集します</p>
+  </div>
+
+  <div class="content">
+    <!-- ページ警告（楽天レビューページ以外で表示） -->
+    <div id="pageWarning" class="page-warning" style="display: none;">
+      楽天市場の商品レビューページを開いてから、収集を開始してください。
+    </div>
+
+    <!-- メインコンテンツ -->
+    <div id="mainContent">
+      <div class="status-card">
+        <h2>保存モード</h2>
+        <div id="modeIndicator" class="mode-indicator csv">
+          <span class="icon">📄</span>
+          <span>CSVダウンロード</span>
+        </div>
+      </div>
+
+      <div class="status-card">
+        <h2>収集状況</h2>
+        <div class="progress-section">
+          <div class="progress-bar-container">
+            <div id="progressBar" class="progress-bar"></div>
+          </div>
+          <div id="progressText" class="progress-text">待機中</div>
+        </div>
+        <div class="stats">
+          <div class="stat-item">
+            <div id="reviewCount" class="value">0</div>
+            <div class="label">収集レビュー数</div>
+          </div>
+          <div class="stat-item">
+            <div id="pageCount" class="value">0</div>
+            <div class="label">処理ページ数</div>
+          </div>
+        </div>
+      </div>
+
+      <button id="startBtn" class="btn btn-start">
+        <span>収集開始</span>
+      </button>
+      <button id="stopBtn" class="btn btn-stop" style="display: none;">
+        <span>収集停止</span>
+      </button>
+
+      <div class="action-buttons">
+        <button id="downloadBtn" class="btn btn-secondary" disabled>
+          CSVダウンロード
+        </button>
+        <button id="clearBtn" class="btn btn-secondary" disabled>
+          データクリア
+        </button>
+      </div>
+
+      <div id="errorMessage" class="error-message"></div>
+      <div id="successMessage" class="success-message"></div>
+
+      <div id="logSection" class="log-section" style="display: none;">
+        <div id="logContainer"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <a href="options.html" target="_blank">設定を開く</a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

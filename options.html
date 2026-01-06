@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>楽天レビュー収集 - 設定</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      padding: 40px;
+    }
+
+    h1 {
+      color: #333;
+      font-size: 24px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .subtitle {
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 30px;
+    }
+
+    .form-group {
+      margin-bottom: 25px;
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      color: #444;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 14px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 14px;
+      transition: all 0.3s ease;
+    }
+
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+    }
+
+    .help-text {
+      margin-top: 10px;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #666;
+      line-height: 1.6;
+    }
+
+    .help-text strong {
+      color: #333;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 14px 32px;
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #666;
+      margin-left: 10px;
+    }
+
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+
+    .status {
+      margin-top: 20px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: none;
+    }
+
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+      display: block;
+    }
+
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+      display: block;
+    }
+
+    .instructions {
+      margin-top: 30px;
+      padding: 20px;
+      background: #fff3cd;
+      border-radius: 10px;
+      border-left: 4px solid #ffc107;
+    }
+
+    .instructions h3 {
+      color: #856404;
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+
+    .instructions ol {
+      margin-left: 20px;
+      color: #856404;
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .button-group {
+      margin-top: 25px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>設定</h1>
+    <p class="subtitle">楽天市場レビュー収集拡張機能の設定を行います</p>
+
+    <div class="form-group">
+      <label for="gasUrl">Google Apps Script Web App URL</label>
+      <input type="text" id="gasUrl" placeholder="https://script.google.com/macros/s/xxxxx/exec">
+      <div class="help-text">
+        <strong>スプレッドシートに自動保存したい場合</strong>は、専用のGAS URLをここに貼り付けてください。<br>
+        <strong>空欄の場合</strong>は、CSVファイルとしてダウンロードされます。
+      </div>
+    </div>
+
+    <div class="button-group">
+      <button id="saveBtn" class="btn btn-primary">保存</button>
+      <button id="testBtn" class="btn btn-secondary">接続テスト</button>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <div class="instructions">
+      <h3>GAS Web Appの設定方法</h3>
+      <ol>
+        <li>Googleスプレッドシートを新規作成</li>
+        <li>拡張機能 → Apps Script を開く</li>
+        <li>提供された code.gs のコードを貼り付け</li>
+        <li>デプロイ → 新しいデプロイ → ウェブアプリ を選択</li>
+        <li>アクセスできるユーザーを「全員」に設定</li>
+        <li>デプロイしてURLをコピー</li>
+        <li>上記の入力欄にURLを貼り付けて保存</li>
+      </ol>
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
