@@ -8,6 +8,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const saveBtn = document.getElementById('saveBtn');
   const testBtn = document.getElementById('testBtn');
   const statusDiv = document.getElementById('status');
+  const spreadsheetLinkDiv = document.getElementById('spreadsheetLink');
+  const spreadsheetUrlLink = document.getElementById('spreadsheetUrl');
 
   // 保存済みの設定を読み込む
   loadSettings();
@@ -81,25 +83,50 @@ document.addEventListener('DOMContentLoaded', () => {
     statusDiv.style.display = 'block';
     statusDiv.style.background = '#e2e3e5';
     statusDiv.style.color = '#383d41';
+    spreadsheetLinkDiv.style.display = 'none';
 
     try {
-      // テスト用のPOSTリクエストを送信
+      // GETリクエストでスプレッドシート情報を取得
       const response = await fetch(gasUrl, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          test: true,
-          timestamp: new Date().toISOString()
-        })
+        method: 'GET',
+        mode: 'cors'
       });
 
-      // no-corsモードではレスポンスの内容を読めないが、エラーがなければ成功とみなす
-      showStatus('success', '接続テスト成功。GASへの通信が確認できました。');
+      const data = await response.json();
+
+      if (data.success) {
+        showStatus('success', '接続テスト成功。GASへの通信が確認できました。');
+
+        // スプレッドシートURLを表示
+        if (data.spreadsheetUrl) {
+          spreadsheetUrlLink.href = data.spreadsheetUrl;
+          spreadsheetUrlLink.textContent = data.spreadsheetUrl;
+          spreadsheetLinkDiv.style.display = 'block';
+
+          // スプレッドシートURLを保存
+          chrome.storage.sync.set({ spreadsheetUrl: data.spreadsheetUrl });
+        }
+      } else {
+        showStatus('error', '接続テスト失敗: ' + (data.error || '不明なエラー'));
+      }
     } catch (error) {
-      showStatus('error', '接続テスト失敗: ' + error.message);
+      // GETが失敗した場合、POSTでno-corsモードを試す
+      try {
+        await fetch(gasUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            test: true,
+            timestamp: new Date().toISOString()
+          })
+        });
+        showStatus('success', '接続テスト成功（レスポンス取得不可）。スプレッドシートURLは手動で確認してください。');
+      } catch (postError) {
+        showStatus('error', '接続テスト失敗: ' + error.message);
+      }
     }
   }
 

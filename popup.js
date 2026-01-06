@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const pageWarning = document.getElementById('pageWarning');
   const mainContent = document.getElementById('mainContent');
   const modeIndicator = document.getElementById('modeIndicator');
+  const spreadsheetLink = document.getElementById('spreadsheetLink');
   const progressBar = document.getElementById('progressBar');
   const progressText = document.getElementById('progressText');
   const reviewCount = document.getElementById('reviewCount');
@@ -55,13 +56,20 @@ document.addEventListener('DOMContentLoaded', () => {
    * 保存モードを確認して表示を更新
    */
   function checkSaveMode() {
-    chrome.storage.sync.get(['gasUrl'], (result) => {
+    chrome.storage.sync.get(['gasUrl', 'spreadsheetUrl'], (result) => {
       if (result.gasUrl) {
         modeIndicator.className = 'mode-indicator spreadsheet';
         modeIndicator.innerHTML = '<span class="icon">📊</span><span>スプレッドシート自動保存</span>';
+
+        // スプレッドシートリンクを表示
+        if (result.spreadsheetUrl) {
+          spreadsheetLink.href = result.spreadsheetUrl;
+          spreadsheetLink.style.display = 'block';
+        }
       } else {
         modeIndicator.className = 'mode-indicator csv';
         modeIndicator.innerHTML = '<span class="icon">📄</span><span>CSVダウンロード</span>';
+        spreadsheetLink.style.display = 'none';
       }
     });
   }

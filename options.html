@@ -158,6 +158,31 @@
     .button-group {
       margin-top: 25px;
     }
+
+    .spreadsheet-link {
+      margin-top: 20px;
+      padding: 15px;
+      background: #e8f5e9;
+      border-radius: 10px;
+      border-left: 4px solid #4caf50;
+    }
+
+    .spreadsheet-link h3 {
+      color: #2e7d32;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .spreadsheet-link a {
+      color: #1976d2;
+      text-decoration: none;
+      font-size: 13px;
+      word-break: break-all;
+    }
+
+    .spreadsheet-link a:hover {
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
@@ -180,6 +205,11 @@
     </div>
 
     <div id="status" class="status"></div>
+
+    <div id="spreadsheetLink" class="spreadsheet-link" style="display: none;">
+      <h3>接続先スプレッドシート</h3>
+      <a id="spreadsheetUrl" href="#" target="_blank"></a>
+    </div>
 
     <div class="instructions">
       <h3>GAS Web Appの設定方法</h3>

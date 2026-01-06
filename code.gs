@@ -20,14 +20,26 @@ function doPost(e) {
     // リクエストボディをパース
     const data = JSON.parse(e.postData.contents);
 
+    // スプレッドシートのURLを取得
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const spreadsheetUrl = ss.getUrl();
+
     // テストリクエストの場合
     if (data.test) {
-      return createResponse({ success: true, message: '接続テスト成功' });
+      return createResponse({
+        success: true,
+        message: '接続テスト成功',
+        spreadsheetUrl: spreadsheetUrl
+      });
     }
 
     // レビューデータがない場合
     if (!data.reviews || data.reviews.length === 0) {
-      return createResponse({ success: false, error: 'レビューデータがありません' });
+      return createResponse({
+        success: false,
+        error: 'レビューデータがありません',
+        spreadsheetUrl: spreadsheetUrl
+      });
     }
 
     // スプレッドシートに保存
@@ -36,7 +48,8 @@ function doPost(e) {
     return createResponse({
       success: true,
       message: `${savedCount}件のレビューを保存しました`,
-      savedCount: savedCount
+      savedCount: savedCount,
+      spreadsheetUrl: spreadsheetUrl
     });
 
   } catch (error) {
@@ -52,10 +65,12 @@ function doPost(e) {
  * GETリクエストを処理（テスト用）
  */
 function doGet(e) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
   return createResponse({
     success: true,
     message: '楽天レビュー収集 GAS API は正常に動作しています',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    spreadsheetUrl: ss.getUrl()
   });
 }
 

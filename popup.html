@@ -266,6 +266,22 @@
     .log-entry.success {
       color: #2e7d32;
     }
+
+    .spreadsheet-link {
+      display: block;
+      margin-top: 10px;
+      padding: 8px 12px;
+      background: #e3f2fd;
+      color: #1976d2;
+      text-decoration: none;
+      border-radius: 6px;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .spreadsheet-link:hover {
+      background: #bbdefb;
+    }
   </style>
 </head>
 <body>
@@ -288,6 +304,9 @@
           <span class="icon">📄</span>
           <span>CSVダウンロード</span>
         </div>
+        <a id="spreadsheetLink" href="#" target="_blank" class="spreadsheet-link" style="display: none;">
+          スプレッドシートを開く
+        </a>
       </div>
 
       <div class="status-card">
