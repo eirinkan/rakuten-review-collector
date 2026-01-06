@@ -115,15 +115,43 @@
   function extractReviews() {
     const reviews = [];
 
-    // 商品名を取得
-    const productNameElem = document.querySelector('.revRvwUserSec .revItemUrl a, .item-name a, h2.revItemTtl a');
-    const productName = productNameElem ? productNameElem.textContent.trim() : '商品名不明';
+    // 商品名を取得（新しい楽天の構造に対応）
+    let productName = '商品名不明';
+    const productNameSelectors = [
+      'a[href*="item.rakuten.co.jp"]',
+      '[class*="item-name"] a',
+      'h1 a', 'h2 a',
+      '.revRvwUserSec .revItemUrl a'
+    ];
+    for (const selector of productNameSelectors) {
+      const elem = document.querySelector(selector);
+      if (elem && elem.textContent.trim().length > 5) {
+        productName = elem.textContent.trim();
+        break;
+      }
+    }
 
     // 商品URLを取得
-    const productUrl = productNameElem ? productNameElem.href : window.location.href;
+    const productUrlElem = document.querySelector('a[href*="item.rakuten.co.jp"]');
+    const productUrl = productUrlElem ? productUrlElem.href : window.location.href;
 
-    // レビュー要素を取得（楽天の構造に対応）
-    const reviewElements = document.querySelectorAll('.revRvwUserSec, .review-item, [class*="review"]');
+    // レビュー要素を取得（新しい楽天の構造: ul > li で「購入者さん」を含む）
+    const allListItems = document.querySelectorAll('li');
+    const reviewElements = [];
+
+    allListItems.forEach(li => {
+      const text = li.textContent;
+      // レビューの特徴: 「購入者さん」または日付パターン、そして十分な長さ
+      if ((text.includes('購入者さん') || text.includes('注文日')) && text.length > 50) {
+        reviewElements.push(li);
+      }
+    });
+
+    // 旧構造にも対応
+    if (reviewElements.length === 0) {
+      const oldElements = document.querySelectorAll('.revRvwUserSec, .review-item, [class*="review-entry"]');
+      oldElements.forEach(elem => reviewElements.push(elem));
+    }
 
     reviewElements.forEach((elem, index) => {
       try {
@@ -142,65 +170,144 @@
 
   /**
    * 個別レビューデータを抽出
+   * 新しい楽天の構造（CSS module）と旧構造の両方に対応
    */
   function extractReviewData(elem, productName, productUrl) {
-    // 評価（星の数）
-    const ratingElem = elem.querySelector('.revRvwUserEntryStar, .rating, [class*="star"]');
+    const text = elem.textContent || '';
+
     let rating = 0;
-    if (ratingElem) {
-      // クラス名から評価を取得（例: revUserRvwStar5）
-      const ratingMatch = ratingElem.className.match(/(\d)/);
+    let reviewDate = '';
+    let author = '匿名';
+    let body = '';
+    let title = '';
+    let purchaseInfo = '';
+    let helpfulCount = 0;
+
+    // 新構造の場合: CSS module クラス名で要素を探す（楽天の現在の構造）
+    const ratingElem = elem.querySelector('[class*="number-wrapper"]');
+    const reviewerElem = elem.querySelector('[class*="reviewer-name"]');
+    const bodyElem = elem.querySelector('[class*="word-break-break-all"]');
+
+    if (ratingElem || reviewerElem || bodyElem) {
+      // 新構造: CSS moduleクラスで要素がある場合
+
+      // 評価を取得（number-wrapper内のテキスト）
+      if (ratingElem) {
+        const ratingText = ratingElem.textContent.trim();
+        const r = parseInt(ratingText, 10);
+        if (r >= 1 && r <= 5) {
+          rating = r;
+        }
+      }
+
+      // 投稿者を取得
+      if (reviewerElem) {
+        author = reviewerElem.textContent.trim() || '匿名';
+      }
+
+      // 本文を取得
+      if (bodyElem) {
+        body = bodyElem.textContent.trim();
+      }
+
+      // 注文日を取得（テキストから抽出）
+      const orderDateMatch = text.match(/注文日[：:]\s*(\d{4}\/\d{1,2}\/\d{1,2})/);
+      if (orderDateMatch) {
+        reviewDate = orderDateMatch[1];
+      }
+    } else {
+      // テキストベースで抽出（フォールバック）
+
+      // 評価: テキスト先頭の数字（1-5）
+      const ratingMatch = text.match(/^(\d)/);
       if (ratingMatch) {
-        rating = parseInt(ratingMatch[1], 10);
+        const r = parseInt(ratingMatch[1], 10);
+        if (r >= 1 && r <= 5) {
+          rating = r;
+        }
       }
-      // または aria-label や title から取得
-      const ariaLabel = ratingElem.getAttribute('aria-label') || ratingElem.getAttribute('title') || '';
-      const ariaMatch = ariaLabel.match(/(\d)/);
-      if (ariaMatch && !rating) {
-        rating = parseInt(ariaMatch[1], 10);
+
+      // 日付: YYYY/MM/DD 形式
+      const dateMatch = text.match(/(\d{4}\/\d{1,2}\/\d{1,2})/);
+      if (dateMatch) {
+        reviewDate = dateMatch[1];
       }
+
+      // 投稿者: 「購入者さん」や「○○さん」
+      if (text.includes('購入者さん')) {
+        author = '購入者さん';
+      } else {
+        const authorMatch = text.match(/(\S+さん)/);
+        if (authorMatch) {
+          author = authorMatch[1];
+        }
+      }
+
+      // 本文: 投稿者名の後から「注文日」や「参考になった」の前まで
+      let bodyText = text;
+
+      // 先頭の評価と日付を除去
+      bodyText = bodyText.replace(/^\d\d{4}\/\d{1,2}\/\d{1,2}/, '');
+
+      // 投稿者名を除去
+      bodyText = bodyText.replace(/購入者さん/, '');
+      bodyText = bodyText.replace(/\S+さん/, '');
+
+      // 末尾の不要な部分を除去
+      bodyText = bodyText.replace(/注文日[：:].+$/, '');
+      bodyText = bodyText.replace(/参考になった.*$/, '');
+      bodyText = bodyText.replace(/不適切レビュー報告.*$/, '');
+
+      body = bodyText.trim();
     }
 
-    // レビュータイトル
-    const titleElem = elem.querySelector('.revRvwUserEntryTtl, .review-title, h3, h4');
-    const title = titleElem ? titleElem.textContent.trim() : '';
+    // 旧構造のセレクターも試す（フォールバック）
+    if (!body && !rating) {
+      const oldRatingElem = elem.querySelector('.revRvwUserEntryStar, .rating');
+      if (oldRatingElem) {
+        const ratingMatch = oldRatingElem.className.match(/(\d)/);
+        if (ratingMatch) {
+          rating = parseInt(ratingMatch[1], 10);
+        }
+      }
 
-    // レビュー本文
-    const bodyElem = elem.querySelector('.revRvwUserEntryCmt, .review-body, .review-text, p');
-    const body = bodyElem ? bodyElem.textContent.trim() : '';
+      const oldTitleElem = elem.querySelector('.revRvwUserEntryTtl, .review-title, h3, h4');
+      title = oldTitleElem ? oldTitleElem.textContent.trim() : '';
+
+      const oldBodyElem = elem.querySelector('.revRvwUserEntryCmt, .review-body, .review-text, p');
+      body = oldBodyElem ? oldBodyElem.textContent.trim() : '';
+
+      const oldAuthorElem = elem.querySelector('.revUserNickname, .reviewer-name, .author');
+      author = oldAuthorElem ? oldAuthorElem.textContent.trim() : '匿名';
+
+      const oldDateElem = elem.querySelector('.revRvwUserEntryDate, .review-date, .date, time');
+      if (oldDateElem) {
+        reviewDate = oldDateElem.textContent.trim();
+        if (oldDateElem.getAttribute('datetime')) {
+          reviewDate = oldDateElem.getAttribute('datetime');
+        }
+      }
+
+      const oldPurchaseElem = elem.querySelector('.revRvwUserEntryPurchase, .purchase-info');
+      purchaseInfo = oldPurchaseElem ? oldPurchaseElem.textContent.trim() : '';
+
+      const oldHelpfulElem = elem.querySelector('.revRvwUserEntryHelpful, .helpful-count');
+      if (oldHelpfulElem) {
+        const helpfulMatch = oldHelpfulElem.textContent.match(/(\d+)/);
+        if (helpfulMatch) {
+          helpfulCount = parseInt(helpfulMatch[1], 10);
+        }
+      }
+    }
 
     // レビューがない場合はスキップ
     if (!body && !title) {
       return null;
     }
 
-    // 投稿者
-    const authorElem = elem.querySelector('.revUserNickname, .reviewer-name, .author');
-    const author = authorElem ? authorElem.textContent.trim() : '匿名';
-
-    // 投稿日
-    const dateElem = elem.querySelector('.revRvwUserEntryDate, .review-date, .date, time');
-    let reviewDate = '';
-    if (dateElem) {
-      reviewDate = dateElem.textContent.trim();
-      // datetime属性があればそちらを優先
-      if (dateElem.getAttribute('datetime')) {
-        reviewDate = dateElem.getAttribute('datetime');
-      }
-    }
-
-    // 購入商品の詳細（サイズ、カラーなど）
-    const purchaseInfoElem = elem.querySelector('.revRvwUserEntryPurchase, .purchase-info');
-    const purchaseInfo = purchaseInfoElem ? purchaseInfoElem.textContent.trim() : '';
-
-    // 参考になった数
-    const helpfulElem = elem.querySelector('.revRvwUserEntryHelpful, .helpful-count');
-    let helpfulCount = 0;
-    if (helpfulElem) {
-      const helpfulMatch = helpfulElem.textContent.match(/(\d+)/);
-      if (helpfulMatch) {
-        helpfulCount = parseInt(helpfulMatch[1], 10);
-      }
+    // 本文が短すぎる場合もスキップ（ノイズ除去）
+    if (body.length < 10 && !title) {
+      return null;
     }
 
     return {
