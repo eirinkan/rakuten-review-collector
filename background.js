@@ -42,6 +42,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'log':
       forwardToAll(message);
       break;
+
+    case 'openOptions':
+      chrome.runtime.openOptionsPage();
+      sendResponse({ success: true });
+      break;
   }
 });
 

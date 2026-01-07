@@ -806,4 +806,54 @@
     });
   }
 
+  // テスト用グローバルAPI（Claude in Chrome等からアクセス可能）
+  window.__RAKUTEN_REVIEW_EXT__ = {
+    openOptions: () => {
+      chrome.runtime.sendMessage({ action: 'openOptions' });
+    },
+    getStatus: () => {
+      return new Promise(resolve => {
+        chrome.storage.local.get(['collectionState', 'queue'], result => {
+          resolve({
+            state: result.collectionState || {},
+            queue: result.queue || [],
+            isCollecting: isCollecting
+          });
+        });
+      });
+    },
+    startCollection: () => {
+      if (!isCollecting) {
+        startCollection();
+        return { success: true };
+      }
+      return { success: false, error: '既に収集中' };
+    },
+    stopCollection: () => {
+      shouldStop = true;
+      isCollecting = false;
+      return { success: true };
+    },
+    addToQueue: () => {
+      const info = getProductInfo();
+      return new Promise(resolve => {
+        chrome.storage.local.get(['queue'], result => {
+          const queue = result.queue || [];
+          if (queue.some(item => item.url === info.url)) {
+            resolve({ success: false, error: '既に追加済み' });
+            return;
+          }
+          queue.push(info);
+          chrome.storage.local.set({ queue }, () => {
+            resolve({ success: true, productInfo: info });
+          });
+        });
+      });
+    },
+    getProductInfo: () => getProductInfo(),
+    version: '1.3.1'
+  };
+
+  console.log('[楽天レビュー収集] テストAPI: window.__RAKUTEN_REVIEW_EXT__');
+
 })();
