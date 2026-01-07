@@ -441,6 +441,13 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
+// キーボードショートカットのリスナー
+chrome.commands.onCommand.addListener((command) => {
+  if (command === 'open_options') {
+    chrome.runtime.openOptionsPage();
+  }
+});
+
 // タブが閉じられた時のクリーンアップ
 chrome.tabs.onRemoved.addListener((tabId) => {
   if (activeCollectionTabs.has(tabId)) {
