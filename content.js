@@ -806,54 +806,93 @@
     });
   }
 
-  // テスト用グローバルAPI（Claude in Chrome等からアクセス可能）
-  window.__RAKUTEN_REVIEW_EXT__ = {
-    openOptions: () => {
-      chrome.runtime.sendMessage({ action: 'openOptions' });
-    },
-    getStatus: () => {
-      return new Promise(resolve => {
-        chrome.storage.local.get(['collectionState', 'queue'], result => {
-          resolve({
-            state: result.collectionState || {},
-            queue: result.queue || [],
-            isCollecting: isCollecting
+  // テスト用API（メインワールドに注入）
+  function injectTestAPI() {
+    const script = document.createElement('script');
+    script.textContent = `
+      window.__RAKUTEN_REVIEW_EXT__ = {
+        version: '1.3.2',
+        _sendCommand: function(cmd, data) {
+          return new Promise(function(resolve) {
+            window.postMessage({ type: 'RAKUTEN_REVIEW_CMD', cmd: cmd, data: data }, '*');
+            window.addEventListener('message', function handler(e) {
+              if (e.data && e.data.type === 'RAKUTEN_REVIEW_RESPONSE' && e.data.cmd === cmd) {
+                window.removeEventListener('message', handler);
+                resolve(e.data.result);
+              }
+            });
           });
-        });
-      });
-    },
-    startCollection: () => {
-      if (!isCollecting) {
-        startCollection();
-        return { success: true };
-      }
-      return { success: false, error: '既に収集中' };
-    },
-    stopCollection: () => {
-      shouldStop = true;
-      isCollecting = false;
-      return { success: true };
-    },
-    addToQueue: () => {
-      const info = getProductInfo();
-      return new Promise(resolve => {
-        chrome.storage.local.get(['queue'], result => {
-          const queue = result.queue || [];
-          if (queue.some(item => item.url === info.url)) {
-            resolve({ success: false, error: '既に追加済み' });
-            return;
-          }
-          queue.push(info);
-          chrome.storage.local.set({ queue }, () => {
-            resolve({ success: true, productInfo: info });
-          });
-        });
-      });
-    },
-    getProductInfo: () => getProductInfo(),
-    version: '1.3.1'
-  };
+        },
+        openOptions: function() { return this._sendCommand('openOptions'); },
+        getStatus: function() { return this._sendCommand('getStatus'); },
+        startCollection: function() { return this._sendCommand('startCollection'); },
+        stopCollection: function() { return this._sendCommand('stopCollection'); },
+        addToQueue: function() { return this._sendCommand('addToQueue'); },
+        getProductInfo: function() { return this._sendCommand('getProductInfo'); }
+      };
+      console.log('[楽天レビュー収集] テストAPI: window.__RAKUTEN_REVIEW_EXT__');
+    `;
+    document.documentElement.appendChild(script);
+    script.remove();
+  }
 
-  console.log('[楽天レビュー収集] テストAPI: window.__RAKUTEN_REVIEW_EXT__');
+  // メインワールドからのコマンドを受信
+  window.addEventListener('message', async (e) => {
+    if (e.data && e.data.type === 'RAKUTEN_REVIEW_CMD') {
+      const { cmd, data } = e.data;
+      let result = null;
+
+      switch (cmd) {
+        case 'openOptions':
+          chrome.runtime.sendMessage({ action: 'openOptions' });
+          result = { success: true };
+          break;
+        case 'getStatus':
+          result = await new Promise(resolve => {
+            chrome.storage.local.get(['collectionState', 'queue'], r => {
+              resolve({ state: r.collectionState || {}, queue: r.queue || [], isCollecting });
+            });
+          });
+          break;
+        case 'startCollection':
+          if (!isCollecting) {
+            startCollection();
+            result = { success: true };
+          } else {
+            result = { success: false, error: '既に収集中' };
+          }
+          break;
+        case 'stopCollection':
+          shouldStop = true;
+          isCollecting = false;
+          result = { success: true };
+          break;
+        case 'addToQueue':
+          const info = getProductInfo();
+          result = await new Promise(resolve => {
+            chrome.storage.local.get(['queue'], r => {
+              const queue = r.queue || [];
+              if (queue.some(item => item.url === info.url)) {
+                resolve({ success: false, error: '既に追加済み' });
+                return;
+              }
+              queue.push(info);
+              chrome.storage.local.set({ queue }, () => {
+                resolve({ success: true, productInfo: info });
+              });
+            });
+          });
+          break;
+        case 'getProductInfo':
+          result = getProductInfo();
+          break;
+      }
+
+      window.postMessage({ type: 'RAKUTEN_REVIEW_RESPONSE', cmd, result }, '*');
+    }
+  });
+
+  // APIを注入
+  injectTestAPI();
 
 })();
