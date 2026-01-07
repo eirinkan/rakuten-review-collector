@@ -594,7 +594,16 @@
         <div id="queueList" class="queue-list">
           <div class="queue-empty">キューは空です</div>
         </div>
-        <div class="btn-group">
+        <div class="form-group" style="margin-top: 12px;">
+          <label>同時収集数（タブ数）</label>
+          <select id="maxConcurrent" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;">
+            <option value="1">1（推奨）</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+          </select>
+          <p class="help-text">サーバー負荷軽減のため、1を推奨します</p>
+        </div>
+        <div class="btn-group" style="margin-top: 12px;">
           <button id="startQueueBtn" class="btn btn-success" disabled>一括収集開始</button>
           <button id="clearQueueBtn" class="btn btn-secondary">キュークリア</button>
         </div>

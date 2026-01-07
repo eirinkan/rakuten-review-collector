@@ -3,6 +3,9 @@
  * レビューデータの保存、GASへの送信、CSVダウンロード、キュー管理を処理
  */
 
+// アクティブな収集タブを追跡
+let activeCollectionTabs = new Set();
+
 // メッセージリスナー
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.action) {
@@ -19,7 +22,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case 'collectionComplete':
-      handleCollectionComplete();
+      handleCollectionComplete(sender.tab?.id);
       sendResponse({ success: true });
       break;
 
@@ -193,13 +196,21 @@ function formatDate(date) {
 /**
  * 収集完了時の処理
  */
-async function handleCollectionComplete() {
+async function handleCollectionComplete(tabId) {
+  // アクティブタブから削除
+  if (tabId) {
+    activeCollectionTabs.delete(tabId);
+    // タブごとの状態をクリーンアップ
+    const stateKey = `collectionState_${tabId}`;
+    await chrome.storage.local.remove(stateKey);
+  }
+
   // 状態を更新
   const result = await chrome.storage.local.get(['collectionState', 'queue']);
   const state = result.collectionState || {};
   const queue = result.queue || [];
 
-  state.isRunning = false;
+  state.isRunning = activeCollectionTabs.size > 0;
   await chrome.storage.local.set({ collectionState: state });
 
   // ポップアップに完了を通知
@@ -214,6 +225,8 @@ async function handleCollectionComplete() {
     setTimeout(() => {
       processNextInQueue();
     }, 3000);
+  } else if (activeCollectionTabs.size === 0) {
+    log('すべての収集が完了しました', 'success');
   }
 }
 
@@ -228,19 +241,39 @@ async function startQueueCollection() {
     throw new Error('キューが空です');
   }
 
-  log(`${queue.length}件のキュー収集を開始します`, 'success');
-  await processNextInQueue();
+  // 設定から同時収集数を取得
+  const settings = await chrome.storage.sync.get(['maxConcurrent']);
+  const maxConcurrent = settings.maxConcurrent || 1;
+
+  log(`${queue.length}件のキュー収集を開始します（同時${maxConcurrent}件）`, 'success');
+
+  // 同時収集数分だけ開始
+  for (let i = 0; i < maxConcurrent && i < queue.length; i++) {
+    await processNextInQueue();
+  }
 }
 
 /**
  * キューの次の商品を処理
  */
 async function processNextInQueue() {
+  // 設定から同時収集数を取得
+  const settings = await chrome.storage.sync.get(['maxConcurrent']);
+  const maxConcurrent = settings.maxConcurrent || 1;
+
+  // 現在のアクティブタブ数をチェック
+  if (activeCollectionTabs.size >= maxConcurrent) {
+    log(`同時収集数上限（${maxConcurrent}）に達しています`, 'info');
+    return;
+  }
+
   const result = await chrome.storage.local.get(['queue']);
   const queue = result.queue || [];
 
   if (queue.length === 0) {
-    log('キューの処理が完了しました', 'success');
+    if (activeCollectionTabs.size === 0) {
+      log('キューの処理が完了しました', 'success');
+    }
     return;
   }
 
@@ -255,15 +288,19 @@ async function processNextInQueue() {
   // 新しいタブで商品ページを開いて収集開始（バックグラウンドで開く）
   const tab = await chrome.tabs.create({ url: nextItem.url, active: false });
 
-  // 収集状態をセット
+  // アクティブタブとして追跡
+  activeCollectionTabs.add(tab.id);
+
+  // 収集状態をセット（タブIDごとに管理）
+  const stateKey = `collectionState_${tab.id}`;
   await chrome.storage.local.set({
-    collectionState: {
+    [stateKey]: {
       isRunning: true,
       reviewCount: 0,
       pageCount: 0,
       totalPages: 0,
       reviews: [],
-      logs: []
+      tabId: tab.id
     }
   });
 
@@ -402,4 +439,21 @@ chrome.runtime.onInstalled.addListener(() => {
     queue: [],
     logs: []
   });
+});
+
+// タブが閉じられた時のクリーンアップ
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (activeCollectionTabs.has(tabId)) {
+    activeCollectionTabs.delete(tabId);
+    log(`タブ ${tabId} が閉じられました。収集を中断しました`, 'error');
+
+    // タブごとの状態をクリーンアップ
+    const stateKey = `collectionState_${tabId}`;
+    chrome.storage.local.remove(stateKey);
+
+    // キューに次がある場合は処理を続行
+    setTimeout(() => {
+      processNextInQueue();
+    }, 1000);
+  }
 });

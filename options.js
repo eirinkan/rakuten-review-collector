@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const rankingCount = document.getElementById('rankingCount');
   const addRankingBtn = document.getElementById('addRankingBtn');
   const rankingStatus = document.getElementById('rankingStatus');
+  const maxConcurrentSelect = document.getElementById('maxConcurrent');
 
   const logContainer = document.getElementById('logContainer');
   const clearLogBtn = document.getElementById('clearLogBtn');
@@ -59,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function loadSettings() {
-    chrome.storage.sync.get(['gasUrl', 'separateSheets', 'spreadsheetUrl'], (result) => {
+    chrome.storage.sync.get(['gasUrl', 'separateSheets', 'spreadsheetUrl', 'maxConcurrent'], (result) => {
       if (result.gasUrl) {
         gasUrlInput.value = result.gasUrl;
         // スプレッドシートモードの場合、CSV/クリアボタンを非表示
@@ -68,6 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
         dataButtons.style.display = 'flex';
       }
       separateSheetsCheckbox.checked = result.separateSheets !== false;
+      maxConcurrentSelect.value = result.maxConcurrent || '1';
 
       if (result.spreadsheetUrl) {
         spreadsheetLink.href = result.spreadsheetUrl;
@@ -138,13 +140,14 @@ document.addEventListener('DOMContentLoaded', () => {
   async function saveSettings() {
     const gasUrl = gasUrlInput.value.trim();
     const separateSheets = separateSheetsCheckbox.checked;
+    const maxConcurrent = parseInt(maxConcurrentSelect.value) || 1;
 
     if (gasUrl && !isValidGasUrl(gasUrl)) {
       showStatus(settingsStatus, 'error', 'URLの形式が正しくありません');
       return;
     }
 
-    chrome.storage.sync.set({ gasUrl, separateSheets }, async () => {
+    chrome.storage.sync.set({ gasUrl, separateSheets, maxConcurrent }, async () => {
       if (chrome.runtime.lastError) {
         showStatus(settingsStatus, 'error', '保存に失敗しました');
         return;
