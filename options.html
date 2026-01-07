@@ -19,7 +19,7 @@
     }
 
     .container {
-      max-width: 900px;
+      max-width: 600px;
       margin: 0 auto;
     }
 
@@ -28,29 +28,110 @@
       color: white;
       padding: 20px;
       border-radius: 10px;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
+    }
+
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
     }
 
     .header h1 {
       font-size: 20px;
-      margin-bottom: 4px;
     }
 
-    .header p {
-      font-size: 12px;
-      opacity: 0.9;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
+    .header-stats {
+      display: flex;
       gap: 16px;
     }
 
-    @media (max-width: 768px) {
-      .grid {
-        grid-template-columns: 1fr;
-      }
+    .header-stat {
+      text-align: center;
+    }
+
+    .header-stat-value {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .header-stat-label {
+      font-size: 10px;
+      opacity: 0.8;
+    }
+
+    /* ヘルプ折りたたみ */
+    .help-toggle {
+      background: rgba(255,255,255,0.15);
+      border: none;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .help-toggle:hover {
+      background: rgba(255,255,255,0.25);
+    }
+
+    .help-card {
+      display: none;
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    .help-card.show {
+      display: block;
+    }
+
+    .help-card h2 {
+      font-size: 14px;
+      color: #333;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .help-section {
+      font-size: 13px;
+      line-height: 1.8;
+      color: #444;
+    }
+
+    .help-section h3 {
+      font-size: 13px;
+      color: #667eea;
+      margin: 16px 0 8px 0;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .help-section h3:first-child {
+      margin-top: 0;
+    }
+
+    .help-section ol,
+    .help-section ul {
+      margin-left: 20px;
+      margin-bottom: 8px;
+    }
+
+    .help-section li {
+      margin-bottom: 8px;
+    }
+
+    .help-section p {
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: #666;
     }
 
     .card {
@@ -58,24 +139,7 @@
       border-radius: 10px;
       padding: 20px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-    }
-
-    .card.full-width {
-      grid-column: 1 / -1;
-    }
-
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid #eee;
-    }
-
-    .card-header h2 {
-      font-size: 14px;
-      color: #333;
+      margin-bottom: 16px;
     }
 
     .card h2 {
@@ -98,7 +162,8 @@
     }
 
     .form-group input[type="text"],
-    .form-group input[type="number"] {
+    .form-group input[type="number"],
+    .form-group select {
       width: 100%;
       padding: 10px;
       border: 1px solid #ddd;
@@ -106,7 +171,8 @@
       font-size: 13px;
     }
 
-    .form-group input:focus {
+    .form-group input:focus,
+    .form-group select:focus {
       outline: none;
       border-color: #667eea;
     }
@@ -213,31 +279,45 @@
       display: block;
     }
 
-    /* 統計 */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
+    /* キュー追加タブ */
+    .tab-container {
       margin-bottom: 16px;
     }
 
-    .stat-item {
-      text-align: center;
-      padding: 12px;
-      background: #f8f9fa;
-      border-radius: 6px;
+    .tab-buttons {
+      display: flex;
+      border-bottom: 2px solid #eee;
+      margin-bottom: 16px;
     }
 
-    .stat-value {
-      font-size: 20px;
-      font-weight: 700;
+    .tab-btn {
+      padding: 10px 20px;
+      background: none;
+      border: none;
+      font-size: 13px;
+      color: #666;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: all 0.2s;
+    }
+
+    .tab-btn:hover {
       color: #667eea;
     }
 
-    .stat-label {
-      font-size: 10px;
-      color: #888;
-      margin-top: 4px;
+    .tab-btn.active {
+      color: #667eea;
+      border-bottom-color: #667eea;
+      font-weight: 600;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
     }
 
     /* キュー一覧 */
@@ -402,47 +482,17 @@
       margin-top: 8px;
     }
 
-    .help-text a {
-      color: #667eea;
-      text-decoration: none;
-    }
-
-    .help-text a:hover {
-      text-decoration: underline;
-    }
-
-    .divider {
-      border-top: 1px solid #eee;
-      margin: 12px 0;
-    }
-
-    /* ランキング */
-    .ranking-input {
-      display: flex;
-      gap: 8px;
-      align-items: flex-end;
-    }
-
-    .ranking-input .form-group {
-      margin-bottom: 0;
-    }
-
-    .ranking-input .form-group:first-child {
-      flex: 1;
-    }
-
-    .ranking-input input[type="number"] {
-      width: 80px;
-    }
-
     /* 説明折りたたみ */
     .collapsible {
       cursor: pointer;
       font-size: 11px;
       color: #667eea;
-      display: flex;
+      display: inline-flex;
       align-items: center;
       gap: 4px;
+      background: none;
+      border: none;
+      padding: 0;
     }
 
     .collapsible:hover {
@@ -479,215 +529,243 @@
       font-family: monospace;
     }
 
-    /* ヘルプセクション */
-    .help-section {
-      font-size: 13px;
-      line-height: 1.8;
-      color: #444;
+    .inline-input {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
     }
 
-    .help-section h3 {
-      font-size: 13px;
-      color: #667eea;
-      margin: 16px 0 8px 0;
-      padding-bottom: 4px;
-      border-bottom: 1px solid #eee;
+    .inline-input .form-group {
+      margin-bottom: 0;
     }
 
-    .help-section h3:first-child {
-      margin-top: 0;
+    .inline-input .form-group.flex-1 {
+      flex: 1;
     }
 
-    .help-section ol,
-    .help-section ul {
-      margin-left: 20px;
-      margin-bottom: 8px;
-    }
-
-    .help-section li {
-      margin-bottom: 8px;
-    }
-
-    .help-section p {
-      margin-bottom: 8px;
-      font-size: 12px;
-      color: #666;
+    .inline-input input[type="number"] {
+      width: 80px;
     }
   </style>
 </head>
 <body>
   <div class="container">
+    <!-- ヘッダー -->
     <div class="header">
-      <h1>楽天レビュー収集</h1>
-      <p>設定・キュー管理</p>
+      <div class="header-top">
+        <h1>楽天レビュー収集</h1>
+        <div class="header-stats">
+          <div class="header-stat">
+            <div id="totalReviews" class="header-stat-value">0</div>
+            <div class="header-stat-label">レビュー数</div>
+          </div>
+          <div class="header-stat">
+            <div id="currentPage" class="header-stat-value">0/0</div>
+            <div class="header-stat-label">ページ</div>
+          </div>
+        </div>
+      </div>
+      <button class="help-toggle" onclick="toggleMainHelp()">
+        <span id="helpToggleIcon">▶</span> 使い方を見る
+      </button>
     </div>
 
-    <div class="grid">
-      <!-- 収集状況 -->
-      <div class="card">
-        <h2>収集状況</h2>
-        <div class="stats-grid">
-          <div class="stat-item">
-            <div id="totalReviews" class="stat-value">0</div>
-            <div class="stat-label">レビュー数</div>
-          </div>
-          <div class="stat-item">
-            <div id="currentPage" class="stat-value">0/0</div>
-            <div class="stat-label">ページ</div>
-          </div>
-        </div>
+    <!-- ヘルプ（折りたたみ） -->
+    <div id="helpCard" class="help-card">
+      <h2>使い方</h2>
+      <div class="help-section">
+        <h3>基本的な使い方</h3>
+        <ol>
+          <li><strong>単一商品のレビュー収集:</strong>
+            <br>楽天市場の商品ページまたはレビューページを開き、拡張機能アイコンをクリック → 「収集開始」ボタンを押す
+          </li>
+          <li><strong>複数商品の一括収集:</strong>
+            <br>各商品ページで「キューに追加」→ この画面で「一括収集開始」
+          </li>
+          <li><strong>ランキングから一括追加:</strong>
+            <br>楽天ランキングページのURLを入力 → 上位N商品を指定 → 「追加」
+            <br>または、ランキングページで拡張機能アイコンをクリック → 商品数を指定して追加
+          </li>
+        </ol>
 
-        <div id="dataButtons" class="btn-group">
-          <button id="downloadBtn" class="btn btn-secondary" disabled>CSVダウンロード</button>
-          <button id="clearDataBtn" class="btn btn-danger" disabled>データクリア</button>
-        </div>
+        <h3>データの保存方法</h3>
+        <ul>
+          <li><strong>CSVモード（デフォルト）:</strong> GAS URLが空の場合、CSVファイルとしてダウンロード</li>
+          <li><strong>スプレッドシートモード:</strong> GAS Web App URLを設定すると、自動でGoogleスプレッドシートに保存</li>
+        </ul>
+
+        <h3>収集できるデータ</h3>
+        <p>レビュー日、商品管理番号、商品名、商品URL、評価、タイトル、本文、投稿者、年代、性別、注文日、バリエーション、用途、贈り先、購入回数、購入情報、参考になった数、ショップ名、ページURL、収集日時</p>
+
+        <h3>注意事項</h3>
+        <ul>
+          <li>収集中はタブを閉じないでください</li>
+          <li>楽天市場のサーバー負荷軽減のため、ページ間に3〜6秒の待機時間が入ります</li>
+          <li>大量のレビューを収集する場合は時間がかかります</li>
+        </ul>
       </div>
+    </div>
 
-      <!-- スプレッドシート設定 -->
-      <div class="card">
-        <h2>スプレッドシート設定</h2>
-        <div class="form-group">
-          <label>GAS Web App URL</label>
-          <input type="text" id="gasUrl" placeholder="https://script.google.com/macros/s/xxx/exec">
-        </div>
-
-        <label class="checkbox-label">
-          <input type="checkbox" id="separateSheets" checked>
-          <span>商品ごとにシートを分ける</span>
-        </label>
-
-        <div class="btn-group" style="margin-top: 12px;">
-          <button id="saveSettingsBtn" class="btn btn-primary">保存</button>
-          <a id="spreadsheetLink" href="#" target="_blank" class="spreadsheet-link" style="display: none;">
-            スプレッドシートを開く
-          </a>
+    <!-- キューに追加 -->
+    <div class="card">
+      <h2>キューに追加</h2>
+      <div class="tab-container">
+        <div class="tab-buttons">
+          <button class="tab-btn active" data-tab="ranking">ランキングから</button>
+          <button class="tab-btn" data-tab="single">単体商品</button>
         </div>
 
-        <div id="settingsStatus" class="status-message"></div>
-
-        <p class="help-text">空欄の場合はCSVモードで動作します</p>
-
-        <div class="collapsible" onclick="toggleHelp()">
-          ▶ GAS Web App URLの取得方法
-        </div>
-        <div id="gasHelp" class="collapsible-content">
-          <ol>
-            <li>Googleスプレッドシートを作成</li>
-            <li>拡張機能 → Apps Script を開く</li>
-            <li>以下のコードを貼り付け:
-              <br><code>gas/Code.gs</code> の内容をコピー
-            </li>
-            <li>デプロイ → 新しいデプロイ</li>
-            <li>種類: ウェブアプリ</li>
-            <li>アクセスできるユーザー: 全員</li>
-            <li>デプロイ後のURLをコピーして上記に貼り付け</li>
-          </ol>
-        </div>
-      </div>
-
-      <!-- キュー管理 -->
-      <div class="card">
-        <div class="queue-header">
-          <h2>キュー管理</h2>
-          <span id="queueRemaining" class="queue-count">0件</span>
-        </div>
-        <div id="queueList" class="queue-list">
-          <div class="queue-empty">キューは空です</div>
-        </div>
-        <div class="form-group" style="margin-top: 12px;">
-          <label>同時収集数（タブ数）</label>
-          <select id="maxConcurrent" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;">
-            <option value="1">1（推奨）</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-          </select>
-          <p class="help-text">サーバー負荷軽減のため、1を推奨します</p>
-        </div>
-        <div class="btn-group" style="margin-top: 12px;">
-          <button id="startQueueBtn" class="btn btn-success" disabled>一括収集開始</button>
-          <button id="clearQueueBtn" class="btn btn-secondary">キュークリア</button>
-        </div>
-      </div>
-
-      <!-- ランキングから追加 -->
-      <div class="card">
-        <h2>ランキングから追加</h2>
-        <div class="form-group">
-          <label>楽天ランキングURL</label>
-          <input type="text" id="rankingUrl" placeholder="https://ranking.rakuten.co.jp/...">
-        </div>
-        <div class="ranking-input">
+        <div id="tab-ranking" class="tab-content active">
           <div class="form-group">
-            <label>上位</label>
+            <label>楽天ランキングURL</label>
+            <input type="text" id="rankingUrl" placeholder="https://ranking.rakuten.co.jp/...">
+          </div>
+          <div class="inline-input">
+            <div class="form-group">
+              <label>上位</label>
+            </div>
+            <div class="form-group">
+              <input type="number" id="rankingCount" value="10" min="1" max="100">
+            </div>
+            <div class="form-group">
+              <label>商品</label>
+            </div>
+            <button id="addRankingBtn" class="btn btn-primary">追加</button>
+          </div>
+          <div id="rankingStatus" class="status-message"></div>
+          <p class="help-text">ランキングページから上位商品をキューに追加</p>
+        </div>
+
+        <div id="tab-single" class="tab-content">
+          <div class="form-group">
+            <label>商品ページURL</label>
+            <input type="text" id="singleProductUrl" placeholder="https://item.rakuten.co.jp/...">
           </div>
           <div class="form-group">
-            <input type="number" id="rankingCount" value="10" min="1" max="100">
+            <label>商品名（任意）</label>
+            <input type="text" id="singleProductTitle" placeholder="商品名を入力">
           </div>
-          <div class="form-group">
-            <label>商品</label>
-          </div>
-          <button id="addRankingBtn" class="btn btn-primary">追加</button>
-        </div>
-        <div id="rankingStatus" class="status-message"></div>
-        <p class="help-text">ランキングページから上位商品をキューに追加</p>
-      </div>
-
-      <!-- ログ -->
-      <div class="card full-width">
-        <div class="log-header">
-          <h2>ログ</h2>
-          <button id="clearLogBtn" class="btn btn-secondary btn-sm">クリア</button>
-        </div>
-        <div id="logContainer" class="log-container">
-          <div class="log-entry"><span class="time">[--:--:--]</span> 待機中...</div>
+          <button id="addSingleBtn" class="btn btn-primary">キューに追加</button>
+          <div id="singleStatus" class="status-message"></div>
+          <p class="help-text">楽天市場の商品ページURLを直接入力して追加</p>
         </div>
       </div>
+    </div>
 
-      <!-- ヘルプ -->
-      <div class="card full-width">
-        <h2>使い方</h2>
-        <div class="help-section">
-          <h3>基本的な使い方</h3>
-          <ol>
-            <li><strong>単一商品のレビュー収集:</strong>
-              <br>楽天市場の商品ページまたはレビューページを開き、拡張機能アイコンをクリック → 「収集開始」ボタンを押す
-            </li>
-            <li><strong>複数商品の一括収集:</strong>
-              <br>各商品ページで「キューに追加」→ この画面で「一括収集開始」
-            </li>
-            <li><strong>ランキングから一括追加:</strong>
-              <br>楽天ランキングページのURLを入力 → 上位N商品を指定 → 「追加」
-              <br>または、ランキングページで拡張機能アイコンをクリック → 商品数を指定して追加
-            </li>
-          </ol>
+    <!-- キュー管理 -->
+    <div class="card">
+      <div class="queue-header">
+        <h2>キュー管理</h2>
+        <span id="queueRemaining" class="queue-count">0件</span>
+      </div>
+      <div id="queueList" class="queue-list">
+        <div class="queue-empty">キューは空です</div>
+      </div>
+      <div class="form-group" style="margin-top: 12px;">
+        <label>同時収集数（タブ数）</label>
+        <select id="maxConcurrent">
+          <option value="1">1（推奨）</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+        </select>
+        <p class="help-text">サーバー負荷軽減のため、1を推奨します</p>
+      </div>
+      <div class="btn-group" style="margin-top: 12px;">
+        <button id="startQueueBtn" class="btn btn-success" disabled>一括収集開始</button>
+        <button id="clearQueueBtn" class="btn btn-secondary">キュークリア</button>
+      </div>
+    </div>
 
-          <h3>データの保存方法</h3>
-          <ul>
-            <li><strong>CSVモード（デフォルト）:</strong> GAS URLが空の場合、CSVファイルとしてダウンロード</li>
-            <li><strong>スプレッドシートモード:</strong> GAS Web App URLを設定すると、自動でGoogleスプレッドシートに保存</li>
-          </ul>
+    <!-- スプレッドシート設定 -->
+    <div class="card">
+      <h2>スプレッドシート設定</h2>
+      <div class="form-group">
+        <label>GAS Web App URL</label>
+        <input type="text" id="gasUrl" placeholder="https://script.google.com/macros/s/xxx/exec">
+      </div>
 
-          <h3>収集できるデータ</h3>
-          <p>レビュー日、商品管理番号、商品名、商品URL、評価、タイトル、本文、投稿者、年代、性別、注文日、バリエーション、用途、贈り先、購入回数、購入情報、参考になった数、ショップ名、ページURL、収集日時</p>
+      <label class="checkbox-label">
+        <input type="checkbox" id="separateSheets" checked>
+        <span>商品ごとにシートを分ける</span>
+      </label>
 
-          <h3>注意事項</h3>
-          <ul>
-            <li>収集中はタブを閉じないでください</li>
-            <li>楽天市場のサーバー負荷軽減のため、ページ間に3〜6秒の待機時間が入ります</li>
-            <li>大量のレビューを収集する場合は時間がかかります</li>
-          </ul>
-        </div>
+      <div class="btn-group" style="margin-top: 12px;">
+        <button id="saveSettingsBtn" class="btn btn-primary">保存</button>
+        <a id="spreadsheetLink" href="#" target="_blank" class="spreadsheet-link" style="display: none;">
+          スプレッドシートを開く
+        </a>
+      </div>
+
+      <div id="settingsStatus" class="status-message"></div>
+
+      <p class="help-text">空欄の場合はCSVモードで動作します</p>
+
+      <button class="collapsible" id="gasHelpToggle" onclick="toggleGasHelp()">
+        <span id="gasHelpIcon">▶</span> GAS Web App URLの取得方法
+      </button>
+      <div id="gasHelp" class="collapsible-content">
+        <ol>
+          <li>Googleスプレッドシートを作成</li>
+          <li>拡張機能 → Apps Script を開く</li>
+          <li>以下のコードを貼り付け:
+            <br><code>gas/Code.gs</code> の内容をコピー
+          </li>
+          <li>デプロイ → 新しいデプロイ</li>
+          <li>種類: ウェブアプリ</li>
+          <li>アクセスできるユーザー: 全員</li>
+          <li>デプロイ後のURLをコピーして上記に貼り付け</li>
+        </ol>
+      </div>
+
+      <div id="dataButtons" class="btn-group" style="margin-top: 16px;">
+        <button id="downloadBtn" class="btn btn-secondary" disabled>CSVダウンロード</button>
+        <button id="clearDataBtn" class="btn btn-danger" disabled>データクリア</button>
+      </div>
+    </div>
+
+    <!-- ログ -->
+    <div class="card">
+      <div class="log-header">
+        <h2>ログ</h2>
+        <button id="clearLogBtn" class="btn btn-secondary btn-sm">クリア</button>
+      </div>
+      <div id="logContainer" class="log-container">
+        <div class="log-entry"><span class="time">[--:--:--]</span> 待機中...</div>
       </div>
     </div>
   </div>
 
   <script>
-    function toggleHelp() {
-      const content = document.getElementById('gasHelp');
-      content.classList.toggle('show');
-      const toggle = document.querySelector('.collapsible');
-      toggle.textContent = content.classList.contains('show') ? '▼ GAS Web App URLの取得方法' : '▶ GAS Web App URLの取得方法';
+    // メインヘルプの開閉
+    function toggleMainHelp() {
+      const helpCard = document.getElementById('helpCard');
+      const icon = document.getElementById('helpToggleIcon');
+      helpCard.classList.toggle('show');
+      icon.textContent = helpCard.classList.contains('show') ? '▼' : '▶';
     }
+
+    // GASヘルプの開閉
+    function toggleGasHelp() {
+      const content = document.getElementById('gasHelp');
+      const icon = document.getElementById('gasHelpIcon');
+      content.classList.toggle('show');
+      icon.textContent = content.classList.contains('show') ? '▼' : '▶';
+    }
+
+    // タブ切り替え
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tabId = btn.dataset.tab;
+
+        // ボタンのアクティブ状態
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // コンテンツの表示
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById('tab-' + tabId).classList.add('active');
+      });
+    });
   </script>
   <script src="options.js"></script>
 </body>
