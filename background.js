@@ -252,8 +252,8 @@ async function processNextInQueue() {
 
   log(`収集中: ${nextItem.title || nextItem.url}`);
 
-  // 新しいタブで商品ページを開いて収集開始
-  const tab = await chrome.tabs.create({ url: nextItem.url, active: true });
+  // 新しいタブで商品ページを開いて収集開始（バックグラウンドで開く）
+  const tab = await chrome.tabs.create({ url: nextItem.url, active: false });
 
   // 収集状態をセット
   await chrome.storage.local.set({
