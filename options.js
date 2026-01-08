@@ -29,6 +29,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const logContainer = document.getElementById('logContainer');
   const clearLogBtn = document.getElementById('clearLogBtn');
 
+  // ヘッダーボタン
+  const settingsToggleBtn = document.getElementById('settingsToggleBtn');
+  const helpToggleBtn = document.getElementById('helpToggleBtn');
+  const settingsCard = document.getElementById('settingsCard');
+  const helpCard = document.getElementById('helpCard');
+  const gasHelpToggle = document.getElementById('gasHelpToggle');
+  const gasHelp = document.getElementById('gasHelp');
+  const gasHelpIcon = document.getElementById('gasHelpIcon');
+
   // 初期化
   init();
 
@@ -46,6 +55,18 @@ document.addEventListener('DOMContentLoaded', () => {
     clearQueueBtn.addEventListener('click', clearQueue);
     addToQueueBtn.addEventListener('click', addToQueue);
     clearLogBtn.addEventListener('click', clearLogs);
+
+    // ヘッダーボタンのイベント
+    settingsToggleBtn.addEventListener('click', () => {
+      settingsCard.classList.toggle('show');
+    });
+    helpToggleBtn.addEventListener('click', () => {
+      helpCard.classList.toggle('show');
+    });
+    gasHelpToggle.addEventListener('click', () => {
+      gasHelp.classList.toggle('show');
+      gasHelpIcon.textContent = gasHelp.classList.contains('show') ? '▼' : '▶';
+    });
 
     // URL入力時にランキングかどうか判定して件数入力の表示を切り替え
     productUrl.addEventListener('input', () => {
