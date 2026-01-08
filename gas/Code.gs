@@ -496,7 +496,44 @@ function onOpen() {
     .addItem('📊 スプレッドシートを初期化', 'initializeSpreadsheet')
     .addItem('🗑️ 空のシートを削除', 'deleteEmptySheets')
     .addItem('🔄 重複レビューを削除', 'removeDuplicates')
+    .addItem('🎨 ヘッダーを赤色に修正', 'fixAllHeaders')
     .addToUi();
+}
+
+/**
+ * 全シートのヘッダーを赤色に修正（メンテナンス用）
+ */
+function fixAllHeaders() {
+  const ss = getSpreadsheet();
+  const sheets = ss.getSheets();
+  let fixedCount = 0;
+
+  sheets.forEach(sheet => {
+    if (sheet.getLastRow() === 0) return;
+
+    const lastCol = sheet.getLastColumn();
+    if (lastCol === 0) return;
+
+    const headerRange = sheet.getRange(1, 1, 1, lastCol);
+    headerRange.setBackground('#BF0000');
+    headerRange.setFontColor('#ffffff');
+    headerRange.setFontWeight('bold');
+    headerRange.setVerticalAlignment('middle');
+    headerRange.setHorizontalAlignment('center');
+    sheet.setFrozenRows(1);
+
+    // データがあれば上下中央揃え
+    if (sheet.getLastRow() > 1) {
+      const dataRange = sheet.getRange(2, 1, sheet.getLastRow() - 1, lastCol);
+      dataRange.setVerticalAlignment('middle');
+    }
+
+    fixedCount++;
+    Logger.log('シート「' + sheet.getName() + '」のヘッダーを修正しました');
+  });
+
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('✅ 完了', fixedCount + '個のシートのヘッダーを赤色に修正しました。', ui.ButtonSet.OK);
 }
 
 /**
