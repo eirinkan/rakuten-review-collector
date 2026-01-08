@@ -61,21 +61,41 @@
       opacity: 0.8;
     }
 
-    /* ヘルプ折りたたみ */
-    .help-toggle {
+    /* ヘッダーアクション */
+    .header-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .header-icon-btn {
       background: rgba(255,255,255,0.15);
       border: none;
       color: white;
-      padding: 8px 16px;
+      padding: 8px;
       border-radius: 6px;
       cursor: pointer;
-      font-size: 12px;
       display: flex;
       align-items: center;
-      gap: 6px;
+      justify-content: center;
     }
 
-    .help-toggle:hover {
+    .header-icon-btn:hover {
+      background: rgba(255,255,255,0.25);
+    }
+
+    .header-link {
+      background: rgba(255,255,255,0.15);
+      color: white;
+      padding: 8px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+    }
+
+    .header-link:hover {
       background: rgba(255,255,255,0.25);
     }
 
@@ -345,7 +365,7 @@
     }
 
     .queue-list {
-      max-height: 450px;
+      max-height: 380px;
       overflow-y: auto;
       margin-bottom: 12px;
     }
@@ -430,7 +450,7 @@
     }
 
     .log-container {
-      max-height: 400px;
+      max-height: 600px;
       overflow-y: auto;
       background: #f8f9fa;
       border-radius: 6px;
@@ -529,22 +549,41 @@
       font-family: monospace;
     }
 
-    .inline-input {
+    .input-row {
       display: flex;
       gap: 8px;
-      align-items: flex-end;
+      align-items: center;
+      margin-bottom: 12px;
     }
 
-    .inline-input .form-group {
-      margin-bottom: 0;
-    }
-
-    .inline-input .form-group.flex-1 {
+    .input-flex {
       flex: 1;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
     }
 
-    .inline-input input[type="number"] {
-      width: 80px;
+    .input-flex:focus {
+      outline: none;
+      border-color: #BF0000;
+    }
+
+    .ranking-count-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: #666;
+    }
+
+    .ranking-count-wrapper input[type="number"] {
+      width: 60px;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      text-align: center;
     }
   </style>
 </head>
@@ -554,16 +593,71 @@
     <div class="header">
       <div class="header-top">
         <h1>楽天レビュー収集</h1>
-        <div class="header-stats">
-          <div class="header-stat">
-            <div id="currentPage" class="header-stat-value">0/0</div>
-            <div class="header-stat-label">ページ</div>
-          </div>
+        <div class="header-actions">
+          <a id="spreadsheetLink" href="#" target="_blank" class="header-link" style="display: none;" title="スプレッドシートを開く">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"/></svg>
+          </a>
+          <button class="header-icon-btn" onclick="toggleSettings()" title="出力設定">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+          </button>
+          <button class="header-icon-btn" onclick="toggleMainHelp()" title="ヘルプ">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>
+          </button>
         </div>
       </div>
-      <button class="help-toggle" onclick="toggleMainHelp()">
-        <span id="helpToggleIcon">▶</span> ヘルプを見る
+    </div>
+
+    <!-- 出力設定（折りたたみ） -->
+    <div id="settingsCard" class="help-card">
+      <h2>出力設定</h2>
+      <div class="form-group">
+        <label>GAS Web App URL</label>
+        <input type="text" id="gasUrl" placeholder="https://script.google.com/macros/s/xxx/exec">
+      </div>
+
+      <label class="checkbox-label">
+        <input type="checkbox" id="separateSheets" checked>
+        <span>商品ごとにシートを分ける</span>
+      </label>
+
+      <div class="btn-group" style="margin-top: 12px;">
+        <button id="saveSettingsBtn" class="btn btn-primary">保存</button>
+      </div>
+
+      <div id="settingsStatus" class="status-message"></div>
+
+      <p class="help-text">空欄の場合はCSVモードで動作します</p>
+
+      <button class="collapsible" onclick="toggleGasHelp()">
+        <span id="gasHelpIcon">▶</span> GAS Web App URLの取得方法
       </button>
+      <div id="gasHelp" class="collapsible-content">
+        <ol>
+          <li>Googleスプレッドシートを作成</li>
+          <li>拡張機能 → Apps Script を開く</li>
+          <li>以下のコードを貼り付け:
+            <br><code>gas/Code.gs</code> の内容をコピー
+          </li>
+          <li>デプロイ → 新しいデプロイ</li>
+          <li>種類: ウェブアプリ</li>
+          <li>アクセスできるユーザー: 全員</li>
+          <li>デプロイ後のURLをコピーして上記に貼り付け</li>
+        </ol>
+        <h4 style="margin-top: 12px; margin-bottom: 8px; color: #BF0000;">GASコードの更新方法</h4>
+        <ol>
+          <li>スプレッドシート → 拡張機能 → Apps Script を開く</li>
+          <li>Code.gs の内容を最新版に置き換え</li>
+          <li>デプロイ → デプロイを管理 → 編集（鉛筆アイコン）</li>
+          <li>バージョン: 「新バージョン」を選択</li>
+          <li>「デプロイ」をクリック</li>
+        </ol>
+        <p style="margin-top: 8px; color: #888;">※URLは変わりません。コード更新後は必ず新バージョンをデプロイしてください。</p>
+      </div>
+
+      <div id="dataButtons" class="btn-group" style="margin-top: 16px;">
+        <button id="downloadBtn" class="btn btn-secondary" disabled>CSVダウンロード</button>
+        <button id="clearDataBtn" class="btn btn-danger" disabled>データクリア</button>
+      </div>
     </div>
 
     <!-- ヘルプ（折りたたみ） -->
@@ -602,129 +696,33 @@
       </div>
     </div>
 
-    <!-- キューに追加 -->
-    <div class="card">
-      <h2>キューに追加</h2>
-      <div class="tab-container">
-        <div class="tab-buttons">
-          <button class="tab-btn active" data-tab="ranking">ランキングから</button>
-          <button class="tab-btn" data-tab="single">単体商品</button>
-        </div>
-
-        <div id="tab-ranking" class="tab-content active">
-          <div class="form-group">
-            <label>楽天ランキングURL</label>
-            <input type="text" id="rankingUrl" placeholder="https://ranking.rakuten.co.jp/...">
-          </div>
-          <div class="inline-input">
-            <div class="form-group">
-              <label>上位</label>
-            </div>
-            <div class="form-group">
-              <input type="number" id="rankingCount" value="10" min="1" max="100">
-            </div>
-            <div class="form-group">
-              <label>商品</label>
-            </div>
-            <button id="addRankingBtn" class="btn btn-primary">追加</button>
-          </div>
-          <div id="rankingStatus" class="status-message"></div>
-          <p class="help-text">ランキングページから上位商品をキューに追加</p>
-        </div>
-
-        <div id="tab-single" class="tab-content">
-          <div class="form-group">
-            <label>商品ページURL</label>
-            <input type="text" id="singleProductUrl" placeholder="https://item.rakuten.co.jp/...">
-          </div>
-          <div class="form-group">
-            <label>商品名（任意）</label>
-            <input type="text" id="singleProductTitle" placeholder="商品名を入力">
-          </div>
-          <button id="addSingleBtn" class="btn btn-primary">キューに追加</button>
-          <div id="singleStatus" class="status-message"></div>
-          <p class="help-text">楽天市場の商品ページURLを直接入力して追加</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- キュー管理 -->
+    <!-- キュー -->
     <div class="card">
       <div class="queue-header">
-        <h2>キュー管理</h2>
+        <h2>キュー</h2>
         <span id="queueRemaining" class="queue-count">0件</span>
       </div>
+
+      <!-- URL入力エリア -->
+      <div class="input-row">
+        <input type="text" id="productUrl" class="input-flex" placeholder="商品ページURLまたはランキングURL">
+        <div id="rankingCountWrapper" class="ranking-count-wrapper" style="display: none;">
+          <span>上位</span>
+          <input type="number" id="rankingCount" value="10" min="1" max="100">
+          <span>件</span>
+        </div>
+        <button id="addToQueueBtn" class="btn btn-primary">追加</button>
+      </div>
+      <div id="addStatus" class="status-message"></div>
+
+      <!-- キューリスト -->
       <div id="queueList" class="queue-list">
         <div class="queue-empty">キューは空です</div>
       </div>
-      <div class="form-group" style="margin-top: 12px;">
-        <label>同時収集数（タブ数）</label>
-        <select id="maxConcurrent">
-          <option value="1">1（推奨）</option>
-          <option value="2">2</option>
-          <option value="3">3</option>
-        </select>
-        <p class="help-text">サーバー負荷軽減のため、1を推奨します</p>
-      </div>
+
       <div class="btn-group" style="margin-top: 12px;">
         <button id="startQueueBtn" class="btn btn-success" disabled>一括収集開始</button>
         <button id="clearQueueBtn" class="btn btn-secondary">キュークリア</button>
-      </div>
-    </div>
-
-    <!-- 出力設定 -->
-    <div class="card">
-      <h2>出力設定</h2>
-      <div class="form-group">
-        <label>GAS Web App URL</label>
-        <input type="text" id="gasUrl" placeholder="https://script.google.com/macros/s/xxx/exec">
-      </div>
-
-      <label class="checkbox-label">
-        <input type="checkbox" id="separateSheets" checked>
-        <span>商品ごとにシートを分ける</span>
-      </label>
-
-      <div class="btn-group" style="margin-top: 12px;">
-        <button id="saveSettingsBtn" class="btn btn-primary">保存</button>
-        <a id="spreadsheetLink" href="#" target="_blank" class="spreadsheet-link" style="display: none;">
-          スプレッドシートを開く
-        </a>
-      </div>
-
-      <div id="settingsStatus" class="status-message"></div>
-
-      <p class="help-text">空欄の場合はCSVモードで動作します</p>
-
-      <button class="collapsible" id="gasHelpToggle" onclick="toggleGasHelp()">
-        <span id="gasHelpIcon">▶</span> GAS Web App URLの取得方法
-      </button>
-      <div id="gasHelp" class="collapsible-content">
-        <ol>
-          <li>Googleスプレッドシートを作成</li>
-          <li>拡張機能 → Apps Script を開く</li>
-          <li>以下のコードを貼り付け:
-            <br><code>gas/Code.gs</code> の内容をコピー
-          </li>
-          <li>デプロイ → 新しいデプロイ</li>
-          <li>種類: ウェブアプリ</li>
-          <li>アクセスできるユーザー: 全員</li>
-          <li>デプロイ後のURLをコピーして上記に貼り付け</li>
-        </ol>
-        <h4 style="margin-top: 12px; margin-bottom: 8px; color: #BF0000;">GASコードの更新方法</h4>
-        <ol>
-          <li>スプレッドシート → 拡張機能 → Apps Script を開く</li>
-          <li>Code.gs の内容を最新版に置き換え</li>
-          <li>デプロイ → デプロイを管理 → 編集（鉛筆アイコン）</li>
-          <li>バージョン: 「新バージョン」を選択</li>
-          <li>「デプロイ」をクリック</li>
-        </ol>
-        <p style="margin-top: 8px; color: #888;">※URLは変わりません。コード更新後は必ず新バージョンをデプロイしてください。</p>
-      </div>
-
-      <div id="dataButtons" class="btn-group" style="margin-top: 16px;">
-        <button id="downloadBtn" class="btn btn-secondary" disabled>CSVダウンロード</button>
-        <button id="clearDataBtn" class="btn btn-danger" disabled>データクリア</button>
       </div>
     </div>
 
@@ -741,12 +739,16 @@
   </div>
 
   <script>
+    // 出力設定の開閉
+    function toggleSettings() {
+      const settingsCard = document.getElementById('settingsCard');
+      settingsCard.classList.toggle('show');
+    }
+
     // メインヘルプの開閉
     function toggleMainHelp() {
       const helpCard = document.getElementById('helpCard');
-      const icon = document.getElementById('helpToggleIcon');
       helpCard.classList.toggle('show');
-      icon.textContent = helpCard.classList.contains('show') ? '▼' : '▶';
     }
 
     // GASヘルプの開閉
@@ -757,20 +759,6 @@
       icon.textContent = content.classList.contains('show') ? '▼' : '▶';
     }
 
-    // タブ切り替え
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const tabId = btn.dataset.tab;
-
-        // ボタンのアクティブ状態
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-
-        // コンテンツの表示
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        document.getElementById('tab-' + tabId).classList.add('active');
-      });
-    });
   </script>
   <script src="options.js"></script>
 </body>

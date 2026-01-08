@@ -249,9 +249,8 @@ async function startQueueCollection() {
     throw new Error('キューが空です');
   }
 
-  // 設定から同時収集数を取得
-  const settings = await chrome.storage.sync.get(['maxConcurrent']);
-  const maxConcurrent = settings.maxConcurrent || 1;
+  // 同時収集数は固定値3
+  const maxConcurrent = 3;
 
   log(`${queue.length}件のキュー収集を開始します（同時${maxConcurrent}件）`, 'success');
 
@@ -265,9 +264,8 @@ async function startQueueCollection() {
  * キューの次の商品を処理
  */
 async function processNextInQueue() {
-  // 設定から同時収集数を取得
-  const settings = await chrome.storage.sync.get(['maxConcurrent']);
-  const maxConcurrent = settings.maxConcurrent || 1;
+  // 同時収集数は固定値3
+  const maxConcurrent = 3;
 
   // 現在のアクティブタブ数をチェック
   if (activeCollectionTabs.size >= maxConcurrent) {

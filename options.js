@@ -21,15 +21,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const startQueueBtn = document.getElementById('startQueueBtn');
   const clearQueueBtn = document.getElementById('clearQueueBtn');
 
-  const rankingUrl = document.getElementById('rankingUrl');
+  const productUrl = document.getElementById('productUrl');
   const rankingCount = document.getElementById('rankingCount');
-  const addRankingBtn = document.getElementById('addRankingBtn');
-  const rankingStatus = document.getElementById('rankingStatus');
-  const maxConcurrentSelect = document.getElementById('maxConcurrent');
-  const singleProductUrl = document.getElementById('singleProductUrl');
-  const singleProductTitle = document.getElementById('singleProductTitle');
-  const addSingleBtn = document.getElementById('addSingleBtn');
-  const singleStatus = document.getElementById('singleStatus');
+  const rankingCountWrapper = document.getElementById('rankingCountWrapper');
+  const addToQueueBtn = document.getElementById('addToQueueBtn');
+  const addStatus = document.getElementById('addStatus');
 
   const logContainer = document.getElementById('logContainer');
   const clearLogBtn = document.getElementById('clearLogBtn');
@@ -49,10 +45,18 @@ document.addEventListener('DOMContentLoaded', () => {
     clearDataBtn.addEventListener('click', clearData);
     startQueueBtn.addEventListener('click', startQueueCollection);
     clearQueueBtn.addEventListener('click', clearQueue);
-    addRankingBtn.addEventListener('click', addFromRanking);
-    addSingleBtn.addEventListener('click', addSingleProduct);
+    addToQueueBtn.addEventListener('click', addToQueue);
     clearLogBtn.addEventListener('click', clearLogs);
-    maxConcurrentSelect.addEventListener('change', saveMaxConcurrent);
+
+    // URL入力時にランキングかどうか判定して件数入力の表示を切り替え
+    productUrl.addEventListener('input', () => {
+      const url = productUrl.value.trim();
+      if (url.includes('ranking.rakuten.co.jp')) {
+        rankingCountWrapper.style.display = 'flex';
+      } else {
+        rankingCountWrapper.style.display = 'none';
+      }
+    });
 
     // バックグラウンドからのメッセージ
     chrome.runtime.onMessage.addListener(handleMessage);
@@ -65,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function loadSettings() {
-    chrome.storage.sync.get(['gasUrl', 'separateSheets', 'spreadsheetUrl', 'maxConcurrent'], (result) => {
+    chrome.storage.sync.get(['gasUrl', 'separateSheets', 'spreadsheetUrl'], (result) => {
       if (result.gasUrl) {
         gasUrlInput.value = result.gasUrl;
         // スプレッドシートモードの場合、CSV/クリアボタンを非表示
@@ -74,7 +78,6 @@ document.addEventListener('DOMContentLoaded', () => {
         dataButtons.style.display = 'flex';
       }
       separateSheetsCheckbox.checked = result.separateSheets !== false;
-      maxConcurrentSelect.value = result.maxConcurrent || '1';
 
       if (result.spreadsheetUrl) {
         spreadsheetLink.href = result.spreadsheetUrl;
@@ -248,56 +251,47 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  async function addFromRanking() {
-    const url = rankingUrl.value.trim();
-    const count = parseInt(rankingCount.value) || 10;
+  async function addToQueue() {
+    const url = productUrl.value.trim();
 
     if (!url) {
-      showStatus(rankingStatus, 'error', 'URLを入力してください');
+      showStatus(addStatus, 'error', 'URLを入力してください');
       return;
     }
 
-    if (!url.includes('ranking.rakuten.co.jp')) {
-      showStatus(rankingStatus, 'error', '楽天ランキングのURLを入力してください');
+    // ランキングURLの場合
+    if (url.includes('ranking.rakuten.co.jp')) {
+      const count = parseInt(rankingCount.value) || 10;
+      showStatus(addStatus, 'info', 'ランキングを取得中...');
+      addToQueueBtn.disabled = true;
+
+      try {
+        chrome.runtime.sendMessage({
+          action: 'fetchRanking',
+          url: url,
+          count: count
+        }, (response) => {
+          addToQueueBtn.disabled = false;
+          if (response && response.success) {
+            showStatus(addStatus, 'success', `${response.addedCount}件追加しました`);
+            loadQueue();
+            addLog(`ランキングから${response.addedCount}件をキューに追加`, 'success');
+            productUrl.value = '';
+            rankingCountWrapper.style.display = 'none';
+          } else {
+            showStatus(addStatus, 'error', response?.error || '取得に失敗しました');
+          }
+        });
+      } catch (e) {
+        addToQueueBtn.disabled = false;
+        showStatus(addStatus, 'error', '取得に失敗しました');
+      }
       return;
     }
 
-    showStatus(rankingStatus, 'info', `ランキングを取得中...`);
-    addRankingBtn.disabled = true;
-
-    try {
-      // バックグラウンドでランキングを取得
-      chrome.runtime.sendMessage({
-        action: 'fetchRanking',
-        url: url,
-        count: count
-      }, (response) => {
-        addRankingBtn.disabled = false;
-        if (response && response.success) {
-          showStatus(rankingStatus, 'success', `${response.addedCount}件追加しました`);
-          loadQueue();
-          addLog(`ランキングから${response.addedCount}件をキューに追加`, 'success');
-        } else {
-          showStatus(rankingStatus, 'error', response?.error || '取得に失敗しました');
-        }
-      });
-    } catch (e) {
-      addRankingBtn.disabled = false;
-      showStatus(rankingStatus, 'error', '取得に失敗しました');
-    }
-  }
-
-  function addSingleProduct() {
-    const url = singleProductUrl.value.trim();
-    const title = singleProductTitle.value.trim();
-
-    if (!url) {
-      showStatus(singleStatus, 'error', 'URLを入力してください');
-      return;
-    }
-
+    // 商品URLの場合
     if (!url.includes('item.rakuten.co.jp') && !url.includes('review.rakuten.co.jp')) {
-      showStatus(singleStatus, 'error', '楽天の商品ページURLを入力してください');
+      showStatus(addStatus, 'error', '楽天の商品ページまたはランキングURLを入力してください');
       return;
     }
 
@@ -307,19 +301,15 @@ document.addEventListener('DOMContentLoaded', () => {
       // 重複チェック
       const exists = queue.some(item => item.url === url);
       if (exists) {
-        showStatus(singleStatus, 'error', '既にキューに追加済みです');
+        showStatus(addStatus, 'error', '既にキューに追加済みです');
         return;
       }
 
-      // URLからタイトルを生成（指定がない場合）
-      let productTitle = title;
-      if (!productTitle) {
-        const pathMatch = url.match(/item\.rakuten\.co\.jp\/([^\/]+)\/([^\/\?]+)/);
-        if (pathMatch) {
-          productTitle = `${pathMatch[1]} - ${pathMatch[2]}`;
-        } else {
-          productTitle = '商品';
-        }
+      // URLからタイトルを生成
+      let productTitle = '商品';
+      const pathMatch = url.match(/item\.rakuten\.co\.jp\/([^\/]+)\/([^\/\?]+)/);
+      if (pathMatch) {
+        productTitle = `${pathMatch[1]} - ${pathMatch[2]}`;
       }
 
       queue.push({
@@ -329,18 +319,12 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       chrome.storage.local.set({ queue }, () => {
-        showStatus(singleStatus, 'success', 'キューに追加しました');
+        showStatus(addStatus, 'success', 'キューに追加しました');
         loadQueue();
         addLog(`${productTitle} をキューに追加`, 'success');
-        singleProductUrl.value = '';
-        singleProductTitle.value = '';
+        productUrl.value = '';
       });
     });
-  }
-
-  function saveMaxConcurrent() {
-    const maxConcurrent = parseInt(maxConcurrentSelect.value) || 1;
-    chrome.storage.sync.set({ maxConcurrent });
   }
 
   function clearLogs() {
