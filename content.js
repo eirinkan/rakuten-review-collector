@@ -19,42 +19,45 @@
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     switch (message.action) {
       case 'startCollection':
-        if (!isCollecting) {
-          if (isItemPage) {
-            // 商品ページの場合、レビューページに遷移
-            const reviewUrl = findReviewPageUrl();
-            if (reviewUrl) {
-              // 商品IDを取得してログに表示
-              const itemUrlMatch = window.location.href.match(/item\.rakuten\.co\.jp\/[^\/]+\/([^\/\?]+)/);
-              const itemProductId = itemUrlMatch ? itemUrlMatch[1] : '';
-              const prefix = itemProductId ? `[${itemProductId}] ` : '';
-              log(prefix + 'レビューページに移動します');
-              // 収集状態を設定してからリダイレクト
-              chrome.storage.local.get(['collectionState'], (result) => {
-                const state = result.collectionState || {
-                  isRunning: false,
-                  reviewCount: 0,
-                  pageCount: 0,
-                  totalPages: 0,
-                  reviews: [],
-                  logs: []
-                };
-                state.isRunning = true;
-                chrome.storage.local.set({ collectionState: state }, () => {
-                  window.location.href = reviewUrl;
-                });
+        // 既に収集中の場合は停止してから再開始
+        if (isCollecting) {
+          shouldStop = true;
+          isCollecting = false;
+          log('前の収集を中断して再開始します');
+        }
+
+        if (isItemPage) {
+          // 商品ページの場合、レビューページに遷移
+          const reviewUrl = findReviewPageUrl();
+          if (reviewUrl) {
+            // 商品IDを取得してログに表示
+            const itemUrlMatch = window.location.href.match(/item\.rakuten\.co\.jp\/[^\/]+\/([^\/\?]+)/);
+            const itemProductId = itemUrlMatch ? itemUrlMatch[1] : '';
+            const prefix = itemProductId ? `[${itemProductId}] ` : '';
+            log(prefix + 'レビューページに移動します');
+            // 収集状態を設定してからリダイレクト
+            chrome.storage.local.get(['collectionState'], (result) => {
+              const state = result.collectionState || {
+                isRunning: false,
+                reviewCount: 0,
+                pageCount: 0,
+                totalPages: 0,
+                reviews: [],
+                logs: []
+              };
+              state.isRunning = true;
+              chrome.storage.local.set({ collectionState: state }, () => {
+                window.location.href = reviewUrl;
               });
-              sendResponse({ success: true, redirecting: true });
-            } else {
-              sendResponse({ success: false, error: 'レビューページが見つかりません' });
-            }
+            });
+            sendResponse({ success: true, redirecting: true });
           } else {
-            // レビューページの場合、収集開始
-            startCollection();
-            sendResponse({ success: true });
+            sendResponse({ success: false, error: 'レビューページが見つかりません' });
           }
         } else {
-          sendResponse({ success: false, error: '既に収集中です' });
+          // レビューページの場合、収集開始
+          startCollection();
+          sendResponse({ success: true });
         }
         break;
       case 'stopCollection':
@@ -906,12 +909,13 @@
           });
           break;
         case 'startCollection':
-          if (!isCollecting) {
-            startCollection();
-            result = { success: true };
-          } else {
-            result = { success: false, error: '既に収集中' };
+          // 既に収集中の場合は停止してから再開始
+          if (isCollecting) {
+            shouldStop = true;
+            isCollecting = false;
           }
+          startCollection();
+          result = { success: true };
           break;
         case 'stopCollection':
           shouldStop = true;
