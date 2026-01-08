@@ -38,102 +38,27 @@
 | レビュー掲載URL | レビューページのURL |
 | 収集日時 | データを収集した日時 |
 
-## ファイル構成
-
-```
-rakuten-review-collector/
-├── manifest.json        # 拡張機能のマニフェスト (v1.3.2)
-├── popup.html           # ポップアップUI
-├── popup.js             # ポップアップのスクリプト
-├── options.html         # 管理画面（設定・キュー管理）
-├── options.js           # 管理画面のスクリプト
-├── content.js           # レビュー収集スクリプト（DOM解析）
-├── background.js        # Service Worker（バックグラウンド処理）
-├── jszip.min.js         # ZIP圧縮ライブラリ
-├── gas/                 # Google Apps Script関連
-│   ├── Code.gs          # GASメインスクリプト
-│   ├── appsscript.json  # GAS設定ファイル
-│   └── .clasp.json.example  # clasp設定テンプレート
-├── icons/               # アイコン画像
-│   ├── icon16.png
-│   ├── icon48.png
-│   └── icon128.png
-├── .gitignore           # Git除外設定
-└── README.md            # このファイル
-```
-
 ## インストール方法
 
-### 1. Chrome拡張機能のインストール
+1. [Releases](https://github.com/eirinkan/rakuten-review-collector/releases)から最新版をダウンロード
+2. ZIPファイルを解凍
+3. Chromeで `chrome://extensions` を開く
+4. 右上の「デベロッパーモード」をオンにする
+5. 「パッケージ化されていない拡張機能を読み込む」をクリック
+6. 解凍したフォルダを選択
 
-1. このリポジトリをクローンまたはダウンロード
-   ```bash
-   git clone https://github.com/your-username/rakuten-review-collector.git
-   ```
-2. Chromeで `chrome://extensions` を開く
-3. 右上の「デベロッパーモード」をオンにする
-4. 「パッケージ化されていない拡張機能を読み込む」をクリック
-5. ダウンロードしたフォルダを選択
+## スプレッドシート連携の設定
 
-### 2. Google Apps Script の設定（スプレッドシート保存を使う場合）
-
-#### 方法A: 拡張機能の管理画面から設定（推奨）
+レビューをGoogleスプレッドシートに自動保存する場合は、以下の手順で設定してください。
 
 1. 拡張機能アイコンを右クリック →「オプション」または `Alt+Shift+R` で管理画面を開く
-2. 「設定」セクションを展開
-3. 「スプレッドシート連携の設定方法」の手順に従う
-4. 自動生成されたGASコードをコピーしてApps Scriptに貼り付け
-
-#### 方法B: 手動でGASを設定
-
-1. [Google スプレッドシート](https://sheets.google.com/)で新規スプレッドシートを作成
-2. メニューから「拡張機能」→「Apps Script」を開く
-3. `gas/Code.gs` の内容をコピーして貼り付け
-4. **重要**: `SPREADSHEET_ID` を自分のスプレッドシートIDに変更
-   ```javascript
-   // スプレッドシートURLの https://docs.google.com/spreadsheets/d/XXXXX/edit の XXXXX 部分
-   const SPREADSHEET_ID = 'あなたのスプレッドシートID';
-   ```
-5. 保存（Ctrl+S）
-6. 「デプロイ」→「新しいデプロイ」をクリック
-7. 「種類の選択」で「ウェブアプリ」を選択
-8. 設定:
-   - 説明: 任意（例: 楽天レビュー収集）
-   - 次のユーザーとして実行: 自分
-   - アクセスできるユーザー: **全員**
-9. 「デプロイ」をクリック
-10. 表示されたURLをコピーし、拡張機能の設定画面に貼り付け
-
-### 3. clasp（GAS CLI）を使う場合（開発者向け）
-
-```bash
-# claspをインストール
-npm install -g @google/clasp
-
-# ログイン
-clasp login
-
-# gas/.clasp.json.example をコピーして .clasp.json を作成
-cp gas/.clasp.json.example gas/.clasp.json
-
-# scriptIdを自分のものに変更
-# Apps Script エディタのURL https://script.google.com/d/XXXXX/edit の XXXXX 部分
-
-# コードをプッシュ
-cd gas
-clasp push
-
-# デプロイIDを確認
-clasp deployments
-
-# 既存デプロイを更新（URLを変えずにコードを更新）
-clasp deploy --deploymentId <デプロイID>
-
-# または新規デプロイ
-clasp deploy --description "説明文"
-```
-
-**注意**: `clasp push`だけではウェブアプリは更新されません。必ず`clasp deploy`でデプロイを更新してください。
+2. 「設定」→「スプレッドシート連携の設定方法」を展開
+3. 画面の手順に従って設定
+   - Googleスプレッドシートを作成
+   - スプレッドシートURLを入力
+   - GASコードをコピーしてApps Scriptに貼り付け
+   - ウェブアプリとしてデプロイ
+   - 生成されたURLを拡張機能に設定
 
 ## 使い方
 
@@ -191,6 +116,42 @@ GASを設定すると、スプレッドシートに「🛠️ レビュー管理
 ## バージョン
 
 v1.3.2
+
+---
+
+## 開発者向け
+
+### ファイル構成
+
+```
+rakuten-review-collector/
+├── manifest.json        # Chrome拡張機能マニフェスト (Manifest V3)
+├── background.js        # Service Worker (収集ロジック、キュー管理)
+├── content.js           # コンテンツスクリプト (レビューページ操作)
+├── popup.html/js        # ポップアップUI
+├── options.html/js      # 管理画面UI
+├── Code.js              # Google Apps Script コード
+└── icons/               # 拡張機能アイコン
+```
+
+### GASの更新（clasp使用時）
+
+GASコードを修正した場合、以下の手順でデプロイを更新:
+
+```bash
+# 1. コードをプッシュ（ソース更新）
+clasp push
+
+# 2. デプロイを更新（本番反映）
+clasp deploy --deploymentId <デプロイID>
+```
+
+※ `clasp push` だけではソースコードが更新されるだけで、デプロイされたウェブアプリには反映されません。
+
+デプロイIDの確認:
+```bash
+clasp deployments
+```
 
 ## ライセンス
 
