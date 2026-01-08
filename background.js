@@ -272,7 +272,7 @@ function convertToCSV(reviews) {
   const headers = [
     'レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文',
     '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先',
-    '購入回数', '参考になった数', 'ショップ名', 'レビュー掲載URL', '収集日時'
+    '購入回数', '参考になった数', 'ショップからの返信', 'ショップ名', 'レビュー掲載URL', '収集日時'
   ];
 
   const rows = reviews.map(review => [
@@ -280,7 +280,7 @@ function convertToCSV(reviews) {
     review.productUrl || '', review.rating || '', review.title || '', review.body || '',
     review.author || '', review.age || '', review.gender || '', review.orderDate || '',
     review.variation || '', review.usage || '', review.recipient || '',
-    review.purchaseCount || '', review.helpfulCount || 0,
+    review.purchaseCount || '', review.helpfulCount || 0, review.shopReply || '',
     review.shopName || '', review.pageUrl || '', review.collectedAt || ''
   ]);
 

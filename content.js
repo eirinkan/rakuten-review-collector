@@ -372,6 +372,7 @@
     let recipient = ''; // 贈り先（自分用、家族へ等）
     let purchaseCount = ''; // 購入回数（はじめて、リピート等）
     let shopName = ''; // ショップ名
+    let shopReply = ''; // ショップからの返信
 
     // 新構造の場合: CSS module クラス名で要素を探す（楽天の現在の構造）
     const ratingElem = elem.querySelector('[class*="number-wrapper"]');
@@ -524,6 +525,35 @@
           purchaseCount = countMatch[0];
         }
       }
+
+      // 参考になった数を取得（新構造）
+      // 「参考になった X人」「参考になった（X人）」などのパターン
+      const helpfulPatterns = [
+        /参考になった[：:\s]*(\d+)\s*人/,
+        /参考になった[（(](\d+)[）)]/,
+        /(\d+)\s*人が参考になった/,
+        /参考になった\s*(\d+)/
+      ];
+      for (const pattern of helpfulPatterns) {
+        const helpfulMatch = text.match(pattern);
+        if (helpfulMatch) {
+          helpfulCount = parseInt(helpfulMatch[1], 10);
+          break;
+        }
+      }
+
+      // ショップからの返信を取得（新構造）
+      // 「ショップからのコメント」の後に続くテキストを抽出
+      const shopReplyMatch = text.match(/ショップからのコメント[：:\s]*(.+?)(?=(?:参考になった|不適切レビュー|$))/s);
+      if (shopReplyMatch) {
+        shopReply = shopReplyMatch[1].trim();
+        // 改行や余分な空白を整理
+        shopReply = shopReply.replace(/\s+/g, ' ').trim();
+        // 長すぎる場合は切り詰め
+        if (shopReply.length > 500) {
+          shopReply = shopReply.substring(0, 500) + '...';
+        }
+      }
     } else {
       // テキストベースで抽出（フォールバック）
 
@@ -604,6 +634,16 @@
           helpfulCount = parseInt(helpfulMatch[1], 10);
         }
       }
+
+      // ショップ返信（旧構造）
+      const oldShopReplyElem = elem.querySelector('.revRvwShopComment, .shop-reply, [class*="shop-comment"]');
+      if (oldShopReplyElem) {
+        shopReply = oldShopReplyElem.textContent.trim();
+        shopReply = shopReply.replace(/^ショップからのコメント[：:\s]*/i, '');
+        if (shopReply.length > 500) {
+          shopReply = shopReply.substring(0, 500) + '...';
+        }
+      }
     }
 
     // レビューがない場合はスキップ
@@ -634,6 +674,7 @@
       recipient: recipient,
       purchaseCount: purchaseCount,
       helpfulCount: helpfulCount,
+      shopReply: shopReply,
       shopName: shopName,
       pageUrl: window.location.href
     };

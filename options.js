@@ -133,8 +133,8 @@ function saveReviewsByProduct(ss, reviews) {
       review.title || '', review.body || '', review.author || '',
       review.age || '', review.gender || '', review.orderDate || '',
       review.variation || '', review.usage || '', review.recipient || '',
-      review.purchaseCount || '', review.helpfulCount || 0, review.shopName || '',
-      review.pageUrl || '', review.collectedAt || new Date().toISOString()
+      review.purchaseCount || '', review.helpfulCount || 0, review.shopReply || '',
+      review.shopName || '', review.pageUrl || '', review.collectedAt || new Date().toISOString()
     ]);
 
     if (rows.length > 0) {
@@ -162,8 +162,8 @@ function saveReviewsToSingleSheet(ss, reviews) {
     review.title || '', review.body || '', review.author || '',
     review.age || '', review.gender || '', review.orderDate || '',
     review.variation || '', review.usage || '', review.recipient || '',
-    review.purchaseCount || '', review.helpfulCount || 0, review.shopName || '',
-    review.pageUrl || '', review.collectedAt || new Date().toISOString()
+    review.purchaseCount || '', review.helpfulCount || 0, review.shopReply || '',
+    review.shopName || '', review.pageUrl || '', review.collectedAt || new Date().toISOString()
   ]);
 
   if (rows.length > 0) {
@@ -194,7 +194,7 @@ function sanitizeSheetName(name) {
 }
 
 function addHeader(sheet) {
-  const headers = ['レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文', '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先', '購入回数', '参考になった数', 'ショップ名', 'レビュー掲載URL', '収集日時'];
+  const headers = ['レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文', '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先', '購入回数', '参考になった数', 'ショップからの返信', 'ショップ名', 'レビュー掲載URL', '収集日時'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   const headerRange = sheet.getRange(1, 1, 1, headers.length);
   headerRange.setBackground('#BF0000');
@@ -206,7 +206,7 @@ function addHeader(sheet) {
 }
 
 function initializeSheet(sheet) {
-  const headers = ['レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文', '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先', '購入回数', '参考になった数', 'ショップ名', 'レビュー掲載URL', '収集日時'];
+  const headers = ['レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文', '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先', '購入回数', '参考になった数', 'ショップからの返信', 'ショップ名', 'レビュー掲載URL', '収集日時'];
   sheet.clear();
   // 行数を調整（ヘッダー1行 + データ用1行 = 最低2行必要）
   const maxRows = sheet.getMaxRows();
@@ -238,9 +238,7 @@ function createResponse(data) {
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('🛠️ レビュー管理')
     .addItem('📊 スプレッドシートを初期化', 'initializeSpreadsheet')
-    .addItem('🗑️ 空のシートを削除', 'deleteEmptySheets')
     .addItem('🔄 重複レビューを削除', 'removeDuplicates')
-    .addItem('🎨 ヘッダーを赤色に修正', 'fixAllHeaders')
     .addToUi();
 }
 
@@ -813,7 +811,7 @@ function removeDuplicates() {
     const headers = [
       'レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文',
       '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先',
-      '購入回数', '参考になった数', 'ショップ名', 'レビュー掲載URL', '収集日時'
+      '購入回数', '参考になった数', 'ショップからの返信', 'ショップ名', 'レビュー掲載URL', '収集日時'
     ];
 
     const rows = reviews.map(review => [
@@ -821,7 +819,7 @@ function removeDuplicates() {
       review.productUrl || '', review.rating || '', review.title || '', review.body || '',
       review.author || '', review.age || '', review.gender || '', review.orderDate || '',
       review.variation || '', review.usage || '', review.recipient || '',
-      review.purchaseCount || '', review.helpfulCount || 0,
+      review.purchaseCount || '', review.helpfulCount || 0, review.shopReply || '',
       review.shopName || '', review.pageUrl || '', review.collectedAt || ''
     ]);
 

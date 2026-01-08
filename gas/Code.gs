@@ -161,6 +161,7 @@ function saveReviewsByProduct(ss, reviews) {
       review.recipient || '',
       review.purchaseCount || '',
       review.helpfulCount || 0,
+      review.shopReply || '',
       review.shopName || '',
       review.pageUrl || '',
       review.collectedAt || new Date().toISOString()
@@ -214,6 +215,7 @@ function saveReviewsToSingleSheet(ss, reviews) {
     review.recipient || '',
     review.purchaseCount || '',
     review.helpfulCount || 0,
+    review.shopReply || '',
     review.shopName || '',
     review.pageUrl || '',
     review.collectedAt || new Date().toISOString()
@@ -299,6 +301,7 @@ function addHeader(sheet) {
     '贈り先',
     '購入回数',
     '参考になった数',
+    'ショップからの返信',
     'ショップ名',
     'レビュー掲載URL',
     '収集日時'
@@ -331,14 +334,15 @@ function addHeader(sheet) {
   sheet.setColumnWidth(14, 80);  // 贈り先
   sheet.setColumnWidth(15, 80);  // 購入回数
   sheet.setColumnWidth(16, 100); // 参考になった数
-  sheet.setColumnWidth(17, 150); // ショップ名
-  sheet.setColumnWidth(18, 250); // レビュー掲載URL
-  sheet.setColumnWidth(19, 150); // 収集日時
+  sheet.setColumnWidth(17, 300); // ショップからの返信
+  sheet.setColumnWidth(18, 150); // ショップ名
+  sheet.setColumnWidth(19, 250); // レビュー掲載URL
+  sheet.setColumnWidth(20, 150); // 収集日時
 
-  // 不要な列を削除（20列目以降）
+  // 不要な列を削除（21列目以降）
   const maxColumns = sheet.getMaxColumns();
-  if (maxColumns > 19) {
-    sheet.deleteColumns(20, maxColumns - 19);
+  if (maxColumns > 20) {
+    sheet.deleteColumns(21, maxColumns - 20);
   }
 
   // ヘッダー行を固定
