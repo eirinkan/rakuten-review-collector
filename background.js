@@ -122,7 +122,7 @@ async function handleSaveReviews(reviews) {
       // 商品IDをログに表示
       const productId = newReviews[0]?.productId || '';
       const prefix = productId ? `[${productId}] ` : '';
-      log(prefix + 'スプレッドシートに保存しました', 'success');
+      log(prefix + 'スプレッドシートに保存しました');
     } catch (error) {
       log(`スプレッドシートへの保存に失敗: ${error.message}`, 'error');
     }
