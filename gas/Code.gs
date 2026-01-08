@@ -128,19 +128,12 @@ function saveReviewsByProduct(ss, reviews) {
       if (defaultSheet && defaultSheet.getLastRow() <= 1) {
         defaultSheet.setName(sheetName);
         sheet = defaultSheet;
-        // ヘッダーがなければ追加
-        if (sheet.getLastRow() === 0) {
-          addHeader(sheet);
-        }
+        // ヘッダーを赤色で再設定（既存ヘッダーを上書き）
+        addHeader(sheet);
       } else {
         sheet = ss.insertSheet(sheetName);
         addHeader(sheet);
       }
-    }
-
-    // ヘッダーがなければ追加
-    if (sheet.getLastRow() === 0) {
-      addHeader(sheet);
     }
 
     // レビューデータを行に変換して追加

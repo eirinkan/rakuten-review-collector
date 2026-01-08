@@ -120,13 +120,12 @@ function saveReviewsByProduct(ss, reviews) {
       if (defaultSheet && defaultSheet.getLastRow() <= 1) {
         defaultSheet.setName(sheetName);
         sheet = defaultSheet;
-        if (sheet.getLastRow() === 0) addHeader(sheet);
+        addHeader(sheet);
       } else {
         sheet = ss.insertSheet(sheetName);
         addHeader(sheet);
       }
     }
-    if (sheet.getLastRow() === 0) addHeader(sheet);
 
     const rows = productReviews.map(review => [
       review.reviewDate || '', review.productId || extractProductId(review.productUrl) || '',
