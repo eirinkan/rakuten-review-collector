@@ -123,8 +123,19 @@ function saveReviewsByProduct(ss, reviews) {
     // シートを取得または作成
     let sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
-      sheet = ss.insertSheet(sheetName);
-      addHeader(sheet);
+      // 「レビュー」シートが存在し、空（ヘッダーのみ）なら商品管理番号にリネームして使用
+      const defaultSheet = ss.getSheetByName('レビュー');
+      if (defaultSheet && defaultSheet.getLastRow() <= 1) {
+        defaultSheet.setName(sheetName);
+        sheet = defaultSheet;
+        // ヘッダーがなければ追加
+        if (sheet.getLastRow() === 0) {
+          addHeader(sheet);
+        }
+      } else {
+        sheet = ss.insertSheet(sheetName);
+        addHeader(sheet);
+      }
     }
 
     // ヘッダーがなければ追加
