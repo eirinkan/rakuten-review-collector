@@ -17,3 +17,12 @@ npm-debug.log*
 # 一時ファイル
 *.tmp
 *.temp
+
+# Google Apps Script (clasp)
+# 機密情報を含むため除外（.clasp.json.exampleを参照）
+gas/.clasp.json
+.clasp.json
+
+# 環境変数
+.env
+.env.local

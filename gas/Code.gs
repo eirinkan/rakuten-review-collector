@@ -3,8 +3,9 @@
  * Chrome拡張機能から送信されたレビューデータをスプレッドシートに保存する
  */
 
-// スプレッドシートID
-const SPREADSHEET_ID = '1o-VqcgiGf_1vItKItOIhz756bcV3KvqbBWuOH4KFnaQ';
+// スプレッドシートID（ここに自分のスプレッドシートIDを設定してください）
+// スプレッドシートURLの https://docs.google.com/spreadsheets/d/XXXXX/edit の XXXXX 部分
+const SPREADSHEET_ID = 'YOUR_SPREADSHEET_ID_HERE';
 
 /**
  * スプレッドシートを取得
