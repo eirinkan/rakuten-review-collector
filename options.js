@@ -242,13 +242,67 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function downloadCSV() {
-    chrome.runtime.sendMessage({ action: 'downloadCSV' }, (response) => {
-      if (response && response.success) {
+    chrome.storage.local.get(['collectionState'], (result) => {
+      const state = result.collectionState;
+
+      if (!state || !state.reviews || state.reviews.length === 0) {
+        addLog('ダウンロードするデータがありません', 'error');
+        return;
+      }
+
+      try {
+        const csv = convertToCSV(state.reviews);
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        const filename = `rakuten_reviews_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.csv`;
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
         addLog('CSVダウンロード完了', 'success');
-      } else {
-        addLog('CSVダウンロード失敗: ' + (response?.error || ''), 'error');
+      } catch (error) {
+        addLog('CSVダウンロード失敗: ' + error.message, 'error');
       }
     });
+  }
+
+  function convertToCSV(reviews) {
+    const headers = [
+      'レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文',
+      '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先',
+      '購入回数', '参考になった数', 'ショップ名', 'レビュー掲載URL', '収集日時'
+    ];
+
+    const rows = reviews.map(review => [
+      review.reviewDate || '', review.productId || '', review.productName || '',
+      review.productUrl || '', review.rating || '', review.title || '', review.body || '',
+      review.author || '', review.age || '', review.gender || '', review.orderDate || '',
+      review.variation || '', review.usage || '', review.recipient || '',
+      review.purchaseCount || '', review.helpfulCount || 0,
+      review.shopName || '', review.pageUrl || '', review.collectedAt || ''
+    ]);
+
+    const escapeCSV = (value) => {
+      if (value === null || value === undefined) return '';
+      const str = String(value);
+      if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
+        return '"' + str.replace(/"/g, '""') + '"';
+      }
+      return str;
+    };
+
+    return [
+      headers.map(escapeCSV).join(','),
+      ...rows.map(row => row.map(escapeCSV).join(','))
+    ].join('\r\n');
   }
 
   function clearData() {
