@@ -574,9 +574,10 @@ function removeDuplicates() {
         return;
       }
 
-      // スプレッドシートモードかどうかでボタン表示を切り替え
+      // CSV機能は常に表示（スプレッドシートと併用可能）
+      dataButtons.style.display = 'flex';
+
       if (gasUrl) {
-        dataButtons.style.display = 'none';
         // 接続テスト
         showStatus(settingsStatus, 'info', '接続テスト中...');
         try {
