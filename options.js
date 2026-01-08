@@ -5,7 +5,6 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   // DOM要素
-  const currentPage = document.getElementById('currentPage');
   const queueRemaining = document.getElementById('queueRemaining');
   const spreadsheetLink = document.getElementById('spreadsheetLink');
   const downloadBtn = document.getElementById('downloadBtn');
@@ -89,7 +88,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function loadState() {
     chrome.storage.local.get(['collectionState'], (result) => {
       const state = result.collectionState || {};
-      currentPage.textContent = `${state.pageCount || 0}/${state.totalPages || 0}`;
 
       const hasData = (state.reviewCount || 0) > 0;
       downloadBtn.disabled = !hasData;

@@ -9,6 +9,7 @@
   // 収集状態
   let isCollecting = false;
   let shouldStop = false;
+  let currentProductId = ''; // 現在の商品管理番号
 
   // ページタイプを判定
   const isReviewPage = window.location.hostname === 'review.rakuten.co.jp';
@@ -111,6 +112,34 @@
   }
 
   /**
+   * 商品管理番号を取得
+   */
+  function getProductId() {
+    // 商品URLを取得
+    const productUrlElem = document.querySelector('a[href*="item.rakuten.co.jp"]');
+    const productUrl = productUrlElem ? productUrlElem.href : window.location.href;
+
+    let productId = '';
+
+    // ページ内の「商品番号：」から取得
+    const pageText = document.body.textContent || '';
+    const productIdMatch = pageText.match(/商品番号[：:]\s*([^\s\n]+)/);
+    if (productIdMatch) {
+      productId = productIdMatch[1].trim();
+    }
+
+    // URLから取得（フォールバック）
+    if (!productId && productUrl) {
+      const urlMatch = productUrl.match(/item\.rakuten\.co\.jp\/[^\/]+\/([^\/\?]+)/);
+      if (urlMatch) {
+        productId = urlMatch[1];
+      }
+    }
+
+    return productId;
+  }
+
+  /**
    * 商品ページからレビューページのURLを取得
    */
   function findReviewPageUrl() {
@@ -140,6 +169,9 @@
   async function startCollection() {
     isCollecting = true;
     shouldStop = false;
+
+    // 商品管理番号を取得
+    currentProductId = getProductId();
 
     log('レビュー収集を開始します');
 
@@ -800,13 +832,15 @@
   }
 
   /**
-   * ログをポップアップに送信
+   * ログをポップアップに送信（商品管理番号を自動プレフィックス）
    */
   function log(text, type = '') {
-    console.log(`[楽天レビュー収集] ${text}`);
+    const prefix = currentProductId ? `[${currentProductId}] ` : '';
+    const fullText = prefix + text;
+    console.log(`[楽天レビュー収集] ${fullText}`);
     chrome.runtime.sendMessage({
       action: 'log',
-      text: text,
+      text: fullText,
       type: type
     });
   }
