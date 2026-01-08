@@ -535,10 +535,18 @@ function removeDuplicates() {
 
       // ヘッダーのスタイルを再適用
       const headerRange = sheet.getRange(1, 1, 1, headers.length);
-      headerRange.setBackground('#4285f4');
+      headerRange.setBackground('#BF0000');
       headerRange.setFontColor('#ffffff');
       headerRange.setFontWeight('bold');
+      headerRange.setVerticalAlignment('middle');
+      headerRange.setHorizontalAlignment('center');
       sheet.setFrozenRows(1);
+
+      // データの上下中央揃え
+      if (uniqueRows.length > 0) {
+        const dataRange = sheet.getRange(2, 1, uniqueRows.length, uniqueRows[0].length);
+        dataRange.setVerticalAlignment('middle');
+      }
 
       totalRemoved += removedCount;
       Logger.log(sheet.getName() + ': ' + removedCount + '件の重複を削除');

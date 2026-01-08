@@ -83,6 +83,15 @@
       background: rgba(255,255,255,0.25);
     }
 
+    .header-icon-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .header-icon-btn:disabled:hover {
+      background: rgba(255,255,255,0.15);
+    }
+
     .header-link {
       background: rgba(255,255,255,0.15);
       color: white;
@@ -271,10 +280,10 @@
     }
 
     .btn-large {
-      width: 100%;
       padding: 20px 16px;
       font-size: 16px;
       font-weight: 600;
+      text-align: center;
     }
 
     .btn-danger {
@@ -558,11 +567,11 @@
     }
 
     .log-entry .time {
-      color: #BF0000;
+      color: #333;
     }
 
     .log-entry.error {
-      color: #dc3545;
+      color: #333;
     }
 
     .log-entry.success {
@@ -596,29 +605,52 @@
     /* 説明折りたたみ */
     .collapsible {
       cursor: pointer;
-      font-size: 11px;
-      color: #BF0000;
-      display: inline-flex;
+      font-size: 12px;
+      color: #333;
+      display: flex;
       align-items: center;
-      gap: 4px;
-      background: none;
-      border: none;
-      padding: 0;
+      gap: 8px;
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-top: 12px;
+      width: 100%;
+      transition: all 0.2s ease;
     }
 
     .collapsible:hover {
-      text-decoration: underline;
+      background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+      border-color: #BF0000;
+    }
+
+    .collapsible .toggle-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      background: #BF0000;
+      color: white;
+      border-radius: 4px;
+      font-size: 10px;
+      transition: transform 0.2s ease;
+    }
+
+    .collapsible.open .toggle-icon {
+      transform: rotate(90deg);
     }
 
     .collapsible-content {
       display: none;
-      margin-top: 10px;
-      padding: 12px;
-      background: #f8f9fa;
-      border-radius: 6px;
-      font-size: 11px;
-      color: #666;
-      line-height: 1.6;
+      margin-top: 12px;
+      padding: 16px;
+      background: linear-gradient(180deg, #fafbfc 0%, #f5f6f8 100%);
+      border: 1px solid #e9ecef;
+      border-radius: 10px;
+      font-size: 12px;
+      color: #444;
+      line-height: 1.7;
     }
 
     .collapsible-content.show {
@@ -634,10 +666,125 @@
     }
 
     .collapsible-content code {
-      background: #e9ecef;
+      background: #fff3cd;
       padding: 2px 6px;
       border-radius: 4px;
       font-family: monospace;
+      font-size: 11px;
+      color: #856404;
+    }
+
+    /* ステップカード */
+    .step-card {
+      background: white;
+      border: 1px solid #e9ecef;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      border-left: 3px solid #BF0000;
+    }
+
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .step-number {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      background: #BF0000;
+      color: white;
+      border-radius: 50%;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .step-title {
+      font-weight: 600;
+      color: #333;
+      font-size: 13px;
+    }
+
+    .step-content {
+      padding-left: 34px;
+      color: #555;
+      font-size: 12px;
+    }
+
+    .step-content ol {
+      margin: 8px 0 0 16px;
+    }
+
+    .step-content li {
+      margin-bottom: 4px;
+    }
+
+    .code-box {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 10px;
+      margin-top: 8px;
+    }
+
+    .code-box textarea {
+      width: 100%;
+      height: 100px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 10px;
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 4px;
+      padding: 8px;
+      resize: vertical;
+      color: #333;
+    }
+
+    .copy-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #28a745;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-bottom: 8px;
+      transition: background 0.2s;
+    }
+
+    .copy-btn:hover {
+      background: #218838;
+    }
+
+    .success-box {
+      background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+      border: 1px solid #28a745;
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 8px;
+    }
+
+    .success-box strong {
+      color: #155724;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .success-box span {
+      font-size: 11px;
+      color: #155724;
     }
 
     .input-row {
@@ -663,18 +810,74 @@
     .ranking-count-wrapper {
       display: flex;
       align-items: center;
-      gap: 4px;
-      font-size: 12px;
+      gap: 6px;
+      font-size: 13px;
       color: #666;
+      white-space: nowrap;
     }
 
     .ranking-count-wrapper input[type="number"] {
-      width: 60px;
+      width: 55px;
       padding: 8px;
       border: 1px solid #ddd;
       border-radius: 6px;
       font-size: 13px;
       text-align: center;
+    }
+
+    /* URL入力エリア */
+    .url-input-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+
+    .url-textarea {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+      resize: none;
+      line-height: 1.4;
+      height: 38px;
+      overflow: hidden;
+    }
+
+    .url-textarea:focus {
+      outline: none;
+      border-color: #BF0000;
+    }
+
+    .url-textarea::placeholder {
+      color: #999;
+      font-size: 11px;
+    }
+
+    .btn-add {
+      align-self: stretch;
+      min-width: 60px;
+      padding: 10px 16px;
+    }
+
+    .url-input-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 6px;
+      min-height: 20px;
+    }
+
+    .url-count-label {
+      font-size: 11px;
+      color: #666;
+      margin-left: auto;
+    }
+
+    .url-count-label.has-urls {
+      color: #28a745;
+      font-weight: 600;
     }
   </style>
 </head>
@@ -691,7 +894,7 @@
           <button id="downloadBtn" class="header-icon-btn" title="CSVダウンロード" disabled>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
           </button>
-          <button id="settingsToggleBtn" class="header-icon-btn" title="出力設定">
+          <button id="settingsToggleBtn" class="header-icon-btn" title="設定">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
           </button>
           <button id="helpToggleBtn" class="header-icon-btn" title="ヘルプ">
@@ -701,22 +904,30 @@
       </div>
     </div>
 
-    <!-- 出力設定（折りたたみ） -->
+    <!-- 設定（折りたたみ） -->
     <div id="settingsCard" class="help-card">
-      <h2>出力設定</h2>
+      <h2>設定</h2>
 
       <!-- CSV -->
       <div class="settings-section">
         <h3>CSV</h3>
-        <div id="dataButtons" class="btn-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="separateCsvFiles" checked>
+          <span>商品ごとにCSVを分ける（ZIP）</span>
+        </label>
+        <div id="dataButtons" class="btn-group" style="margin-top: 8px;">
           <button id="clearDataBtn" class="btn btn-danger" disabled>収集データをクリア</button>
         </div>
-        <p class="help-text" style="margin-top: 8px;">CSVダウンロードはヘッダーのアイコンから</p>
       </div>
 
       <!-- スプレッドシート -->
       <div class="settings-section">
         <h3>スプレッドシート</h3>
+        <label class="checkbox-label" style="margin-bottom: 12px;">
+          <input type="checkbox" id="separateSheets" checked>
+          <span>商品ごとにシートを分ける</span>
+        </label>
+
         <div class="form-group">
           <label>GAS Web App URL</label>
           <div class="input-with-btn">
@@ -725,53 +936,108 @@
           </div>
         </div>
 
-        <label class="checkbox-label">
-          <input type="checkbox" id="separateSheets" checked>
-          <span>商品ごとにシートを分ける</span>
-        </label>
-
         <div id="settingsStatus" class="status-message"></div>
 
         <button id="gasHelpToggle" class="collapsible">
-          <span id="gasHelpIcon">▶</span> GAS Web App URLの取得方法
+          <span id="gasHelpIcon" class="toggle-icon">▶</span>
+          <span>スプレッドシート連携の設定方法</span>
         </button>
         <div id="gasHelp" class="collapsible-content">
-          <ol>
-            <li>Googleスプレッドシートを作成</li>
-            <li>拡張機能 → Apps Script を開く</li>
-            <li>以下のコードを貼り付け:
-              <br><code>gas/Code.gs</code> の内容をコピー
-            </li>
-            <li>デプロイ → 新しいデプロイ</li>
-            <li>種類: ウェブアプリ</li>
-            <li>アクセスできるユーザー: 全員</li>
-            <li>デプロイ後のURLをコピーして上記に貼り付け</li>
-          </ol>
-          <h4 style="margin-top: 12px; margin-bottom: 8px; color: #BF0000;">GASコードの更新方法</h4>
-          <ol>
-            <li>スプレッドシート → 拡張機能 → Apps Script を開く</li>
-            <li>Code.gs の内容を最新版に置き換え</li>
-            <li>デプロイ → デプロイを管理 → 編集（鉛筆アイコン）</li>
-            <li>バージョン: 「新バージョン」を選択</li>
-            <li>「デプロイ」をクリック</li>
-          </ol>
-          <p style="margin-top: 8px; color: #888;">※URLは変わりません。コード更新後は必ず新バージョンをデプロイしてください。</p>
+          <p style="margin-bottom: 16px; color: #333; font-size: 12px;">レビューをGoogleスプレッドシートに自動保存するための設定です。</p>
 
-          <h4 style="margin-top: 16px; margin-bottom: 8px; color: #BF0000;">スプレッドシートの初期化機能</h4>
-          <p style="margin-bottom: 8px;">GASコードを更新すると、スプレッドシートに「🛠️ レビュー管理」メニューが追加されます。</p>
-          <ol>
-            <li>上記「GASコードの更新方法」でコードを更新</li>
-            <li>スプレッドシートを開き直す（またはページ更新）</li>
-            <li>メニューバーに「🛠️ レビュー管理」が表示される</li>
-            <li>クリックして以下の機能を使用:
-              <ul style="margin-top: 4px; margin-left: 16px;">
-                <li><strong>スプレッドシートを初期化</strong> - 全シートを削除</li>
-                <li><strong>空のシートを削除</strong> - データのないシートを削除</li>
-                <li><strong>重複レビューを削除</strong> - 重複データを削除</li>
-              </ul>
-            </li>
-          </ol>
+          <div class="step-card">
+            <div class="step-header">
+              <span class="step-number">1</span>
+              <span class="step-title">スプレッドシートを作成</span>
+            </div>
+            <div class="step-content">
+              Googleドライブで新しいスプレッドシートを作成してください。
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-header">
+              <span class="step-number">2</span>
+              <span class="step-title">Apps Scriptを開く</span>
+            </div>
+            <div class="step-content">
+              スプレッドシートのメニューから「拡張機能」→「Apps Script」をクリック。
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-header">
+              <span class="step-number">3</span>
+              <span class="step-title">スプレッドシートURLを入力</span>
+            </div>
+            <div class="step-content">
+              作成したスプレッドシートのURLをここに貼り付けてください。コードに自動で反映されます。
+              <div style="margin-top: 8px;">
+                <input type="text" id="spreadsheetUrlForCode" placeholder="https://docs.google.com/spreadsheets/d/xxxxx/edit" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+                <div id="spreadsheetIdStatus" style="font-size: 11px; margin-top: 4px;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-header">
+              <span class="step-number">4</span>
+              <span class="step-title">コードをコピーして貼り付け</span>
+            </div>
+            <div class="step-content">
+              Apps Scriptエディタで、最初から入っているコードをすべて削除し、下のコードを貼り付けてください。
+              <div class="code-box">
+                <button id="copyGasCodeBtn" class="copy-btn">📋 コードをコピー</button>
+                <textarea id="gasCodeArea" readonly></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-header">
+              <span class="step-number">5</span>
+              <span class="step-title">保存してデプロイ</span>
+            </div>
+            <div class="step-content">
+              <ol>
+                <li>💾アイコン（またはCtrl+S）で保存</li>
+                <li>右上の「デプロイ」→「新しいデプロイ」をクリック</li>
+                <li>⚙️歯車アイコンをクリック →「ウェブアプリ」を選択</li>
+                <li>「アクセスできるユーザー」を<strong>「全員」</strong>に変更</li>
+                <li>「デプロイ」をクリック</li>
+                <li>Googleアカウントでのアクセスを許可</li>
+              </ol>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-header">
+              <span class="step-number">6</span>
+              <span class="step-title">Web App URLを貼り付け</span>
+            </div>
+            <div class="step-content">
+              デプロイ完了後に表示される「ウェブアプリのURL」をコピーし、上の「GAS Web App URL」欄に貼り付けて「保存」をクリック。
+            </div>
+          </div>
+
+          <div class="success-box">
+            <strong>✅ 設定完了後</strong>
+            <span>レビュー収集時に自動でスプレッドシートに保存されます。スプレッドシートを<strong>リロード</strong>すると「🛠️ レビュー管理」メニューが追加され、初期化・重複削除などの機能が使えます。</span>
+          </div>
         </div>
+      </div>
+
+      <!-- 通知 -->
+      <div class="settings-section">
+        <h3>通知</h3>
+        <label class="checkbox-label">
+          <input type="checkbox" id="enableNotification" checked>
+          <span>収集完了時にデスクトップ通知</span>
+        </label>
+        <label class="checkbox-label" style="margin-top: 8px;">
+          <input type="checkbox" id="notifyPerProduct">
+          <span>商品ごとに通知（全体完了のみの場合はOFF）</span>
+        </label>
       </div>
     </div>
 
@@ -783,31 +1049,133 @@
         <ol>
           <li><strong>単一商品のレビュー収集:</strong>
             <br>楽天市場の商品ページまたはレビューページを開き、拡張機能アイコンをクリック → 「収集開始」ボタンを押す
+            <br>※商品ページからは自動でレビューページに遷移します
           </li>
-          <li><strong>複数商品の一括収集:</strong>
-            <br>各商品ページで「キューに追加」→ この画面で「一括収集開始」
+          <li><strong>複数商品の一括収集（キュー）:</strong>
+            <br>① 各商品ページで「キューに追加」ボタンを押す
+            <br>② この管理画面で「一括収集開始」をクリック
+            <br>※最大3商品を同時に収集（バックグラウンドの別ウィンドウで実行）
           </li>
           <li><strong>ランキングから一括追加:</strong>
-            <br>楽天ランキングページのURLを入力 → 上位N商品を指定 → 「追加」
-            <br>または、ランキングページで拡張機能アイコンをクリック → 商品数を指定して追加
+            <br>【方法1】楽天ランキングページを開き、拡張機能アイコンをクリック → 商品数を指定して追加
+            <br>【方法2】この管理画面でランキングURLを入力 → 上位N商品を指定 → 「追加」
           </li>
         </ol>
 
         <h3>データの保存方法</h3>
         <ul>
-          <li><strong>CSVモード（デフォルト）:</strong> GAS URLが空の場合、CSVファイルとしてダウンロード</li>
-          <li><strong>スプレッドシートモード:</strong> GAS Web App URLを設定すると、自動でGoogleスプレッドシートに保存</li>
+          <li><strong>CSVモード:</strong>
+            <br>GAS URLが空の場合に利用可能。ヘッダーの📥アイコンでダウンロード
+            <br>「商品ごとにCSVを分ける」ONの場合はZIPファイルで一括ダウンロード
+          </li>
+          <li><strong>スプレッドシートモード（推奨）:</strong>
+            <br>GAS Web App URLを設定すると、収集時に自動でGoogleスプレッドシートに保存
+            <br>「商品ごとにシートを分ける」ONで商品別にシート作成
+          </li>
         </ul>
 
-        <h3>収集できるデータ</h3>
-        <p>レビュー日、商品管理番号、商品名、商品URL、評価、タイトル、本文、投稿者、年代、性別、注文日、バリエーション、用途、贈り先、購入回数、購入情報、参考になった数、ショップ名、ページURL、収集日時</p>
+        <h3>スプレッドシートのカスタムメニュー</h3>
+        <p>GASコードを設定すると、スプレッドシートに「🛠️ レビュー管理」メニューが追加されます（要リロード）</p>
+        <ul>
+          <li><strong>📊 スプレッドシートを初期化:</strong>
+            <br>すべてのシートを削除し、初期化済みの「レビュー」シートを作成
+          </li>
+          <li><strong>🗑️ 空のシートを削除:</strong>
+            <br>データが入っていない空シートを一括削除
+          </li>
+          <li><strong>🔄 重複レビューを削除:</strong>
+            <br>全シートから重複レビューを検出して削除（本文+投稿者+日付で判定）
+          </li>
+        </ul>
+
+        <h3>収集できるデータ（19項目）</h3>
+        <table style="font-size: 11px; border-collapse: collapse; width: 100%; margin: 8px 0;">
+          <tr style="background: #f5f5f5;">
+            <td style="border: 1px solid #ddd; padding: 4px;">レビュー日</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">商品管理番号</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">商品名</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">商品URL</td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid #ddd; padding: 4px;">評価（1-5）</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">タイトル</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">本文</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">投稿者</td>
+          </tr>
+          <tr style="background: #f5f5f5;">
+            <td style="border: 1px solid #ddd; padding: 4px;">年代</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">性別</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">注文日</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">バリエーション</td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid #ddd; padding: 4px;">用途</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">贈り先</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">購入回数</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">参考になった数</td>
+          </tr>
+          <tr style="background: #f5f5f5;">
+            <td style="border: 1px solid #ddd; padding: 4px;">ショップ名</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">レビュー掲載URL</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">収集日時</td>
+            <td style="border: 1px solid #ddd; padding: 4px;"></td>
+          </tr>
+        </table>
+
+        <h3>キーボードショートカット</h3>
+        <ul>
+          <li><strong>Alt + R:</strong> ポップアップを開く（収集開始/停止）</li>
+          <li><strong>Alt + Shift + R:</strong> 管理画面（この画面）を開く</li>
+        </ul>
+
+        <h3>通知設定</h3>
+        <ul>
+          <li><strong>収集完了時にデスクトップ通知:</strong> 全商品の収集が完了した時に通知</li>
+          <li><strong>商品ごとに通知:</strong> 各商品の収集完了時にも通知（大量収集時は OFF 推奨）</li>
+        </ul>
+
+        <h3>対応ページ</h3>
+        <ul>
+          <li><strong>商品ページ:</strong> item.rakuten.co.jp/*</li>
+          <li><strong>レビューページ:</strong> review.rakuten.co.jp/*</li>
+          <li><strong>ランキングページ:</strong> ranking.rakuten.co.jp/*</li>
+        </ul>
+
+        <h3>収集の仕組み</h3>
+        <ul>
+          <li>キュー収集時は最大<strong>3商品を同時に並列処理</strong></li>
+          <li>サーバー負荷軽減のため、ページ間に<strong>3〜6秒のランダム待機</strong></li>
+          <li>収集用の最小化ウィンドウで自動実行（通常の作業を妨げません）</li>
+          <li>各商品の収集完了後、タブは自動で閉じられます</li>
+        </ul>
 
         <h3>注意事項</h3>
         <ul>
-          <li>収集中はタブを閉じないでください</li>
-          <li>楽天市場のサーバー負荷軽減のため、ページ間に3〜6秒の待機時間が入ります</li>
-          <li>大量のレビューを収集する場合は時間がかかります</li>
+          <li><strong>単一収集時:</strong> 収集中のタブを閉じると中断されます</li>
+          <li><strong>キュー収集時:</strong> 収集用ウィンドウを閉じると全て中断されます</li>
+          <li>楽天市場のページ構造変更により、収集できない場合があります</li>
+          <li>大量のレビュー収集には時間がかかります（1ページ約15件、3-6秒/ページ）</li>
+          <li>レビューページから直接収集を開始することも可能です</li>
         </ul>
+
+        <h3>トラブルシューティング</h3>
+        <ul>
+          <li><strong>「ページをリロードしてください」と表示される:</strong>
+            <br>→ ページをF5でリロードしてから再度収集を開始してください
+          </li>
+          <li><strong>スプレッドシートに保存されない:</strong>
+            <br>→ GAS URLが正しいか確認。デプロイ後の「ウェブアプリのURL」を使用
+          </li>
+          <li><strong>カスタムメニューが表示されない:</strong>
+            <br>→ スプレッドシートをリロード（Ctrl+R）してください
+          </li>
+          <li><strong>レビューが収集されない:</strong>
+            <br>→ 楽天の新しいページ構造に対応していない可能性。拡張機能の更新を確認
+          </li>
+        </ul>
+
+        <h3>バージョン情報</h3>
+        <p>楽天市場レビュー収集 v1.3.2</p>
       </div>
     </div>
 
@@ -815,33 +1183,36 @@
     <div class="card">
       <div class="queue-header">
         <h2>キュー</h2>
-        <span id="queueRemaining" class="queue-count">0件</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span id="queueRemaining" class="queue-count">0件</span>
+          <button id="clearQueueBtn" class="icon-btn" title="キュークリア">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+          </button>
+        </div>
       </div>
 
       <!-- URL入力エリア -->
-      <div class="input-row">
-        <input type="text" id="productUrl" class="input-flex" placeholder="商品ページURLまたはランキングURL">
+      <div class="url-input-row">
+        <textarea id="productUrl" class="url-textarea" placeholder="商品ページURL（改行で複数可）またはランキングURLを入力"></textarea>
         <div id="rankingCountWrapper" class="ranking-count-wrapper" style="display: none;">
           <span>上位</span>
           <input type="number" id="rankingCount" value="10" min="1" max="100">
           <span>件</span>
         </div>
-        <button id="addToQueueBtn" class="btn btn-primary">追加</button>
+        <button id="addToQueueBtn" class="btn btn-primary btn-add">追加</button>
+      </div>
+      <div class="url-input-footer">
+        <span id="urlCountLabel" class="url-count-label"></span>
       </div>
       <div id="addStatus" class="status-message"></div>
 
-      <!-- キューリスト -->
-      <div id="queueList" class="queue-list">
-        <div class="queue-empty">キューは空です</div>
+      <div style="margin-top: 12px; margin-bottom: 16px;">
+        <button id="startQueueBtn" class="btn btn-success btn-large" style="width: 100%;" disabled>一括収集開始</button>
+        <button id="stopQueueBtn" class="btn btn-stop btn-large" style="width: 100%; display: none;">収集中止</button>
       </div>
 
-      <div style="margin-top: 12px;">
-        <button id="startQueueBtn" class="btn btn-success btn-large" disabled>一括収集開始</button>
-        <button id="stopQueueBtn" class="btn btn-stop btn-large" style="display: none;">収集中止</button>
-      </div>
-      <div style="margin-top: 8px; text-align: right;">
-        <button id="clearQueueBtn" class="btn btn-secondary">キュークリア</button>
-      </div>
+      <!-- キューリスト -->
+      <div id="queueList" class="queue-list"></div>
     </div>
 
     <!-- ログ -->

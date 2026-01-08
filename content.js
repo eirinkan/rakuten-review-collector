@@ -19,11 +19,19 @@
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     switch (message.action) {
       case 'startCollection':
-        // 既に収集中の場合は停止してから再開始
+        // 既に収集中の場合
         if (isCollecting) {
-          shouldStop = true;
-          isCollecting = false;
-          log('前の収集を中断して再開始します');
+          // 強制フラグがある場合のみ再開始（ユーザーが明示的に押した場合）
+          if (message.force) {
+            shouldStop = true;
+            isCollecting = false;
+            log('前の収集を中断して再開始します');
+          } else {
+            // キュー収集などの自動収集では無視
+            console.log('[楽天レビュー収集] 既に収集中のためスキップ');
+            sendResponse({ success: false, error: '既に収集中' });
+            break;
+          }
         }
 
         if (isItemPage) {
@@ -63,6 +71,8 @@
       case 'stopCollection':
         shouldStop = true;
         isCollecting = false;
+        // background.jsに停止を通知（collectingItemsからの削除用）
+        chrome.runtime.sendMessage({ action: 'collectionStopped' });
         sendResponse({ success: true });
         break;
       case 'getProductInfo':
@@ -170,6 +180,12 @@
    * 収集を開始
    */
   async function startCollection() {
+    // 既に収集中の場合は何もしない（重複防止）
+    if (isCollecting) {
+      console.log('[楽天レビュー収集] 既に収集中のためスキップ');
+      return;
+    }
+
     isCollecting = true;
     shouldStop = false;
 
@@ -182,14 +198,19 @@
     await collectCurrentPage();
 
     // ページネーションがある場合、次のページも収集
-    await collectAllPages();
+    // navigatedがtrueの場合、ページ遷移中なので完了通知を送らない
+    const navigated = await collectAllPages();
+
+    if (navigated) {
+      // ページ遷移中は何もしない（新しいページで収集を継続）
+      return;
+    }
 
     isCollecting = false;
 
-    // 収集完了を通知
+    // 収集完了を通知（ログはbackground.jsで出力）
     if (!shouldStop) {
       chrome.runtime.sendMessage({ action: 'collectionComplete' });
-      log('収集が完了しました', 'success');
     }
   }
 
@@ -206,18 +227,23 @@
 
     log(`${reviews.length}件のレビューを検出`);
 
-    // バックグラウンドにデータを送信
-    chrome.runtime.sendMessage({
-      action: 'saveReviews',
-      reviews: reviews
+    // バックグラウンドにデータを送信（完了を待つ）
+    await new Promise((resolve) => {
+      chrome.runtime.sendMessage({
+        action: 'saveReviews',
+        reviews: reviews
+      }, (response) => {
+        resolve(response);
+      });
     });
 
-    // 状態を更新
+    // 状態を更新（saveReviews完了後に実行）
     await updateState(reviews.length);
   }
 
   /**
    * すべてのページを収集
+   * @returns {boolean} ページ遷移した場合はtrue、完了した場合はfalse
    */
   async function collectAllPages() {
     while (!shouldStop) {
@@ -226,7 +252,7 @@
 
       if (!nextLink) {
         log('最後のページに到達しました');
-        break;
+        return false; // 完了
       }
 
       // ランダムウェイト（3-6秒）
@@ -234,7 +260,9 @@
       log(`${(waitTime / 1000).toFixed(1)}秒待機中...`);
       await sleep(waitTime);
 
-      if (shouldStop) break;
+      if (shouldStop) {
+        return false; // 停止された
+      }
 
       // 次のページに移動
       log('次のページに移動します');
@@ -242,8 +270,10 @@
 
       // ページ遷移後は新しいコンテンツスクリプトが起動するため、
       // ここで現在のインスタンスは終了
-      return;
+      return true; // ページ遷移中
     }
+
+    return false; // shouldStopで終了
   }
 
   /**
@@ -789,7 +819,7 @@
   }
 
   /**
-   * 状態を更新
+   * 状態を更新（pageCountとtotalPagesのみ。reviewCountとreviewsはbackground.jsで管理）
    */
   async function updateState(newReviewCount) {
     return new Promise((resolve) => {
@@ -803,17 +833,13 @@
           logs: []
         };
 
-        state.reviewCount = (state.reviewCount || 0) + newReviewCount;
+        // reviewsとreviewCountは変更しない（background.jsのsaveToLocalStorageで管理）
+        // pageCountとtotalPagesのみ更新
         state.pageCount = (state.pageCount || 0) + 1;
         state.totalPages = getTotalPages();
         state.isRunning = isCollecting;
 
         chrome.storage.local.set({ collectionState: state }, () => {
-          // ポップアップに進捗を通知
-          chrome.runtime.sendMessage({
-            action: 'updateProgress',
-            state: state
-          });
           resolve();
         });
       });
@@ -920,6 +946,8 @@
         case 'stopCollection':
           shouldStop = true;
           isCollecting = false;
+          // background.jsに停止を通知（collectingItemsからの削除用）
+          chrome.runtime.sendMessage({ action: 'collectionStopped' });
           result = { success: true };
           break;
         case 'addToQueue':

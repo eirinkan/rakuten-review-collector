@@ -13,6 +13,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const gasUrlInput = document.getElementById('gasUrl');
   const separateSheetsCheckbox = document.getElementById('separateSheets');
+  const separateCsvFilesCheckbox = document.getElementById('separateCsvFiles');
+  const enableNotificationCheckbox = document.getElementById('enableNotification');
+  const notifyPerProductCheckbox = document.getElementById('notifyPerProduct');
   const saveSettingsBtn = document.getElementById('saveSettingsBtn');
   const settingsStatus = document.getElementById('settingsStatus');
 
@@ -27,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const rankingCountWrapper = document.getElementById('rankingCountWrapper');
   const addToQueueBtn = document.getElementById('addToQueueBtn');
   const addStatus = document.getElementById('addStatus');
+  const urlCountLabel = document.getElementById('urlCountLabel');
 
   const logCard = document.getElementById('logCard');
   const logContainer = document.getElementById('logContainer');
@@ -40,6 +44,271 @@ document.addEventListener('DOMContentLoaded', () => {
   const gasHelpToggle = document.getElementById('gasHelpToggle');
   const gasHelp = document.getElementById('gasHelp');
   const gasHelpIcon = document.getElementById('gasHelpIcon');
+  const gasCodeArea = document.getElementById('gasCodeArea');
+  const copyGasCodeBtn = document.getElementById('copyGasCodeBtn');
+  const spreadsheetUrlForCode = document.getElementById('spreadsheetUrlForCode');
+  const spreadsheetIdStatus = document.getElementById('spreadsheetIdStatus');
+
+  // 現在のスプレッドシートID
+  let currentSpreadsheetId = '';
+
+  // GASコードテンプレート（__SPREADSHEET_ID__がプレースホルダー）
+  const GAS_CODE_TEMPLATE = `/**
+ * 楽天レビュー収集 - Google Apps Script
+ * Chrome拡張機能から送信されたレビューデータをスプレッドシートに保存する
+ */
+
+const SPREADSHEET_ID = '__SPREADSHEET_ID__';
+
+function getSpreadsheet() {
+  return SpreadsheetApp.openById(SPREADSHEET_ID);
+}
+
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+    const ss = getSpreadsheet();
+    const spreadsheetUrl = ss.getUrl();
+
+    if (data.test) {
+      return createResponse({ success: true, message: '接続テスト成功', spreadsheetUrl: spreadsheetUrl });
+    }
+
+    if (!data.reviews || data.reviews.length === 0) {
+      return createResponse({ success: false, error: 'レビューデータがありません', spreadsheetUrl: spreadsheetUrl });
+    }
+
+    const separateSheets = data.separateSheets !== false;
+    const savedCount = saveReviews(data.reviews, separateSheets);
+
+    return createResponse({ success: true, message: savedCount + '件のレビューを保存しました', savedCount: savedCount, spreadsheetUrl: spreadsheetUrl });
+  } catch (error) {
+    console.error('エラー:', error);
+    return createResponse({ success: false, error: error.message });
+  }
+}
+
+function doGet(e) {
+  const ss = getSpreadsheet();
+  return createResponse({ success: true, message: '楽天レビュー収集 GAS API は正常に動作しています', timestamp: new Date().toISOString(), spreadsheetUrl: ss.getUrl() });
+}
+
+function saveReviews(reviews, separateSheets) {
+  const ss = getSpreadsheet();
+  if (separateSheets) {
+    return saveReviewsByProduct(ss, reviews);
+  } else {
+    return saveReviewsToSingleSheet(ss, reviews);
+  }
+}
+
+function saveReviewsByProduct(ss, reviews) {
+  let totalSaved = 0;
+  const reviewsByProduct = {};
+  reviews.forEach(review => {
+    const productId = review.productId || extractProductId(review.productUrl) || '不明な商品';
+    if (!reviewsByProduct[productId]) reviewsByProduct[productId] = [];
+    reviewsByProduct[productId].push(review);
+  });
+
+  for (const productId in reviewsByProduct) {
+    const productReviews = reviewsByProduct[productId];
+    let sheetName = sanitizeSheetName(productId);
+    let sheet = ss.getSheetByName(sheetName);
+    if (!sheet) {
+      sheet = ss.insertSheet(sheetName);
+      addHeader(sheet);
+    }
+    if (sheet.getLastRow() === 0) addHeader(sheet);
+
+    const rows = productReviews.map(review => [
+      review.reviewDate || '', review.productId || extractProductId(review.productUrl) || '',
+      review.productName || '', review.productUrl || '', review.rating || '',
+      review.title || '', review.body || '', review.author || '',
+      review.age || '', review.gender || '', review.orderDate || '',
+      review.variation || '', review.usage || '', review.recipient || '',
+      review.purchaseCount || '', review.helpfulCount || 0, review.shopName || '',
+      review.pageUrl || '', review.collectedAt || new Date().toISOString()
+    ]);
+
+    if (rows.length > 0) {
+      const lastRow = sheet.getLastRow();
+      sheet.getRange(lastRow + 1, 1, rows.length, rows[0].length).setValues(rows);
+      totalSaved += rows.length;
+    }
+  }
+  return totalSaved;
+}
+
+function saveReviewsToSingleSheet(ss, reviews) {
+  let sheet = ss.getSheetByName('レビュー');
+  if (!sheet) {
+    sheet = ss.insertSheet('レビュー');
+    addHeader(sheet);
+  }
+  if (sheet.getLastRow() === 0) addHeader(sheet);
+
+  const rows = reviews.map(review => [
+    review.reviewDate || '', review.productId || extractProductId(review.productUrl) || '',
+    review.productName || '', review.productUrl || '', review.rating || '',
+    review.title || '', review.body || '', review.author || '',
+    review.age || '', review.gender || '', review.orderDate || '',
+    review.variation || '', review.usage || '', review.recipient || '',
+    review.purchaseCount || '', review.helpfulCount || 0, review.shopName || '',
+    review.pageUrl || '', review.collectedAt || new Date().toISOString()
+  ]);
+
+  if (rows.length > 0) {
+    const lastRow = sheet.getLastRow();
+    sheet.getRange(lastRow + 1, 1, rows.length, rows[0].length).setValues(rows);
+  }
+  return rows.length;
+}
+
+function extractProductId(productUrl) {
+  if (!productUrl) return null;
+  try {
+    const match = productUrl.match(/item\\.rakuten\\.co\\.jp\\/[^\\/]+\\/([^\\/\\?]+)/);
+    if (match && match[1]) return match[1];
+    const reviewMatch = productUrl.match(/review\\.rakuten\\.co\\.jp\\/item\\/\\d+\\/[^\\/]+\\/([^\\/\\?]+)/);
+    if (reviewMatch && reviewMatch[1]) return reviewMatch[1];
+    return null;
+  } catch (e) { return null; }
+}
+
+function sanitizeSheetName(name) {
+  let sanitized = name.replace(/[*?:\\\\/\\[\\]]/g, '');
+  if (sanitized.length > 31) sanitized = sanitized.substring(0, 31);
+  if (!sanitized.trim()) sanitized = '不明な商品';
+  return sanitized;
+}
+
+function addHeader(sheet) {
+  const headers = ['レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文', '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先', '購入回数', '参考になった数', 'ショップ名', 'レビュー掲載URL', '収集日時'];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  const headerRange = sheet.getRange(1, 1, 1, headers.length);
+  headerRange.setBackground('#BF0000');
+  headerRange.setFontColor('#ffffff');
+  headerRange.setFontWeight('bold');
+  sheet.setFrozenRows(1);
+}
+
+function initializeSheet(sheet) {
+  const headers = ['レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文', '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先', '購入回数', '参考になった数', 'ショップ名', 'レビュー掲載URL', '収集日時'];
+  sheet.clear();
+  // 行数を調整（ヘッダー1行 + データ用1行 = 最低2行必要）
+  const maxRows = sheet.getMaxRows();
+  if (maxRows > 2) {
+    sheet.deleteRows(3, maxRows - 2);
+  } else if (maxRows < 2) {
+    sheet.insertRows(2, 2 - maxRows);
+  }
+  // 余分な列を削除（ヘッダー列より後）
+  const maxCols = sheet.getMaxColumns();
+  if (maxCols > headers.length) {
+    sheet.deleteColumns(headers.length + 1, maxCols - headers.length);
+  }
+  // ヘッダーを設定
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  const headerRange = sheet.getRange(1, 1, 1, headers.length);
+  headerRange.setBackground('#BF0000');
+  headerRange.setFontColor('#ffffff');
+  headerRange.setFontWeight('bold');
+  sheet.setFrozenRows(1);
+}
+
+function createResponse(data) {
+  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu('🛠️ レビュー管理')
+    .addItem('📊 スプレッドシートを初期化', 'initializeSpreadsheet')
+    .addItem('🗑️ 空のシートを削除', 'deleteEmptySheets')
+    .addItem('🔄 重複レビューを削除', 'removeDuplicates')
+    .addToUi();
+}
+
+function initializeSpreadsheet() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert('⚠️ スプレッドシートの初期化', 'すべてのシートとデータが削除されます。\\nこの操作は取り消せません。\\n\\n本当に初期化しますか？', ui.ButtonSet.YES_NO);
+  if (response !== ui.Button.YES) { ui.alert('初期化をキャンセルしました'); return; }
+  const ss = getSpreadsheet();
+  const sheets = ss.getSheets();
+  // 既存の「レビュー」シートがあれば使用、なければ新規作成
+  let reviewSheet = ss.getSheetByName('レビュー');
+  if (!reviewSheet) {
+    reviewSheet = ss.insertSheet('レビュー');
+  }
+  initializeSheet(reviewSheet);
+  let deletedCount = 0;
+  sheets.forEach(sheet => { if (sheet.getName() !== 'レビュー') { ss.deleteSheet(sheet); deletedCount++; } });
+  ui.alert('✅ 初期化完了', deletedCount + '個のシートを削除しました。', ui.ButtonSet.OK);
+}
+
+function deleteEmptySheets() {
+  const ss = getSpreadsheet();
+  const sheets = ss.getSheets();
+  let deletedCount = 0;
+
+  // まず空シートを特定
+  const emptySheets = sheets.filter(sheet => sheet.getLastRow() <= 1);
+  const nonEmptySheets = sheets.filter(sheet => sheet.getLastRow() > 1);
+
+  // 空シートを削除（最低1シートは残す）
+  emptySheets.forEach(sheet => {
+    if (ss.getSheets().length > 1) {
+      ss.deleteSheet(sheet);
+      deletedCount++;
+    }
+  });
+
+  // レビューが入っているシートがない場合、初期化シートを作成
+  if (nonEmptySheets.length === 0) {
+    let reviewSheet = ss.getSheetByName('レビュー');
+    if (!reviewSheet) {
+      // 残っているシートがあれば名前を変更、なければ新規作成
+      const remaining = ss.getSheets();
+      if (remaining.length > 0 && remaining[0].getLastRow() <= 1) {
+        reviewSheet = remaining[0];
+        reviewSheet.setName('レビュー');
+      } else {
+        reviewSheet = ss.insertSheet('レビュー');
+      }
+    }
+    initializeSheet(reviewSheet);
+    SpreadsheetApp.getUi().alert(deletedCount + '個の空シートを削除しました。\\n初期化済みの「レビュー」シートを作成しました。');
+  } else {
+    SpreadsheetApp.getUi().alert(deletedCount + '個の空シートを削除しました');
+  }
+}
+
+function removeDuplicates() {
+  const ss = getSpreadsheet();
+  const sheets = ss.getSheets();
+  let totalRemoved = 0;
+  sheets.forEach(sheet => {
+    if (sheet.getLastRow() <= 1) return;
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const rows = data.slice(1);
+    const seen = new Set();
+    const uniqueRows = [];
+    rows.forEach(row => {
+      const key = (row[6] || '').substring(0, 100) + '|' + (row[7] || '');
+      if (!seen.has(key)) { seen.add(key); uniqueRows.push(row); }
+    });
+    const removedCount = rows.length - uniqueRows.length;
+    if (removedCount > 0) {
+      sheet.clear();
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+      if (uniqueRows.length > 0) sheet.getRange(2, 1, uniqueRows.length, uniqueRows[0].length).setValues(uniqueRows);
+      addHeader(sheet);
+      totalRemoved += removedCount;
+    }
+  });
+  SpreadsheetApp.getUi().alert(totalRemoved + '件の重複を削除しました');
+}`;
 
   // 初期化
   init();
@@ -49,6 +318,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadState();
     loadQueue();
     loadLogs();
+    loadGasCode();
 
     // イベントリスナー
     saveSettingsBtn.addEventListener('click', saveSettings);
@@ -70,18 +340,64 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     gasHelpToggle.addEventListener('click', () => {
       gasHelp.classList.toggle('show');
-      gasHelpIcon.textContent = gasHelp.classList.contains('show') ? '▼' : '▶';
+      gasHelpToggle.classList.toggle('open');
     });
 
-    // URL入力時にランキングかどうか判定して件数入力の表示を切り替え
+    // URL入力時にランキングかどうか判定して件数入力の表示を切り替え、URLカウントを表示
     productUrl.addEventListener('input', () => {
-      const url = productUrl.value.trim();
-      if (url.includes('ranking.rakuten.co.jp')) {
+      // 高さを自動調整
+      productUrl.style.height = '38px';
+      productUrl.style.height = Math.min(productUrl.scrollHeight, 120) + 'px';
+
+      const text = productUrl.value.trim();
+      const urls = text.split('\n').map(u => u.trim()).filter(u => u.length > 0);
+
+      // ランキングURLチェック
+      const hasRankingUrl = urls.some(u => u.includes('ranking.rakuten.co.jp'));
+      if (hasRankingUrl && urls.length === 1) {
         rankingCountWrapper.style.display = 'flex';
       } else {
         rankingCountWrapper.style.display = 'none';
       }
+
+      // URLカウント表示
+      const validUrls = urls.filter(u =>
+        u.includes('item.rakuten.co.jp') ||
+        u.includes('review.rakuten.co.jp') ||
+        u.includes('ranking.rakuten.co.jp')
+      );
+
+      if (urlCountLabel) {
+        if (validUrls.length > 0) {
+          urlCountLabel.textContent = `${validUrls.length}件のURL`;
+          urlCountLabel.className = 'url-count-label has-urls';
+        } else if (urls.length > 0) {
+          urlCountLabel.textContent = '有効なURLがありません';
+          urlCountLabel.className = 'url-count-label';
+        } else {
+          urlCountLabel.textContent = '';
+          urlCountLabel.className = 'url-count-label';
+        }
+      }
     });
+
+    // 通知設定のチェックボックス変更時に自動保存
+    if (enableNotificationCheckbox) {
+      enableNotificationCheckbox.addEventListener('change', saveNotificationSettings);
+    }
+    if (notifyPerProductCheckbox) {
+      notifyPerProductCheckbox.addEventListener('change', saveNotificationSettings);
+    }
+
+    // GASコードコピーボタン
+    if (copyGasCodeBtn) {
+      copyGasCodeBtn.addEventListener('click', copyGasCode);
+    }
+
+    // スプレッドシートURL入力
+    if (spreadsheetUrlForCode) {
+      spreadsheetUrlForCode.addEventListener('input', handleSpreadsheetUrlInput);
+    }
 
     // バックグラウンドからのメッセージ
     chrome.runtime.onMessage.addListener(handleMessage);
@@ -94,7 +410,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function loadSettings() {
-    chrome.storage.sync.get(['gasUrl', 'separateSheets', 'spreadsheetUrl'], (result) => {
+    chrome.storage.sync.get(['gasUrl', 'separateSheets', 'separateCsvFiles', 'spreadsheetUrl', 'enableNotification', 'notifyPerProduct'], (result) => {
       if (result.gasUrl) {
         gasUrlInput.value = result.gasUrl;
         // スプレッドシートモードの場合、CSV/クリアボタンを非表示
@@ -102,7 +418,19 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         dataButtons.style.display = 'flex';
       }
-      separateSheetsCheckbox.checked = result.separateSheets !== false;
+      if (separateSheetsCheckbox) {
+        separateSheetsCheckbox.checked = result.separateSheets !== false;
+      }
+      if (separateCsvFilesCheckbox) {
+        separateCsvFilesCheckbox.checked = result.separateCsvFiles !== false;
+      }
+      // 通知設定（デフォルト: 通知ON、商品ごとOFF）
+      if (enableNotificationCheckbox) {
+        enableNotificationCheckbox.checked = result.enableNotification !== false;
+      }
+      if (notifyPerProductCheckbox) {
+        notifyPerProductCheckbox.checked = result.notifyPerProduct === true;
+      }
 
       if (result.spreadsheetUrl) {
         spreadsheetLink.href = result.spreadsheetUrl;
@@ -134,7 +462,7 @@ document.addEventListener('DOMContentLoaded', () => {
       startQueueBtn.disabled = totalCount === 0;
 
       if (totalCount === 0) {
-        queueList.innerHTML = '<div class="queue-empty">キューは空です</div>';
+        queueList.innerHTML = '';
         return;
       }
 
@@ -194,14 +522,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function saveSettings() {
     const gasUrl = gasUrlInput.value.trim();
-    const separateSheets = separateSheetsCheckbox.checked;
+    const separateSheets = separateSheetsCheckbox ? separateSheetsCheckbox.checked : true;
+    const separateCsvFiles = separateCsvFilesCheckbox ? separateCsvFilesCheckbox.checked : true;
+    const enableNotification = enableNotificationCheckbox ? enableNotificationCheckbox.checked : true;
+    const notifyPerProduct = notifyPerProductCheckbox ? notifyPerProductCheckbox.checked : false;
 
     if (gasUrl && !isValidGasUrl(gasUrl)) {
       showStatus(settingsStatus, 'error', 'URLの形式が正しくありません');
       return;
     }
 
-    chrome.storage.sync.set({ gasUrl, separateSheets }, async () => {
+    chrome.storage.sync.set({ gasUrl, separateSheets, separateCsvFiles, enableNotification, notifyPerProduct }, async () => {
       if (chrome.runtime.lastError) {
         showStatus(settingsStatus, 'error', '保存に失敗しました');
         return;
@@ -241,65 +572,181 @@ document.addEventListener('DOMContentLoaded', () => {
     return url.startsWith('https://script.google.com/macros/s/') && url.includes('/exec');
   }
 
+  // スプレッドシートURLからIDを抽出
+  function extractSpreadsheetId(url) {
+    if (!url) return '';
+    const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    return match ? match[1] : '';
+  }
+
+  // GASコードを生成（スプレッドシートIDを埋め込み）
+  function generateGasCode() {
+    if (currentSpreadsheetId) {
+      return GAS_CODE_TEMPLATE.replace('__SPREADSHEET_ID__', currentSpreadsheetId);
+    } else {
+      return GAS_CODE_TEMPLATE.replace('__SPREADSHEET_ID__', 'ここにスプレッドシートURLを入力してください');
+    }
+  }
+
+  // GASコードをテキストエリアに表示
+  function loadGasCode() {
+    if (gasCodeArea) {
+      gasCodeArea.value = generateGasCode();
+    }
+  }
+
+  // スプレッドシートURL入力時の処理
+  function handleSpreadsheetUrlInput() {
+    const url = spreadsheetUrlForCode.value.trim();
+    const id = extractSpreadsheetId(url);
+
+    if (id) {
+      currentSpreadsheetId = id;
+      spreadsheetIdStatus.innerHTML = '<span style="color: #28a745;">✓ ID検出: ' + id.substring(0, 20) + '...</span>';
+      // コードを更新
+      loadGasCode();
+    } else if (url) {
+      currentSpreadsheetId = '';
+      spreadsheetIdStatus.innerHTML = '<span style="color: #dc3545;">✗ 正しいスプレッドシートURLを入力してください</span>';
+    } else {
+      currentSpreadsheetId = '';
+      spreadsheetIdStatus.innerHTML = '';
+      loadGasCode();
+    }
+  }
+
+  // GASコードをクリップボードにコピー
+  function copyGasCode() {
+    if (!gasCodeArea) return;
+
+    if (!currentSpreadsheetId) {
+      copyGasCodeBtn.textContent = 'URLを入力してください';
+      copyGasCodeBtn.style.background = '#dc3545';
+      setTimeout(() => {
+        copyGasCodeBtn.textContent = '📋 コードをコピー';
+        copyGasCodeBtn.style.background = '';
+      }, 2000);
+      return;
+    }
+
+    navigator.clipboard.writeText(generateGasCode()).then(() => {
+      copyGasCodeBtn.textContent = 'コピーしました!';
+      copyGasCodeBtn.style.background = '#28a745';
+      setTimeout(() => {
+        copyGasCodeBtn.textContent = '📋 コードをコピー';
+        copyGasCodeBtn.style.background = '';
+      }, 2000);
+    }).catch(err => {
+      console.error('コピー失敗:', err);
+    });
+  }
+
+  // 通知設定のみを保存（チェックボックス変更時）
+  function saveNotificationSettings() {
+    const enableNotification = enableNotificationCheckbox ? enableNotificationCheckbox.checked : true;
+    const notifyPerProduct = notifyPerProductCheckbox ? notifyPerProductCheckbox.checked : false;
+    chrome.storage.sync.set({ enableNotification, notifyPerProduct });
+  }
+
   async function downloadCSV() {
-    chrome.storage.local.get(['collectionState'], async (result) => {
-      const state = result.collectionState;
+    console.log('downloadCSV called');
+    // 設定を取得してからダウンロード処理
+    chrome.storage.sync.get(['separateCsvFiles'], (syncResult) => {
+      console.log('syncResult:', syncResult);
+      const separateCsvFiles = syncResult.separateCsvFiles !== false;
+      console.log('separateCsvFiles:', separateCsvFiles);
 
-      if (!state || !state.reviews || state.reviews.length === 0) {
-        addLog('ダウンロードするデータがありません', 'error');
-        return;
-      }
+      chrome.storage.local.get(['collectionState'], async (result) => {
+        console.log('collectionState result:', result);
+        const state = result.collectionState;
 
-      try {
-        // 商品ごとにレビューをグループ化
-        const reviewsByProduct = {};
-        state.reviews.forEach(review => {
-          const productId = review.productId || 'unknown';
-          if (!reviewsByProduct[productId]) {
-            reviewsByProduct[productId] = [];
-          }
-          reviewsByProduct[productId].push(review);
-        });
-
-        const productIds = Object.keys(reviewsByProduct);
-
-        // 商品が1つだけの場合は単一CSVをダウンロード
-        if (productIds.length === 1) {
-          const csv = convertToCSV(state.reviews);
-          downloadSingleCSV(csv, productIds[0]);
-          addLog('CSVダウンロード完了', 'success');
+        if (!state || !state.reviews || state.reviews.length === 0) {
+          addLog('ダウンロードするデータがありません', 'error');
+          console.log('No data to download');
           return;
         }
 
-        // 複数商品の場合はZIPでダウンロード
-        const zip = new JSZip();
+        console.log('Reviews count:', state.reviews.length);
+        console.log('JSZip available:', typeof JSZip !== 'undefined');
 
-        productIds.forEach(productId => {
-          const reviews = reviewsByProduct[productId];
-          const csv = convertToCSV(reviews);
-          const filename = `${sanitizeFilename(productId)}.csv`;
-          zip.file(filename, '\uFEFF' + csv);
-        });
+        try {
+          // 分割設定がOFFの場合、または商品が1つの場合は単一CSVをダウンロード
+          if (!separateCsvFiles) {
+            const csv = convertToCSV(state.reviews);
+            downloadSingleCSV(csv, 'rakuten_reviews');
+            addLog('CSVダウンロード完了', 'success');
+            return;
+          }
 
-        const blob = await zip.generateAsync({ type: 'blob' });
-        const url = URL.createObjectURL(blob);
+          // 商品ごとにレビューをグループ化
+          const reviewsByProduct = {};
+          state.reviews.forEach(review => {
+            const productId = review.productId || 'unknown';
+            if (!reviewsByProduct[productId]) {
+              reviewsByProduct[productId] = [];
+            }
+            reviewsByProduct[productId].push(review);
+          });
 
-        const now = new Date();
-        const pad = (n) => String(n).padStart(2, '0');
-        const zipFilename = `rakuten_reviews_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.zip`;
+          const productIds = Object.keys(reviewsByProduct);
 
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = zipFilename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+          // 商品が1つだけの場合は単一CSVをダウンロード
+          if (productIds.length === 1) {
+            const csv = convertToCSV(state.reviews);
+            downloadSingleCSV(csv, productIds[0]);
+            addLog('CSVダウンロード完了', 'success');
+            return;
+          }
 
-        addLog(`${productIds.length}商品分のCSVをZIPでダウンロード完了`, 'success');
-      } catch (error) {
-        addLog('CSVダウンロード失敗: ' + error.message, 'error');
-      }
+          // 複数商品の場合はZIPでダウンロード
+          // JSZipが利用できない場合は単一CSVにフォールバック
+          if (typeof JSZip === 'undefined') {
+            console.log('JSZip not available, falling back to single CSV');
+            const csv = convertToCSV(state.reviews);
+            downloadSingleCSV(csv, 'rakuten_reviews_all');
+            addLog('CSVダウンロード完了（全商品統合）', 'success');
+            return;
+          }
+
+          const zip = new JSZip();
+
+          productIds.forEach(productId => {
+            const reviews = reviewsByProduct[productId];
+            const csv = convertToCSV(reviews);
+            const filename = `${sanitizeFilename(productId)}.csv`;
+            zip.file(filename, '\uFEFF' + csv);
+          });
+
+          const blob = await zip.generateAsync({ type: 'blob' });
+          const url = URL.createObjectURL(blob);
+
+          const now = new Date();
+          const pad = (n) => String(n).padStart(2, '0');
+          const zipFilename = `rakuten_reviews_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.zip`;
+
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = zipFilename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+
+          addLog(`${productIds.length}商品分のCSVをZIPでダウンロード完了`, 'success');
+        } catch (error) {
+          console.error('CSV download error:', error);
+          addLog('CSVダウンロード失敗: ' + error.message, 'error');
+          // エラー時も単一CSVでフォールバック
+          try {
+            const csv = convertToCSV(state.reviews);
+            downloadSingleCSV(csv, 'rakuten_reviews_fallback');
+            addLog('フォールバック: 単一CSVとしてダウンロード完了', 'success');
+          } catch (fallbackError) {
+            console.error('Fallback download error:', fallbackError);
+            addLog('CSVダウンロード完全失敗: ' + fallbackError.message, 'error');
+          }
+        }
+      });
     });
   }
 
@@ -385,11 +832,33 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function clearQueue() {
-    if (!confirm('キューをクリアしますか？')) return;
+    // 収集中かチェック
+    chrome.storage.local.get(['isQueueCollecting', 'collectingItems'], (result) => {
+      const isCollecting = result.isQueueCollecting || (result.collectingItems && result.collectingItems.length > 0);
 
-    chrome.storage.local.set({ queue: [] }, () => {
-      loadQueue();
-      addLog('キューをクリアしました');
+      const message = isCollecting
+        ? 'キューをクリアし、収集中の処理も全て中止しますか？'
+        : 'キューをクリアしますか？';
+
+      if (!confirm(message)) return;
+
+      // 収集中の場合は中止
+      if (isCollecting) {
+        chrome.runtime.sendMessage({ action: 'stopQueueCollection' }, () => {
+          // キューをクリア
+          chrome.storage.local.set({ queue: [], collectingItems: [] }, () => {
+            loadQueue();
+            addLog('収集を中止し、キューをクリアしました', 'error');
+            updateQueueButtons(false);
+          });
+        });
+      } else {
+        // キューのみクリア
+        chrome.storage.local.set({ queue: [] }, () => {
+          loadQueue();
+          addLog('キューをクリアしました');
+        });
+      }
     });
   }
 
@@ -442,23 +911,27 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateQueueButtons(isRunning) {
     if (isRunning) {
       startQueueBtn.style.display = 'none';
-      stopQueueBtn.style.display = 'inline-flex';
+      stopQueueBtn.style.display = 'block';
     } else {
-      startQueueBtn.style.display = 'inline-flex';
+      startQueueBtn.style.display = 'block';
       stopQueueBtn.style.display = 'none';
     }
   }
 
   async function addToQueue() {
-    const url = productUrl.value.trim();
+    const text = productUrl.value.trim();
 
-    if (!url) {
+    if (!text) {
       showStatus(addStatus, 'error', 'URLを入力してください');
       return;
     }
 
-    // ランキングURLの場合
-    if (url.includes('ranking.rakuten.co.jp')) {
+    // 改行で分割して複数URLを取得
+    const urls = text.split('\n').map(u => u.trim()).filter(u => u.length > 0);
+
+    // ランキングURLの場合（1件のみ対応）
+    const rankingUrl = urls.find(u => u.includes('ranking.rakuten.co.jp'));
+    if (rankingUrl && urls.length === 1) {
       const count = parseInt(rankingCount.value) || 10;
       showStatus(addStatus, 'info', 'ランキングを取得中...');
       addToQueueBtn.disabled = true;
@@ -466,7 +939,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         chrome.runtime.sendMessage({
           action: 'fetchRanking',
-          url: url,
+          url: rankingUrl,
           count: count
         }, (response) => {
           addToQueueBtn.disabled = false;
@@ -476,6 +949,10 @@ document.addEventListener('DOMContentLoaded', () => {
             addLog(`ランキングから${response.addedCount}件をキューに追加`, 'success');
             productUrl.value = '';
             rankingCountWrapper.style.display = 'none';
+            if (urlCountLabel) {
+              urlCountLabel.textContent = '';
+              urlCountLabel.className = 'url-count-label';
+            }
           } else {
             showStatus(addStatus, 'error', response?.error || '取得に失敗しました');
           }
@@ -487,40 +964,62 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // 商品URLの場合
-    if (!url.includes('item.rakuten.co.jp') && !url.includes('review.rakuten.co.jp')) {
+    // 商品URLの場合（複数対応）
+    const productUrls = urls.filter(u =>
+      u.includes('item.rakuten.co.jp') || u.includes('review.rakuten.co.jp')
+    );
+
+    if (productUrls.length === 0) {
       showStatus(addStatus, 'error', '楽天の商品ページまたはランキングURLを入力してください');
       return;
     }
 
     chrome.storage.local.get(['queue'], (result) => {
       const queue = result.queue || [];
+      let addedCount = 0;
+      let skippedCount = 0;
 
-      // 重複チェック
-      const exists = queue.some(item => item.url === url);
-      if (exists) {
-        showStatus(addStatus, 'error', '既にキューに追加済みです');
+      productUrls.forEach(url => {
+        // 重複チェック
+        const exists = queue.some(item => item.url === url);
+        if (exists) {
+          skippedCount++;
+          return;
+        }
+
+        // URLからタイトルを生成
+        let productTitle = '商品';
+        const pathMatch = url.match(/item\.rakuten\.co\.jp\/([^\/]+)\/([^\/\?]+)/);
+        if (pathMatch) {
+          productTitle = `${pathMatch[1]} - ${pathMatch[2]}`;
+        }
+
+        queue.push({
+          url: url,
+          title: productTitle.substring(0, 100),
+          addedAt: new Date().toISOString()
+        });
+        addedCount++;
+      });
+
+      if (addedCount === 0 && skippedCount > 0) {
+        showStatus(addStatus, 'error', `${skippedCount}件は既に追加済みです`);
         return;
       }
 
-      // URLからタイトルを生成
-      let productTitle = '商品';
-      const pathMatch = url.match(/item\.rakuten\.co\.jp\/([^\/]+)\/([^\/\?]+)/);
-      if (pathMatch) {
-        productTitle = `${pathMatch[1]} - ${pathMatch[2]}`;
-      }
-
-      queue.push({
-        url: url,
-        title: productTitle.substring(0, 100),
-        addedAt: new Date().toISOString()
-      });
-
       chrome.storage.local.set({ queue }, () => {
-        showStatus(addStatus, 'success', 'キューに追加しました');
+        let message = `${addedCount}件追加しました`;
+        if (skippedCount > 0) {
+          message += `（${skippedCount}件は重複のためスキップ）`;
+        }
+        showStatus(addStatus, 'success', message);
         loadQueue();
-        addLog(`${productTitle} をキューに追加`, 'success');
+        addLog(`${addedCount}件の商品をキューに追加`, 'success');
         productUrl.value = '';
+        if (urlCountLabel) {
+          urlCountLabel.textContent = '';
+          urlCountLabel.className = 'url-count-label';
+        }
       });
     });
   }

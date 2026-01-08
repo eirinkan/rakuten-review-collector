@@ -5,6 +5,36 @@
 
 // アクティブな収集タブを追跡
 let activeCollectionTabs = new Set();
+// 収集用ウィンドウのID
+let collectionWindowId = null;
+
+/**
+ * デスクトップ通知を表示
+ */
+async function showNotification(title, message, productId = null) {
+  // 通知設定を確認
+  const settings = await chrome.storage.sync.get(['enableNotification', 'notifyPerProduct']);
+
+  // 通知が無効の場合は何もしない
+  if (settings.enableNotification === false) {
+    return;
+  }
+
+  // 商品ごとの通知で、設定がOFFの場合は何もしない
+  if (productId && settings.notifyPerProduct !== true) {
+    return;
+  }
+
+  // 通知を作成
+  const notificationId = `rakuten-review-${Date.now()}`;
+  chrome.notifications.create(notificationId, {
+    type: 'basic',
+    iconUrl: 'icons/icon128.png',
+    title: title,
+    message: message,
+    priority: 2
+  });
+}
 
 // メッセージリスナー
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -26,6 +56,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: true });
       break;
 
+    case 'collectionStopped':
+      handleCollectionStopped(sender.tab?.id);
+      sendResponse({ success: true });
+      break;
+
     case 'startQueueCollection':
       startQueueCollection()
         .then(() => sendResponse({ success: true }))
@@ -41,6 +76,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'fetchRanking':
       fetchRankingProducts(message.url, message.count)
         .then(result => sendResponse(result))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'startSingleCollection':
+      startSingleCollection(message.productInfo, message.tabId)
+        .then(() => sendResponse({ success: true }))
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
 
@@ -64,17 +105,22 @@ async function handleSaveReviews(reviews) {
     return;
   }
 
-  // ローカルストレージに保存
-  await saveToLocalStorage(reviews);
+  // 重複を除外してローカルストレージに保存
+  const newReviews = await saveToLocalStorage(reviews);
 
-  // GAS URLが設定されている場合はスプレッドシートにも送信
+  // 新規レビューがない場合はGASへの送信をスキップ
+  if (newReviews.length === 0) {
+    return;
+  }
+
+  // GAS URLが設定されている場合はスプレッドシートにも送信（重複除外済み）
   const { gasUrl, separateSheets } = await chrome.storage.sync.get(['gasUrl', 'separateSheets']);
 
   if (gasUrl) {
     try {
-      await sendToGas(gasUrl, reviews, separateSheets !== false);
+      await sendToGas(gasUrl, newReviews, separateSheets !== false);
       // 商品IDをログに表示
-      const productId = reviews[0]?.productId || '';
+      const productId = newReviews[0]?.productId || '';
       const prefix = productId ? `[${productId}] ` : '';
       log(prefix + 'スプレッドシートに保存しました', 'success');
     } catch (error) {
@@ -84,7 +130,17 @@ async function handleSaveReviews(reviews) {
 }
 
 /**
- * ローカルストレージに保存
+ * レビューの一意キーを生成
+ */
+function getReviewKey(review) {
+  // 商品ID + レビュー日 + 投稿者 + 本文の最初の50文字で一意性を判断
+  const bodySnippet = (review.body || '').substring(0, 50);
+  return `${review.productId || ''}_${review.reviewDate || ''}_${review.author || ''}_${bodySnippet}`;
+}
+
+/**
+ * ローカルストレージに保存（重複削除付き）
+ * @returns {Promise<Array>} 新規追加されたレビューの配列
  */
 async function saveToLocalStorage(reviews) {
   return new Promise((resolve, reject) => {
@@ -98,13 +154,57 @@ async function saveToLocalStorage(reviews) {
         logs: []
       };
 
-      state.reviews = (state.reviews || []).concat(reviews);
+      const existingReviews = state.reviews || [];
+
+      // 既存レビューのキーをセットに格納
+      const existingKeys = new Set(existingReviews.map(r => getReviewKey(r)));
+
+      // 重複を除外して新規レビューのみ追加
+      const newReviews = reviews.filter(review => {
+        const key = getReviewKey(review);
+        if (existingKeys.has(key)) {
+          return false; // 重複
+        }
+        existingKeys.add(key); // 新規追加分も重複チェック対象に
+        return true;
+      });
+
+      const duplicateCount = reviews.length - newReviews.length;
+      if (duplicateCount > 0) {
+        if (newReviews.length === 0) {
+          // 全て重複の場合
+          log(`全て収集済み（${duplicateCount}件の重複をスキップ）`);
+        } else {
+          // 一部重複の場合
+          log(`${newReviews.length}件追加、${duplicateCount}件の重複をスキップ`);
+        }
+        // ポップアップにも通知
+        forwardToAll({
+          action: 'duplicatesSkipped',
+          count: duplicateCount,
+          newCount: newReviews.length
+        });
+      }
+
+      state.reviews = existingReviews.concat(newReviews);
+      // レビュー数も更新（content.jsのupdateStateとのレースコンディション回避）
+      state.reviewCount = state.reviews.length;
 
       chrome.storage.local.set({ collectionState: state }, () => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message));
         } else {
-          resolve();
+          // 進捗を通知
+          forwardToAll({
+            action: 'updateProgress',
+            state: {
+              isRunning: state.isRunning,
+              reviewCount: state.reviewCount,
+              pageCount: state.pageCount,
+              totalPages: state.totalPages
+            }
+          });
+          resolve(newReviews); // 新規追加されたレビューを返す
         }
       });
     });
@@ -211,6 +311,17 @@ function formatDate(date) {
  * 収集完了時の処理
  */
 async function handleCollectionComplete(tabId) {
+  // 収集中アイテムと収集状態を取得
+  const initialResult = await chrome.storage.local.get(['collectingItems', 'isQueueCollecting']);
+  const isQueueCollecting = initialResult.isQueueCollecting || false;
+
+  // 収集中アイテムから商品情報を取得（ログ出力用）
+  let completedItem = null;
+  if (tabId) {
+    const collectingItems = initialResult.collectingItems || [];
+    completedItem = collectingItems.find(item => item.tabId === tabId);
+  }
+
   // アクティブタブから削除
   if (tabId) {
     activeCollectionTabs.delete(tabId);
@@ -224,19 +335,28 @@ async function handleCollectionComplete(tabId) {
     collectingItems = collectingItems.filter(item => item.tabId !== tabId);
     await chrome.storage.local.set({ collectingItems });
 
-    // 収集完了したタブを閉じる
-    try {
-      await chrome.tabs.remove(tabId);
-    } catch (e) {
-      // タブが既に閉じられている場合は無視
+    // 商品の収集完了ログを出力
+    if (completedItem) {
+      const productId = extractProductIdFromUrl(completedItem.url);
+      log(`[${productId}] 収集が完了しました`, 'success');
+      // 商品ごとの通知（設定で有効な場合のみ）
+      showNotification('楽天レビュー収集', `[${productId}] 収集が完了しました`, productId);
+    }
+
+    // キュー収集の場合のみタブを閉じる（単一収集ではユーザーがページに留まる）
+    if (isQueueCollecting) {
+      try {
+        await chrome.tabs.remove(tabId);
+      } catch (e) {
+        // タブが既に閉じられている場合は無視
+      }
     }
   }
 
   // 状態を更新
-  const result = await chrome.storage.local.get(['collectionState', 'queue', 'collectingItems']);
+  const result = await chrome.storage.local.get(['collectionState', 'queue']);
   const state = result.collectionState || {};
   const queue = result.queue || [];
-  const collectingItems = result.collectingItems || [];
 
   state.isRunning = activeCollectionTabs.size > 0;
   await chrome.storage.local.set({ collectionState: state });
@@ -248,16 +368,89 @@ async function handleCollectionComplete(tabId) {
   });
 
   // キューに次の商品がある場合、次を処理
-  if (queue.length > 0) {
+  if (queue.length > 0 && isQueueCollecting) {
     log('次の商品の収集を開始します...');
     setTimeout(() => {
       processNextInQueue();
     }, 3000);
-  } else if (activeCollectionTabs.size === 0) {
-    // すべて完了
+  } else if (activeCollectionTabs.size === 0 && isQueueCollecting) {
+    // すべて完了（キュー収集中の場合）
     await chrome.storage.local.set({ isQueueCollecting: false, collectingItems: [] });
-    log('すべての収集が完了しました', 'success');
+
+    // 収集用ウィンドウを閉じる
+    if (collectionWindowId) {
+      try {
+        await chrome.windows.remove(collectionWindowId);
+      } catch (e) {
+        // ウィンドウが既に閉じられている場合は無視
+      }
+      collectionWindowId = null;
+    }
+
+    // 収集結果のサマリーを取得
+    const stateResult = await chrome.storage.local.get(['collectionState']);
+    const finalState = stateResult.collectionState || {};
+    const reviewCount = finalState.reviewCount || 0;
+    log(`すべての収集が完了しました（${reviewCount}件のレビュー）`, 'success');
+    // 全体完了の通知
+    showNotification('楽天レビュー収集', `すべての収集が完了しました（${reviewCount}件のレビュー）`);
+  } else if (activeCollectionTabs.size === 0 && !isQueueCollecting && !completedItem) {
+    // 単一収集完了時の通知
+    const reviewCount = state.reviewCount || 0;
+    log(`収集が完了しました（${reviewCount}件のレビュー）`, 'success');
+    showNotification('楽天レビュー収集', `収集が完了しました（${reviewCount}件のレビュー）`);
   }
+}
+
+/**
+ * 収集停止時の処理
+ */
+async function handleCollectionStopped(tabId) {
+  if (!tabId) return;
+
+  // 収集中アイテムから商品情報を取得（ログ出力用）
+  const collectingResult = await chrome.storage.local.get(['collectingItems']);
+  let collectingItems = collectingResult.collectingItems || [];
+  const stoppedItem = collectingItems.find(item => item.tabId === tabId);
+
+  // アクティブタブから削除
+  activeCollectionTabs.delete(tabId);
+
+  // タブごとの状態をクリーンアップ
+  const stateKey = `collectionState_${tabId}`;
+  await chrome.storage.local.remove(stateKey);
+
+  // 収集中リストから削除
+  collectingItems = collectingItems.filter(item => item.tabId !== tabId);
+  await chrome.storage.local.set({ collectingItems });
+
+  // ログを出力
+  if (stoppedItem) {
+    const productId = extractProductIdFromUrl(stoppedItem.url);
+    log(`[${productId}] 収集を停止しました`, 'error');
+  }
+
+  // 状態を更新
+  const result = await chrome.storage.local.get(['collectionState']);
+  const state = result.collectionState || {};
+  state.isRunning = activeCollectionTabs.size > 0;
+  await chrome.storage.local.set({ collectionState: state });
+
+  // UIを更新
+  forwardToAll({
+    action: 'collectionComplete',
+    state: state
+  });
+  forwardToAll({ action: 'queueUpdated' });
+}
+
+/**
+ * URLから商品管理番号を抽出
+ */
+function extractProductIdFromUrl(url) {
+  if (!url) return 'unknown';
+  const match = url.match(/item\.rakuten\.co\.jp\/[^\/]+\/([^\/\?]+)/);
+  return match ? match[1] : 'unknown';
 }
 
 /**
@@ -276,6 +469,30 @@ async function startQueueCollection() {
 
   // 収集中フラグを立てる
   await chrome.storage.local.set({ isQueueCollecting: true, collectingItems: [] });
+
+  // 収集用ウィンドウを新規作成して最小化
+  try {
+    const window = await chrome.windows.create({
+      url: 'about:blank',
+      width: 400,
+      height: 300,
+      focused: false
+    });
+    collectionWindowId = window.id;
+
+    // 作成後に最小化を試行
+    await chrome.windows.update(collectionWindowId, { state: 'minimized' });
+
+    // about:blankタブは後で閉じる
+    if (window.tabs && window.tabs[0]) {
+      setTimeout(() => {
+        chrome.tabs.remove(window.tabs[0].id).catch(() => {});
+      }, 1000);
+    }
+  } catch (e) {
+    console.error('ウィンドウ作成エラー:', e);
+    collectionWindowId = null;
+  }
 
   log(`${queue.length}件のキュー収集を開始します（同時${maxConcurrent}件）`, 'success');
 
@@ -298,6 +515,16 @@ async function stopQueueCollection() {
     } catch (e) {
       // タブが既に閉じられている場合は無視
     }
+  }
+
+  // 収集用ウィンドウを閉じる
+  if (collectionWindowId) {
+    try {
+      await chrome.windows.remove(collectionWindowId);
+    } catch (e) {
+      // ウィンドウが既に閉じられている場合は無視
+    }
+    collectionWindowId = null;
   }
 
   // 状態をクリア
@@ -329,11 +556,7 @@ async function processNextInQueue() {
   const collectingItems = result.collectingItems || [];
 
   if (queue.length === 0) {
-    if (activeCollectionTabs.size === 0) {
-      // すべて完了
-      await chrome.storage.local.set({ isQueueCollecting: false, collectingItems: [] });
-      log('キューの処理が完了しました', 'success');
-    }
+    // キューが空の場合は何もしない（完了ログはhandleCollectionCompleteで出す）
     return;
   }
 
@@ -349,8 +572,24 @@ async function processNextInQueue() {
 
   log(`収集中: ${nextItem.title || nextItem.url}`);
 
-  // 新しいタブで商品ページを開いて収集開始（バックグラウンドで開く）
-  const tab = await chrome.tabs.create({ url: nextItem.url, active: false });
+  // 収集用ウィンドウにタブを作成（最小化ウィンドウ内）
+  let tab;
+  if (collectionWindowId) {
+    try {
+      tab = await chrome.tabs.create({
+        url: nextItem.url,
+        windowId: collectionWindowId,
+        active: false
+      });
+    } catch (e) {
+      // ウィンドウが閉じられている場合は通常のタブで開く
+      console.error('収集用ウィンドウにタブ作成失敗:', e);
+      tab = await chrome.tabs.create({ url: nextItem.url, active: false });
+    }
+  } else {
+    // フォールバック: 通常のバックグラウンドタブ
+    tab = await chrome.tabs.create({ url: nextItem.url, active: false });
+  }
 
   // tabIdを収集中アイテムに設定
   nextItem.tabId = tab.id;
@@ -380,6 +619,70 @@ async function processNextInQueue() {
         chrome.tabs.sendMessage(tab.id, { action: 'startCollection' }).catch(() => {});
       }, 2000);
     }
+  });
+}
+
+/**
+ * 単一ページの収集を開始（ポップアップからの収集開始ボタン用）
+ * キューに追加して収集中状態にし、完了時に削除する
+ */
+async function startSingleCollection(productInfo, tabId) {
+  const result = await chrome.storage.local.get(['queue', 'collectingItems']);
+  let queue = result.queue || [];
+  let collectingItems = result.collectingItems || [];
+
+  // キューに同じURLがあるか確認
+  const existingInQueue = queue.find(item => item.url === productInfo.url);
+  const existingInCollecting = collectingItems.find(item => item.url === productInfo.url);
+
+  if (existingInCollecting) {
+    // 既に収集中の場合はエラー
+    throw new Error('この商品は既に収集中です');
+  }
+
+  if (!existingInQueue) {
+    // キューにない場合は追加
+    queue.push(productInfo);
+  }
+
+  // 収集中リストに追加
+  const collectingItem = {
+    ...productInfo,
+    tabId: tabId
+  };
+  collectingItems.push(collectingItem);
+
+  // キューから削除（収集中リストに移動したため）
+  queue = queue.filter(item => item.url !== productInfo.url);
+
+  // ストレージを更新
+  await chrome.storage.local.set({ queue, collectingItems });
+
+  // アクティブタブとして追跡
+  activeCollectionTabs.add(tabId);
+
+  // 収集状態をセット（タブIDごとに管理）
+  const stateKey = `collectionState_${tabId}`;
+  await chrome.storage.local.set({
+    [stateKey]: {
+      isRunning: true,
+      reviewCount: 0,
+      pageCount: 0,
+      totalPages: 0,
+      reviews: [],
+      tabId: tabId
+    }
+  });
+
+  // UIを更新
+  forwardToAll({ action: 'queueUpdated' });
+
+  const productId = extractProductIdFromUrl(productInfo.url);
+  log(`[${productId}] 収集を開始しました`);
+
+  // content.jsに収集開始を指示
+  chrome.tabs.sendMessage(tabId, { action: 'startCollection' }).catch((error) => {
+    log(`収集開始に失敗: ${error.message}`, 'error');
   });
 }
 
@@ -467,22 +770,10 @@ function forwardToAll(message) {
 
 /**
  * ログを送信
+ * ストレージへの保存はoptions.jsのaddLog()が行うため、ここでは転送のみ
  */
 function log(text, type = '') {
   console.log(`[楽天レビュー収集] ${text}`);
-
-  // ログを保存
-  chrome.storage.local.get(['logs'], (result) => {
-    const logs = result.logs || [];
-    const time = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    logs.push({ time, text, type });
-
-    if (logs.length > 100) {
-      logs.splice(0, logs.length - 100);
-    }
-
-    chrome.storage.local.set({ logs });
-  });
 
   forwardToAll({
     action: 'log',
@@ -530,5 +821,22 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     setTimeout(() => {
       processNextInQueue();
     }, 1000);
+  }
+});
+
+// 収集用ウィンドウが閉じられた時のクリーンアップ
+chrome.windows.onRemoved.addListener((windowId) => {
+  if (windowId === collectionWindowId) {
+    collectionWindowId = null;
+    // ウィンドウが手動で閉じられた場合、収集を停止
+    if (activeCollectionTabs.size > 0) {
+      log('収集用ウィンドウが閉じられました。収集を停止します', 'error');
+      activeCollectionTabs.clear();
+      chrome.storage.local.set({
+        isQueueCollecting: false,
+        collectingItems: []
+      });
+      forwardToAll({ action: 'queueUpdated' });
+    }
   }
 });

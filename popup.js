@@ -5,13 +5,14 @@
 document.addEventListener('DOMContentLoaded', () => {
   const pageWarning = document.getElementById('pageWarning');
   const message = document.getElementById('message');
-  const statusText = document.getElementById('statusText');
+  const rankingMessage = document.getElementById('rankingMessage');
   const normalMode = document.getElementById('normalMode');
   const rankingMode = document.getElementById('rankingMode');
   const startBtn = document.getElementById('startBtn');
   const stopBtn = document.getElementById('stopBtn');
   const queueBtn = document.getElementById('queueBtn');
   const settingsBtn = document.getElementById('settingsBtn');
+  const startRankingBtn = document.getElementById('startRankingBtn');
   const addRankingBtn = document.getElementById('addRankingBtn');
   const rankingCountInput = document.getElementById('rankingCount');
 
@@ -46,30 +47,28 @@ document.addEventListener('DOMContentLoaded', () => {
     stopBtn.addEventListener('click', stopCollection);
     queueBtn.addEventListener('click', addToQueue);
     settingsBtn.addEventListener('click', openSettings);
+    startRankingBtn.addEventListener('click', startRankingCollection);
     addRankingBtn.addEventListener('click', addRankingToQueue);
 
     // バックグラウンドからのメッセージ
     chrome.runtime.onMessage.addListener(handleMessage);
   }
 
-  function restoreState() {
-    chrome.storage.local.get(['collectionState'], (result) => {
-      const state = result.collectionState || {};
-      updateUI(state);
+  async function restoreState() {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    chrome.storage.local.get(['collectingItems'], (result) => {
+      const collectingItems = result.collectingItems || [];
+      // 現在のタブが収集中リストにあるかチェック
+      const isCurrentTabCollecting = collectingItems.some(item => item.tabId === tab.id);
+      updateUI({ isRunning: isCurrentTabCollecting });
     });
   }
 
   function updateUI(state) {
     if (state.isRunning) {
-      const current = state.pageCount || 0;
-      const total = state.totalPages || 0;
-      statusText.textContent = `収集中... ${state.reviewCount || 0}件 (${current}/${total}ページ)`;
-      statusText.classList.add('running');
       startBtn.style.display = 'none';
       stopBtn.style.display = 'block';
     } else {
-      statusText.textContent = '待機中';
-      statusText.classList.remove('running');
       startBtn.style.display = 'block';
       stopBtn.style.display = 'none';
     }
@@ -78,18 +77,43 @@ document.addEventListener('DOMContentLoaded', () => {
   async function startCollection() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-    chrome.tabs.sendMessage(tab.id, { action: 'startCollection' }, (response) => {
+    // 既に収集中かチェック
+    const result = await chrome.storage.local.get(['collectingItems']);
+    const collectingItems = result.collectingItems || [];
+    const isAlreadyCollecting = collectingItems.some(item => item.tabId === tab.id);
+
+    if (isAlreadyCollecting) {
+      showMessage('このページは既に収集中です', 'error');
+      return;
+    }
+
+    // 商品情報を取得
+    chrome.tabs.sendMessage(tab.id, { action: 'getProductInfo' }, (response) => {
       if (chrome.runtime.lastError) {
         showMessage('ページをリロードしてください', 'error');
         return;
       }
 
-      if (response && response.success) {
-        startBtn.style.display = 'none';
-        stopBtn.style.display = 'block';
-        statusText.textContent = '収集中...';
-        statusText.classList.add('running');
-      }
+      const productInfo = response?.success ? response.productInfo : {
+        url: tab.url,
+        title: tab.title || '商品',
+        addedAt: new Date().toISOString()
+      };
+
+      // background.jsに単一収集開始を依頼（キュー管理も任せる）
+      chrome.runtime.sendMessage({
+        action: 'startSingleCollection',
+        productInfo: productInfo,
+        tabId: tab.id
+      }, (res) => {
+        if (res && res.success) {
+          startBtn.style.display = 'none';
+          stopBtn.style.display = 'block';
+          showMessage('収集を開始しました', 'success');
+        } else {
+          showMessage(res?.error || '収集開始に失敗しました', 'error');
+        }
+      });
     });
   }
 
@@ -100,8 +124,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (response && response.success) {
         startBtn.style.display = 'block';
         stopBtn.style.display = 'none';
-        statusText.textContent = '停止';
-        statusText.classList.remove('running');
       }
     });
   }
@@ -151,11 +173,63 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  async function startRankingCollection() {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const count = parseInt(rankingCountInput.value) || 10;
+
+    startRankingBtn.disabled = true;
+    addRankingBtn.disabled = true;
+    startRankingBtn.textContent = '準備中...';
+
+    // まずランキングからキューに追加
+    chrome.runtime.sendMessage({
+      action: 'fetchRanking',
+      url: tab.url,
+      count: count
+    }, (response) => {
+      // キューの状態を確認
+      chrome.storage.local.get(['queue'], (result) => {
+        const queueLength = (result.queue || []).length;
+
+        if (response && response.success && response.addedCount > 0) {
+          // 新規追加があった場合
+          showRankingMessage(`${response.addedCount}件追加、収集開始...`, 'success');
+          startQueueCollectionFromRanking(response.addedCount);
+        } else if (queueLength > 0) {
+          // 新規追加はないが、キューに既存の商品がある場合
+          showRankingMessage(`キューの${queueLength}件を収集開始...`, 'success');
+          startQueueCollectionFromRanking(queueLength);
+        } else {
+          // キューが空で追加もできなかった場合
+          startRankingBtn.disabled = false;
+          addRankingBtn.disabled = false;
+          startRankingBtn.textContent = '収集開始';
+          showRankingMessage(response?.error || '商品が見つかりませんでした', 'error');
+        }
+      });
+    });
+  }
+
+  function startQueueCollectionFromRanking(itemCount) {
+    chrome.runtime.sendMessage({ action: 'startQueueCollection' }, (res) => {
+      startRankingBtn.disabled = false;
+      addRankingBtn.disabled = false;
+      startRankingBtn.textContent = '収集開始';
+
+      if (res && res.success) {
+        showRankingMessage(`${itemCount}件の収集を開始しました`, 'success');
+      } else {
+        showRankingMessage(res?.error || '収集開始に失敗しました', 'error');
+      }
+    });
+  }
+
   async function addRankingToQueue() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const count = parseInt(rankingCountInput.value) || 10;
 
     addRankingBtn.disabled = true;
+    startRankingBtn.disabled = true;
     addRankingBtn.textContent = '追加中...';
 
     chrome.runtime.sendMessage({
@@ -164,12 +238,13 @@ document.addEventListener('DOMContentLoaded', () => {
       count: count
     }, (response) => {
       addRankingBtn.disabled = false;
-      addRankingBtn.textContent = '追加';
+      startRankingBtn.disabled = false;
+      addRankingBtn.textContent = 'キューに追加';
 
       if (response && response.success) {
-        showMessage(`${response.addedCount}件追加しました`, 'success');
+        showRankingMessage(`${response.addedCount}件追加しました`, 'success');
       } else {
-        showMessage(response?.error || '追加に失敗しました', 'error');
+        showRankingMessage(response?.error || '追加に失敗しました', 'error');
       }
     });
   }
@@ -183,15 +258,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     switch (msg.action) {
       case 'updateProgress':
-        if (msg.state) updateUI(msg.state);
+        restoreState(); // 現在のタブの状態を再確認
         break;
       case 'collectionComplete':
-        statusText.textContent = '完了';
-        statusText.classList.remove('running');
-        startBtn.style.display = 'block';
-        stopBtn.style.display = 'none';
-        if (msg.state) {
-          showMessage(`${msg.state?.reviewCount || 0}件収集完了`, 'success');
+        restoreState(); // 現在のタブの状態を再確認
+        break;
+      case 'queueUpdated':
+        restoreState(); // 現在のタブの状態を再確認
+        break;
+      case 'duplicatesSkipped':
+        // 重複スキップの通知
+        if (msg.newCount > 0) {
+          showMessage(`${msg.newCount}件追加（${msg.count}件重複スキップ）`, 'success');
+        } else {
+          showMessage(`全て収集済み（${msg.count}件重複）`, 'error');
         }
         break;
     }
@@ -202,6 +282,14 @@ document.addEventListener('DOMContentLoaded', () => {
     message.className = 'message ' + type;
     setTimeout(() => {
       message.className = 'message';
+    }, 3000);
+  }
+
+  function showRankingMessage(text, type) {
+    rankingMessage.textContent = text;
+    rankingMessage.className = 'message ' + type;
+    setTimeout(() => {
+      rankingMessage.className = 'message';
     }, 3000);
   }
 });
