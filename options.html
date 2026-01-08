@@ -24,7 +24,7 @@
     }
 
     .header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: #BF0000;
       color: white;
       padding: 20px;
       border-radius: 10px;
@@ -108,7 +108,7 @@
 
     .help-section h3 {
       font-size: 13px;
-      color: #667eea;
+      color: #BF0000;
       margin: 16px 0 8px 0;
       padding-bottom: 4px;
       border-bottom: 1px solid #eee;
@@ -174,7 +174,7 @@
     .form-group input:focus,
     .form-group select:focus {
       outline: none;
-      border-color: #667eea;
+      border-color: #BF0000;
     }
 
     .checkbox-label {
@@ -303,12 +303,12 @@
     }
 
     .tab-btn:hover {
-      color: #667eea;
+      color: #BF0000;
     }
 
     .tab-btn.active {
-      color: #667eea;
-      border-bottom-color: #667eea;
+      color: #BF0000;
+      border-bottom-color: #BF0000;
       font-weight: 600;
     }
 
@@ -340,7 +340,7 @@
 
     .queue-count {
       font-size: 12px;
-      color: #667eea;
+      color: #BF0000;
       font-weight: 600;
     }
 
@@ -447,7 +447,7 @@
     }
 
     .log-entry .time {
-      color: #667eea;
+      color: #BF0000;
     }
 
     .log-entry.error {
@@ -486,7 +486,7 @@
     .collapsible {
       cursor: pointer;
       font-size: 11px;
-      color: #667eea;
+      color: #BF0000;
       display: inline-flex;
       align-items: center;
       gap: 4px;
@@ -562,13 +562,13 @@
         </div>
       </div>
       <button class="help-toggle" onclick="toggleMainHelp()">
-        <span id="helpToggleIcon">▶</span> 使い方を見る
+        <span id="helpToggleIcon">▶</span> ヘルプを見る
       </button>
     </div>
 
     <!-- ヘルプ（折りたたみ） -->
     <div id="helpCard" class="help-card">
-      <h2>使い方</h2>
+      <h2>ヘルプ</h2>
       <div class="help-section">
         <h3>基本的な使い方</h3>
         <ol>
@@ -672,9 +672,9 @@
       </div>
     </div>
 
-    <!-- スプレッドシート設定 -->
+    <!-- 出力設定 -->
     <div class="card">
-      <h2>スプレッドシート設定</h2>
+      <h2>出力設定</h2>
       <div class="form-group">
         <label>GAS Web App URL</label>
         <input type="text" id="gasUrl" placeholder="https://script.google.com/macros/s/xxx/exec">
@@ -711,7 +711,7 @@
           <li>アクセスできるユーザー: 全員</li>
           <li>デプロイ後のURLをコピーして上記に貼り付け</li>
         </ol>
-        <h4 style="margin-top: 12px; margin-bottom: 8px; color: #667eea;">GASコードの更新方法</h4>
+        <h4 style="margin-top: 12px; margin-bottom: 8px; color: #BF0000;">GASコードの更新方法</h4>
         <ol>
           <li>スプレッドシート → 拡張機能 → Apps Script を開く</li>
           <li>Code.gs の内容を最新版に置き換え</li>
