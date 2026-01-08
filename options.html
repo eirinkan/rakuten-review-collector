@@ -109,15 +109,28 @@
 
     .help-card {
       display: none;
-      background: white;
+      background: #f8f9fa;
       border-radius: 10px;
       padding: 20px;
       margin-bottom: 16px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      border-left: 4px solid #6c757d;
     }
 
     .help-card.show {
       display: block;
+    }
+
+    /* 設定カード専用 */
+    #settingsCard {
+      background: #f8f9fa;
+      border-left-color: #6c757d;
+    }
+
+    /* ヘルプカード専用 */
+    #helpCard {
+      background: #fff8e1;
+      border-left-color: #ffc107;
     }
 
     .help-card h2 {
@@ -168,6 +181,18 @@
       padding: 20px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
       margin-bottom: 16px;
+    }
+
+    /* キューカード */
+    .card.queue-card {
+      background: #e3f2fd;
+      border-left: 4px solid #2196f3;
+    }
+
+    /* ログカード */
+    .card.log-card {
+      background: #e8f5e9;
+      border-left: 4px solid #4caf50;
     }
 
     .card h2 {
@@ -1180,7 +1205,7 @@
     </div>
 
     <!-- キュー -->
-    <div class="card">
+    <div class="card queue-card">
       <div class="queue-header">
         <h2>キュー</h2>
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -1216,7 +1241,7 @@
     </div>
 
     <!-- ログ -->
-    <div id="logCard" class="card" style="display: none;">
+    <div id="logCard" class="card log-card" style="display: none;">
       <div class="log-header">
         <h2>ログ</h2>
         <div class="log-actions">
