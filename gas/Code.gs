@@ -386,6 +386,109 @@ function resetSheet() {
 }
 
 /**
+ * スプレッドシートを初期化（すべてのシートを削除して空にする）
+ * Apps Scriptエディタから手動で実行してください
+ * 注意: すべてのレビューデータが削除されます！
+ */
+function initializeSpreadsheet() {
+  const ui = SpreadsheetApp.getUi();
+
+  // 確認ダイアログを表示
+  const response = ui.alert(
+    '⚠️ スプレッドシートの初期化',
+    'すべてのシートとデータが削除されます。\nこの操作は取り消せません。\n\n本当に初期化しますか？',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) {
+    ui.alert('初期化をキャンセルしました');
+    return;
+  }
+
+  const ss = getSpreadsheet();
+  const sheets = ss.getSheets();
+
+  // 最低1つのシートが必要なため、まず新しい空のシートを作成
+  const newSheet = ss.insertSheet('レビュー');
+  addHeader(newSheet);
+
+  // 他のすべてのシートを削除
+  let deletedCount = 0;
+  sheets.forEach(sheet => {
+    if (sheet.getName() !== 'レビュー') {
+      ss.deleteSheet(sheet);
+      deletedCount++;
+    }
+  });
+
+  ui.alert(
+    '✅ 初期化完了',
+    `${deletedCount}個のシートを削除しました。\nスプレッドシートは初期状態に戻りました。`
+  );
+
+  Logger.log('スプレッドシートを初期化しました。削除したシート数: ' + deletedCount);
+}
+
+/**
+ * 特定のシートを削除
+ * @param {string} sheetName - 削除するシート名
+ */
+function deleteSheet(sheetName) {
+  const ss = getSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+
+  if (sheet) {
+    // 最後の1シートは削除できないため確認
+    if (ss.getSheets().length <= 1) {
+      Logger.log('最後のシートは削除できません');
+      return false;
+    }
+
+    ss.deleteSheet(sheet);
+    Logger.log('シート「' + sheetName + '」を削除しました');
+    return true;
+  } else {
+    Logger.log('シート「' + sheetName + '」が見つかりません');
+    return false;
+  }
+}
+
+/**
+ * 空のシートを一括削除（メンテナンス用）
+ * ヘッダーのみのシートを削除
+ */
+function deleteEmptySheets() {
+  const ss = getSpreadsheet();
+  const sheets = ss.getSheets();
+
+  let deletedCount = 0;
+
+  sheets.forEach(sheet => {
+    // ヘッダー行のみ（1行以下）のシートを削除
+    if (sheet.getLastRow() <= 1 && ss.getSheets().length > 1) {
+      const name = sheet.getName();
+      ss.deleteSheet(sheet);
+      Logger.log('空のシート「' + name + '」を削除しました');
+      deletedCount++;
+    }
+  });
+
+  Logger.log('合計 ' + deletedCount + ' 個の空シートを削除しました');
+}
+
+/**
+ * メニューを追加（スプレッドシートを開いたときに実行）
+ */
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('🛠️ レビュー管理')
+    .addItem('📊 スプレッドシートを初期化', 'initializeSpreadsheet')
+    .addItem('🗑️ 空のシートを削除', 'deleteEmptySheets')
+    .addItem('🔄 重複レビューを削除', 'removeDuplicates')
+    .addToUi();
+}
+
+/**
  * 重複レビューを削除（メンテナンス用）
  * 本文と投稿者が同じレビューを重複とみなす
  */

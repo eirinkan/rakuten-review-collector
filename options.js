@@ -241,8 +241,8 @@ document.addEventListener('DOMContentLoaded', () => {
     return url.startsWith('https://script.google.com/macros/s/') && url.includes('/exec');
   }
 
-  function downloadCSV() {
-    chrome.storage.local.get(['collectionState'], (result) => {
+  async function downloadCSV() {
+    chrome.storage.local.get(['collectionState'], async (result) => {
       const state = result.collectionState;
 
       if (!state || !state.reviews || state.reviews.length === 0) {
@@ -251,27 +251,78 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       try {
-        const csv = convertToCSV(state.reviews);
-        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+        // 商品ごとにレビューをグループ化
+        const reviewsByProduct = {};
+        state.reviews.forEach(review => {
+          const productId = review.productId || 'unknown';
+          if (!reviewsByProduct[productId]) {
+            reviewsByProduct[productId] = [];
+          }
+          reviewsByProduct[productId].push(review);
+        });
+
+        const productIds = Object.keys(reviewsByProduct);
+
+        // 商品が1つだけの場合は単一CSVをダウンロード
+        if (productIds.length === 1) {
+          const csv = convertToCSV(state.reviews);
+          downloadSingleCSV(csv, productIds[0]);
+          addLog('CSVダウンロード完了', 'success');
+          return;
+        }
+
+        // 複数商品の場合はZIPでダウンロード
+        const zip = new JSZip();
+
+        productIds.forEach(productId => {
+          const reviews = reviewsByProduct[productId];
+          const csv = convertToCSV(reviews);
+          const filename = `${sanitizeFilename(productId)}.csv`;
+          zip.file(filename, '\uFEFF' + csv);
+        });
+
+        const blob = await zip.generateAsync({ type: 'blob' });
         const url = URL.createObjectURL(blob);
 
         const now = new Date();
         const pad = (n) => String(n).padStart(2, '0');
-        const filename = `rakuten_reviews_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.csv`;
+        const zipFilename = `rakuten_reviews_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.zip`;
 
         const a = document.createElement('a');
         a.href = url;
-        a.download = filename;
+        a.download = zipFilename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        addLog('CSVダウンロード完了', 'success');
+        addLog(`${productIds.length}商品分のCSVをZIPでダウンロード完了`, 'success');
       } catch (error) {
         addLog('CSVダウンロード失敗: ' + error.message, 'error');
       }
     });
+  }
+
+  function downloadSingleCSV(csv, productId) {
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const filename = `${sanitizeFilename(productId)}_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}.csv`;
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function sanitizeFilename(name) {
+    // ファイル名に使えない文字を置換
+    return name.replace(/[\\/:*?"<>|]/g, '_').substring(0, 100);
   }
 
   function convertToCSV(reviews) {
