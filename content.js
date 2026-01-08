@@ -275,14 +275,14 @@
       // 次のページに移動
       if (nextPage.type === 'button') {
         // ボタンクリック方式（新UI）
-        // 現在のレビュー要素を記録（変更検知用）
-        const currentReviewCount = document.querySelectorAll('li').length;
+        // 現在のページ番号を記録（変更検知用）
+        const currentPageNum = getCurrentPageNumber();
 
         // ボタンをクリック
         nextPage.element.click();
 
-        // コンテンツの更新を待つ
-        const contentUpdated = await waitForContentUpdate(currentReviewCount);
+        // コンテンツの更新を待つ（ページ番号が変わるまで）
+        const contentUpdated = await waitForContentUpdate(currentPageNum);
 
         if (!contentUpdated) {
           log('最終ページに到達しました');
@@ -310,46 +310,36 @@
 
   /**
    * コンテンツの更新を待つ（AJAX読み込み用）
-   * @param {number} previousCount 更新前のレビュー要素数
+   * @param {number} initialPageNum 更新前のページ番号
    * @param {number} timeout タイムアウト（ミリ秒）
    * @returns {boolean} 更新されたらtrue、タイムアウトしたらfalse
    */
-  async function waitForContentUpdate(previousCount, timeout = 10000) {
+  async function waitForContentUpdate(initialPageNum, timeout = 8000) {
     const startTime = Date.now();
-    const checkInterval = 500; // 500msごとにチェック
+    const checkInterval = 300; // 300msごとにチェック
 
     while (Date.now() - startTime < timeout) {
       await sleep(checkInterval);
 
-      // レビュー要素の変化をチェック
-      const currentReviewElements = document.querySelectorAll('li');
-      let reviewLiCount = 0;
-      currentReviewElements.forEach(li => {
-        const text = li.textContent;
-        if ((text.includes('購入者さん') || text.includes('注文日')) && text.length > 50) {
-          reviewLiCount++;
-        }
-      });
-
-      // URLの変化をチェック（ページ番号が変わったか）
+      // ページ番号の変化をチェック（最も確実な方法）
       const currentPage = getCurrentPageNumber();
+      if (currentPage > initialPageNum) {
+        // ページ番号が増えた = 次のページに移動した
+        await sleep(500); // コンテンツ読み込み完了を少し待つ
+        return true;
+      }
 
-      // スクロール位置の変化をチェック
-      const scrollY = window.scrollY;
-
-      // ローディング要素が消えたかチェック
-      const loadingElem = document.querySelector('[class*="loading"], [class*="spinner"]');
-
-      // 何らかの変化があれば更新完了と判断
-      // （レビュー内容が変わっている、またはローディングが終わっている）
-      if (!loadingElem || (Date.now() - startTime > 2000)) {
-        // 少し追加で待ってから完了
-        await sleep(1000);
+      // URLの変化もチェック
+      const urlPageMatch = window.location.href.match(/[?&]p=([0-9]+)/);
+      const urlPage = urlPageMatch ? parseInt(urlPageMatch[1], 10) : 1;
+      if (urlPage > initialPageNum) {
+        await sleep(500);
         return true;
       }
     }
 
-    return false; // タイムアウト
+    // タイムアウト = 最終ページ（ページ番号が変わらなかった）
+    return false;
   }
 
   /**

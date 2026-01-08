@@ -20,17 +20,9 @@ class ThemeManager {
     if (savedTheme) {
       this.setTheme(savedTheme);
     } else {
-      // システム設定に従う
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      this.setTheme(prefersDark ? 'dark' : 'light');
+      // デフォルトはライトモード
+      this.setTheme('light');
     }
-
-    // システム設定変更を監視
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-      if (!localStorage.getItem(this.storageKey)) {
-        this.setTheme(e.matches ? 'dark' : 'light');
-      }
-    });
 
     // トグルボタンのイベント
     this.bindToggle();
