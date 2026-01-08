@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const addToQueueBtn = document.getElementById('addToQueueBtn');
   const addStatus = document.getElementById('addStatus');
 
+  const logCard = document.getElementById('logCard');
   const logContainer = document.getElementById('logContainer');
   const clearLogBtn = document.getElementById('clearLogBtn');
 
@@ -176,10 +177,12 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.local.get(['logs'], (result) => {
       const logs = result.logs || [];
       if (logs.length === 0) {
+        logCard.style.display = 'none';
         logContainer.innerHTML = '';
         return;
       }
 
+      logCard.style.display = 'block';
       logContainer.innerHTML = logs.map(log => {
         const typeClass = log.type ? ` ${log.type}` : '';
         return `<div class="log-entry${typeClass}"><span class="time">[${log.time}]</span> ${escapeHtml(log.text)}</div>`;
