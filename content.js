@@ -192,15 +192,12 @@
     // 商品管理番号を取得
     currentProductId = getProductId();
 
-    // レビュー総数を取得して保存（収集完了時の検証用）
-    const expectedTotal = getTotalReviewCount();
-    if (expectedTotal > 0) {
-      chrome.storage.local.set({ expectedReviewTotal: expectedTotal });
-      log(`レビュー収集を開始します（全${expectedTotal.toLocaleString()}件）`);
-    } else {
-      chrome.storage.local.set({ expectedReviewTotal: 0 });
-      log('レビュー収集を開始します');
-    }
+    // 総ページ数から推定レビュー数を保存（収集完了時の検証用）
+    const totalPages = getTotalPages();
+    const estimatedTotal = totalPages > 1 ? totalPages * 30 : 0; // 1ページ約30件
+    chrome.storage.local.set({ expectedReviewTotal: estimatedTotal });
+
+    log('レビュー収集を開始します');
 
     // 現在のページからレビューを収集
     await collectCurrentPage();
@@ -275,8 +272,6 @@
       // 次のページに移動
       if (nextPage.type === 'button') {
         // ボタンクリック方式（新UI）
-        log('次へボタンをクリックします');
-
         // 現在のレビュー要素を記録（変更検知用）
         const currentReviewCount = document.querySelectorAll('li').length;
 
@@ -287,7 +282,7 @@
         const contentUpdated = await waitForContentUpdate(currentReviewCount);
 
         if (!contentUpdated) {
-          log('ページ更新がタイムアウトしました。最終ページの可能性があります。', 'error');
+          log('最終ページに到達しました');
           return false;
         }
 
@@ -299,7 +294,6 @@
 
       } else if (nextPage.type === 'link' || nextPage.type === 'url') {
         // リンク/URL方式（旧UI）
-        log('次のページに移動します');
         window.location.href = nextPage.url;
 
         // ページ遷移後は新しいコンテンツスクリプトが起動するため、
@@ -796,7 +790,6 @@
         if (button && !button.disabled) {
           const buttonText = button.textContent.trim();
           if (buttonText.includes('次へ') || buttonText === '>' || buttonText === '»') {
-            log(`次へボタンを発見（セレクタ: ${selector}）`);
             return { type: 'button', element: button };
           }
         }
@@ -811,7 +804,6 @@
       if (button.disabled) continue;
       const text = button.textContent.trim();
       if (text === '次へ' || text.includes('次へ') || text === '>' || text === '»') {
-        log(`次へボタンを発見（テキスト: ${text}）`);
         return { type: 'button', element: button };
       }
     }
@@ -822,7 +814,6 @@
       if (button.disabled) continue;
       const text = button.textContent.trim();
       if (text === String(nextPageNum)) {
-        log(`ページ${nextPageNum}ボタンを発見`);
         return { type: 'button', element: button };
       }
     }
@@ -833,7 +824,6 @@
       const text = link.textContent.trim();
       if ((text === '次へ' || text === '>' || text === '»' || text === '次' || text.includes('次のページ') || text === '>>') && link.href) {
         if (link.href !== window.location.href && link.href.includes('review.rakuten.co.jp')) {
-          log(`次のページリンクを発見: ${text}`);
           return { type: 'link', element: link, url: link.href };
         }
       }
@@ -843,7 +833,6 @@
     for (const link of allLinks) {
       const text = link.textContent.trim();
       if (text === String(nextPageNum) && link.href && link.href.includes('review.rakuten.co.jp')) {
-        log(`ページ${nextPageNum}のリンクを発見`);
         return { type: 'link', element: link, url: link.href };
       }
     }
@@ -858,16 +847,13 @@
       const query = pageMatch[3] || '';
 
       const totalPages = getTotalPages();
-      const expectedTotal = getTotalReviewCount();
 
-      if (pageNum < totalPages || (expectedTotal > 0 && pageNum * 30 < expectedTotal)) {
+      if (pageNum < totalPages) {
         const nextUrl = currentUrl.replace(pagePattern, `/${pageNum + 1}.${sortNum}/${query}`);
-        log(`URL構築で次のページへ: ${pageNum + 1}`);
         return { type: 'url', url: nextUrl };
       }
     }
 
-    log(`次のページが見つかりません（現在ページ: ${currentPage}）`);
     return null;
   }
 
