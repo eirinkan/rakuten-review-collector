@@ -192,7 +192,15 @@
     // 商品管理番号を取得
     currentProductId = getProductId();
 
-    log('レビュー収集を開始します');
+    // レビュー総数を取得して保存（収集完了時の検証用）
+    const expectedTotal = getTotalReviewCount();
+    if (expectedTotal > 0) {
+      chrome.storage.local.set({ expectedReviewTotal: expectedTotal });
+      log(`レビュー収集を開始します（全${expectedTotal.toLocaleString()}件）`);
+    } else {
+      chrome.storage.local.set({ expectedReviewTotal: 0 });
+      log('レビュー収集を開始します');
+    }
 
     // 現在のページからレビューを収集
     await collectCurrentPage();
@@ -247,10 +255,10 @@
    */
   async function collectAllPages() {
     while (!shouldStop) {
-      // 次のページリンクを探す
-      const nextLink = findNextPageLink();
+      // 次のページへ移動する方法を探す
+      const nextPage = findNextPage();
 
-      if (!nextLink) {
+      if (!nextPage) {
         log('最後のページに到達しました');
         return false; // 完了
       }
@@ -265,15 +273,86 @@
       }
 
       // 次のページに移動
-      log('次のページに移動します');
-      window.location.href = nextLink;
+      if (nextPage.type === 'button') {
+        // ボタンクリック方式（新UI）
+        log('次へボタンをクリックします');
 
-      // ページ遷移後は新しいコンテンツスクリプトが起動するため、
-      // ここで現在のインスタンスは終了
-      return true; // ページ遷移中
+        // 現在のレビュー要素を記録（変更検知用）
+        const currentReviewCount = document.querySelectorAll('li').length;
+
+        // ボタンをクリック
+        nextPage.element.click();
+
+        // コンテンツの更新を待つ
+        const contentUpdated = await waitForContentUpdate(currentReviewCount);
+
+        if (!contentUpdated) {
+          log('ページ更新がタイムアウトしました。最終ページの可能性があります。', 'error');
+          return false;
+        }
+
+        // 新しいページのレビューを収集
+        await collectCurrentPage();
+
+        // 次のループで次のページを探す
+        continue;
+
+      } else if (nextPage.type === 'link' || nextPage.type === 'url') {
+        // リンク/URL方式（旧UI）
+        log('次のページに移動します');
+        window.location.href = nextPage.url;
+
+        // ページ遷移後は新しいコンテンツスクリプトが起動するため、
+        // ここで現在のインスタンスは終了
+        return true; // ページ遷移中
+      }
     }
 
     return false; // shouldStopで終了
+  }
+
+  /**
+   * コンテンツの更新を待つ（AJAX読み込み用）
+   * @param {number} previousCount 更新前のレビュー要素数
+   * @param {number} timeout タイムアウト（ミリ秒）
+   * @returns {boolean} 更新されたらtrue、タイムアウトしたらfalse
+   */
+  async function waitForContentUpdate(previousCount, timeout = 10000) {
+    const startTime = Date.now();
+    const checkInterval = 500; // 500msごとにチェック
+
+    while (Date.now() - startTime < timeout) {
+      await sleep(checkInterval);
+
+      // レビュー要素の変化をチェック
+      const currentReviewElements = document.querySelectorAll('li');
+      let reviewLiCount = 0;
+      currentReviewElements.forEach(li => {
+        const text = li.textContent;
+        if ((text.includes('購入者さん') || text.includes('注文日')) && text.length > 50) {
+          reviewLiCount++;
+        }
+      });
+
+      // URLの変化をチェック（ページ番号が変わったか）
+      const currentPage = getCurrentPageNumber();
+
+      // スクロール位置の変化をチェック
+      const scrollY = window.scrollY;
+
+      // ローディング要素が消えたかチェック
+      const loadingElem = document.querySelector('[class*="loading"], [class*="spinner"]');
+
+      // 何らかの変化があれば更新完了と判断
+      // （レビュー内容が変わっている、またはローディングが終わっている）
+      if (!loadingElem || (Date.now() - startTime > 2000)) {
+        // 少し追加で待ってから完了
+        await sleep(1000);
+        return true;
+      }
+    }
+
+    return false; // タイムアウト
   }
 
   /**
@@ -696,61 +775,113 @@
   }
 
   /**
-   * 次のページリンクを探す
+   * 次のページへ移動する方法を探す
+   * @returns {Object|null} { type: 'link'|'button', element: Element, url?: string } または null
    */
-  function findNextPageLink() {
+  function findNextPage() {
     const currentPage = getCurrentPageNumber();
-    const totalPages = getTotalPages();
 
-    log(`現在のページ: ${currentPage} / ${totalPages}`);
+    // === 方法1: 「次へ」ボタンを探す（新しい楽天UI - 最優先） ===
+    // 新UIではページネーションがbutton要素で実装されている
+    const nextButtonSelectors = [
+      'button.navigation-button-right--3z-F_',
+      'button[class*="navigation-button-right"]',
+      'button[class*="next"]',
+      '[class*="pagination"] button:last-child'
+    ];
 
-    // 最終ページに到達している場合
-    if (currentPage >= totalPages) {
-      return null;
+    for (const selector of nextButtonSelectors) {
+      try {
+        const button = document.querySelector(selector);
+        if (button && !button.disabled) {
+          const buttonText = button.textContent.trim();
+          if (buttonText.includes('次へ') || buttonText === '>' || buttonText === '»') {
+            log(`次へボタンを発見（セレクタ: ${selector}）`);
+            return { type: 'button', element: button };
+          }
+        }
+      } catch (e) {
+        // セレクターエラーは無視
+      }
     }
 
-    // 方法1: 「次へ」リンクを探す
+    // テキストで「次へ」を含むボタンを探す
+    const allButtons = document.querySelectorAll('button');
+    for (const button of allButtons) {
+      if (button.disabled) continue;
+      const text = button.textContent.trim();
+      if (text === '次へ' || text.includes('次へ') || text === '>' || text === '»') {
+        log(`次へボタンを発見（テキスト: ${text}）`);
+        return { type: 'button', element: button };
+      }
+    }
+
+    // === 方法2: 次のページ番号ボタンを探す ===
+    const nextPageNum = currentPage + 1;
+    for (const button of allButtons) {
+      if (button.disabled) continue;
+      const text = button.textContent.trim();
+      if (text === String(nextPageNum)) {
+        log(`ページ${nextPageNum}ボタンを発見`);
+        return { type: 'button', element: button };
+      }
+    }
+
+    // === 方法3: 「次へ」リンクを探す（旧UI対応） ===
     const allLinks = document.querySelectorAll('a');
     for (const link of allLinks) {
       const text = link.textContent.trim();
-      if ((text === '次へ' || text === '>' || text === '»' || text === '次' || text.includes('次のページ')) && link.href) {
+      if ((text === '次へ' || text === '>' || text === '»' || text === '次' || text.includes('次のページ') || text === '>>') && link.href) {
         if (link.href !== window.location.href && link.href.includes('review.rakuten.co.jp')) {
-          return link.href;
+          log(`次のページリンクを発見: ${text}`);
+          return { type: 'link', element: link, url: link.href };
         }
       }
     }
 
-    // 方法2: 次のページ番号のリンクを探す
-    const nextPageNum = currentPage + 1;
+    // === 方法4: 次のページ番号のリンクを探す ===
     for (const link of allLinks) {
       const text = link.textContent.trim();
       if (text === String(nextPageNum) && link.href && link.href.includes('review.rakuten.co.jp')) {
-        return link.href;
+        log(`ページ${nextPageNum}のリンクを発見`);
+        return { type: 'link', element: link, url: link.href };
       }
     }
 
-    // 方法3: URLパラメータで次のページを構築
-    // 楽天レビューページのURL形式: /item/1/SHOP_ID/ITEM_ID/PAGE.SORT/
+    // === 方法5: URLパターンで次のページを構築（最後の手段） ===
     const currentUrl = window.location.href;
-
-    // URL形式1: /1.1/ → /2.1/ のパターン
     const pagePattern = /\/(\d+)\.(\d+)\/?(\?.*)?$/;
     const pageMatch = currentUrl.match(pagePattern);
     if (pageMatch) {
       const pageNum = parseInt(pageMatch[1], 10);
       const sortNum = pageMatch[2];
       const query = pageMatch[3] || '';
-      const nextUrl = currentUrl.replace(pagePattern, `/${pageNum + 1}.${sortNum}/${query}`);
-      return nextUrl;
+
+      const totalPages = getTotalPages();
+      const expectedTotal = getTotalReviewCount();
+
+      if (pageNum < totalPages || (expectedTotal > 0 && pageNum * 30 < expectedTotal)) {
+        const nextUrl = currentUrl.replace(pagePattern, `/${pageNum + 1}.${sortNum}/${query}`);
+        log(`URL構築で次のページへ: ${pageNum + 1}`);
+        return { type: 'url', url: nextUrl };
+      }
     }
 
-    // URL形式2: ?page=X パラメータ
-    const url = new URL(currentUrl);
-    if (url.searchParams.has('page')) {
-      url.searchParams.set('page', nextPageNum);
-      return url.toString();
-    }
+    log(`次のページが見つかりません（現在ページ: ${currentPage}）`);
+    return null;
+  }
 
+  /**
+   * 次のページリンクを探す（後方互換性のため残す）
+   * @deprecated findNextPage() を使用してください
+   */
+  function findNextPageLink() {
+    const next = findNextPage();
+    if (!next) return null;
+    if (next.type === 'link' || next.type === 'url') {
+      return next.url;
+    }
+    // ボタンの場合はnullを返す（旧方式では対応不可）
     return null;
   }
 
@@ -760,7 +891,13 @@
   function getCurrentPageNumber() {
     const url = window.location.href;
 
-    // 楽天レビューページのURL形式: /PAGE.SORT/ (例: /1.1/, /2.1/)
+    // 新しい楽天レビューページのURL形式: ?p=N (例: ?p=2, ?p=3)
+    const newPageMatch = url.match(/[?&]p=(\d+)/);
+    if (newPageMatch) {
+      return parseInt(newPageMatch[1], 10);
+    }
+
+    // 旧楽天レビューページのURL形式: /PAGE.SORT/ (例: /1.1/, /2.1/)
     const pagePattern = /\/(\d+)\.\d+\/?(\?.*)?$/;
     const pageMatch = url.match(pagePattern);
     if (pageMatch) {
@@ -773,7 +910,16 @@
       return parseInt(urlParamMatch[1], 10);
     }
 
-    // アクティブなページネーション要素から取得
+    // アクティブなページネーション要素から取得（新UI - aria-current="page"）
+    const activeButton = document.querySelector('button[aria-current="page"]');
+    if (activeButton) {
+      const num = parseInt(activeButton.textContent.trim(), 10);
+      if (!isNaN(num) && num > 0) {
+        return num;
+      }
+    }
+
+    // アクティブなページネーション要素から取得（旧UI）
     const activeSelectors = [
       '[class*="pagination"] [class*="active"]',
       '[class*="pagination"] [class*="current"]',
@@ -800,21 +946,68 @@
   }
 
   /**
+   * レビュー総数を取得
+   * @returns {number} レビュー総数（取得できない場合は0）
+   */
+  function getTotalReviewCount() {
+    // 方法1: ページ上部の「○○件のレビュー」を探す
+    const headerElements = document.querySelectorAll('h1, h2, h3, .review-count, [class*="count"], [class*="total"]');
+    for (const elem of headerElements) {
+      const text = elem.textContent || '';
+      // カンマ区切りの数字に対応（例: 1,318件）
+      const match = text.match(/([\d,]+)\s*件/);
+      if (match) {
+        const count = parseInt(match[1].replace(/,/g, ''), 10);
+        if (count > 0 && count < 100000) {
+          return count;
+        }
+      }
+    }
+
+    // 方法2: body全体から探す（より緩い検索）
+    const bodyText = document.body.textContent || '';
+    // 「レビュー」「評価」の近くにある件数を探す
+    const reviewPatterns = [
+      /レビュー[（(]?\s*([\d,]+)\s*件/,
+      /([\d,]+)\s*件のレビュー/,
+      /全\s*([\d,]+)\s*件/,
+      /レビュー数[：:]\s*([\d,]+)/
+    ];
+
+    for (const pattern of reviewPatterns) {
+      const match = bodyText.match(pattern);
+      if (match) {
+        const count = parseInt(match[1].replace(/,/g, ''), 10);
+        if (count > 0 && count < 100000) {
+          return count;
+        }
+      }
+    }
+
+    // 方法3: 単純な「○○件」を探す（最後の手段）
+    const simpleMatch = bodyText.match(/([\d,]+)件/);
+    if (simpleMatch) {
+      const count = parseInt(simpleMatch[1].replace(/,/g, ''), 10);
+      if (count > 0 && count < 100000) {
+        return count;
+      }
+    }
+
+    return 0; // 取得できなかった
+  }
+
+  /**
    * 総ページ数を取得
    */
   function getTotalPages() {
     let maxPage = 1;
 
     // 方法1: レビュー件数から計算（1ページあたり約15件）
-    const reviewCountText = document.body.textContent;
-    const reviewCountMatch = reviewCountText.match(/(\d+)件/);
-    if (reviewCountMatch) {
-      const totalReviews = parseInt(reviewCountMatch[1], 10);
-      if (totalReviews > 0) {
-        const calculatedPages = Math.ceil(totalReviews / 15);
-        if (calculatedPages > maxPage) {
-          maxPage = calculatedPages;
-        }
+    const totalReviews = getTotalReviewCount();
+    if (totalReviews > 0) {
+      const calculatedPages = Math.ceil(totalReviews / 15);
+      if (calculatedPages > maxPage) {
+        maxPage = calculatedPages;
       }
     }
 

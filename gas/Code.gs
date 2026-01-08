@@ -5,7 +5,7 @@
 
 // スプレッドシートID（ここに自分のスプレッドシートIDを設定してください）
 // スプレッドシートURLの https://docs.google.com/spreadsheets/d/XXXXX/edit の XXXXX 部分
-const SPREADSHEET_ID = 'YOUR_SPREADSHEET_ID_HERE';
+const SPREADSHEET_ID = '1o-VqcgiGf_1vItKItOIhz756bcV3KvqbBWuOH4KFnaQ';
 
 // ユーザー管理用スプレッドシートID（許可ユーザーリスト）
 const USER_MANAGEMENT_SPREADSHEET_ID = '1Hqi8CRXJObO1DOJ9dBVEnnd1SYUs5FPB3Kb5RW9LF6w';
@@ -27,8 +27,8 @@ function isUserAllowed(email) {
       return true;
     }
 
-    // A列のメールアドレスを取得（2行目以降、ヘッダーを除く）
-    const emails = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
+    // B列のメールアドレスを取得（2行目以降、ヘッダーを除く）
+    const emails = sheet.getRange(2, 2, sheet.getLastRow() - 1, 1).getValues();
     const emailList = emails.map(row => row[0].toString().toLowerCase().trim());
 
     return emailList.includes(email.toLowerCase().trim());

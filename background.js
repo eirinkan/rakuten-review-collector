@@ -512,8 +512,11 @@ function formatDate(date) {
  */
 async function handleCollectionComplete(tabId) {
   // 収集中アイテムと収集状態を取得
-  const initialResult = await chrome.storage.local.get(['collectingItems', 'isQueueCollecting']);
+  const initialResult = await chrome.storage.local.get(['collectingItems', 'isQueueCollecting', 'expectedReviewTotal', 'collectionState']);
   const isQueueCollecting = initialResult.isQueueCollecting || false;
+  const expectedTotal = initialResult.expectedReviewTotal || 0;
+  const currentState = initialResult.collectionState || {};
+  const actualCount = currentState.reviewCount || 0;
 
   // 収集中アイテムから商品情報を取得（ログ出力用）
   let completedItem = null;
@@ -521,6 +524,28 @@ async function handleCollectionComplete(tabId) {
     const collectingItems = initialResult.collectingItems || [];
     completedItem = collectingItems.find(item => item.tabId === tabId);
   }
+
+  // レビュー件数の検証（期待値との比較）
+  const verifyReviewCount = () => {
+    if (expectedTotal > 0 && actualCount > 0) {
+      const diff = expectedTotal - actualCount;
+      const diffPercent = Math.round((diff / expectedTotal) * 100);
+
+      if (diff > 0 && diffPercent > 5) {
+        // 5%以上の不足がある場合は警告
+        log(`⚠️ 取得件数が期待値より少ない可能性があります（取得: ${actualCount.toLocaleString()}件 / 期待: ${expectedTotal.toLocaleString()}件、差分: ${diff.toLocaleString()}件）`, 'error');
+        return false;
+      } else if (actualCount >= expectedTotal) {
+        log(`✅ 全${actualCount.toLocaleString()}件のレビューを取得完了`, 'success');
+        return true;
+      } else {
+        // 5%以内の差は許容（ページ表示と実際の件数の誤差）
+        log(`✅ ${actualCount.toLocaleString()}件のレビューを取得完了（期待: ${expectedTotal.toLocaleString()}件）`, 'success');
+        return true;
+      }
+    }
+    return true; // 検証できない場合は成功扱い
+  };
 
   // アクティブタブから削除
   if (tabId) {
@@ -595,9 +620,13 @@ async function handleCollectionComplete(tabId) {
     // 全体完了の通知
     showNotification('楽天レビュー収集', `すべての収集が完了しました（${reviewCount}件のレビュー）`);
   } else if (activeCollectionTabs.size === 0 && !isQueueCollecting && !completedItem) {
-    // 単一収集完了時の通知
+    // 単一収集完了時の検証と通知
+    verifyReviewCount();
+
+    // expectedReviewTotalをクリア
+    await chrome.storage.local.remove('expectedReviewTotal');
+
     const reviewCount = state.reviewCount || 0;
-    log(`収集が完了しました（${reviewCount}件のレビュー）`, 'success');
     showNotification('楽天レビュー収集', `収集が完了しました（${reviewCount}件のレビュー）`);
   }
 }

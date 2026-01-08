@@ -9,11 +9,8 @@
  */
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
-  ui.createMenu('👥 ユーザー管理')
-    .addItem('📇 Google連絡先から追加', 'showContactPicker')
-    .addItem('✅ 重複を削除', 'removeDuplicateEmails')
-    .addSeparator()
-    .addItem('📊 ユーザー数を確認', 'showUserCount')
+  ui.createMenu('👥 連絡先から追加')
+    .addItem('追加する', 'showContactPicker')
     .addToUi();
 }
 
@@ -25,7 +22,7 @@ function showContactPicker() {
     <style>
       body { font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; }
       h3 { color: #BF0000; margin-bottom: 15px; }
-      .contact-list { max-height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 8px; }
+      .contact-list { max-height: 420px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 8px; }
       .contact-item { padding: 8px; margin: 4px 0; background: #f5f5f5; border-radius: 4px; cursor: pointer; }
       .contact-item:hover { background: #e0e0e0; }
       .contact-item input { margin-right: 10px; }
@@ -36,7 +33,6 @@ function showContactPicker() {
       .loading { text-align: center; padding: 20px; color: #666; }
       .search-box { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
     </style>
-    <h3>📇 Google連絡先から追加</h3>
     <input type="text" class="search-box" id="search" placeholder="検索..." onkeyup="filterContacts()">
     <div class="contact-list" id="contactList">
       <div class="loading">連絡先を読み込み中...</div>
@@ -69,7 +65,7 @@ function showContactPicker() {
         list.innerHTML = contacts.map((c, i) =>
           '<div class="contact-item">' +
           '<input type="checkbox" id="contact_' + i + '" data-name="' + escapeHtml(c.name || '') + '" data-email="' + escapeHtml(c.email) + '">' +
-          '<label for="contact_' + i + '">' + escapeHtml(c.name || c.email) + ' &lt;' + escapeHtml(c.email) + '&gt;</label>' +
+          '<label for="contact_' + i + '">' + escapeHtml(c.name || c.email) + '</label>' +
           '</div>'
         ).join('');
       }
@@ -96,25 +92,36 @@ function showContactPicker() {
           email: cb.getAttribute('data-email')
         }));
         if (users.length === 0) {
-          alert('ユーザーを選択してください');
+          showMessage('ユーザーを選択してください', 'error');
           return;
         }
+        // 即座にフィードバック表示
+        showMessage(users.length + '人を追加しています...', 'loading');
+        document.querySelector('.btn-primary').disabled = true;
+
         google.script.run
           .withSuccessHandler(function(result) {
-            alert(result.message);
-            google.script.host.close();
+            showMessage('✓ ' + result.message, 'success');
+            setTimeout(function() { google.script.host.close(); }, 1200);
           })
           .withFailureHandler(function(error) {
-            alert('エラー: ' + error.message);
+            showMessage('エラー: ' + error.message, 'error');
+            document.querySelector('.btn-primary').disabled = false;
           })
           .addUsersFromContacts(users);
+      }
+
+      function showMessage(text, type) {
+        const list = document.getElementById('contactList');
+        const color = type === 'error' ? '#c00' : type === 'loading' ? '#666' : '#080';
+        list.innerHTML = '<div style="text-align:center;padding:40px;color:' + color + ';font-size:16px;">' + text + '</div>';
       }
     </script>
   `)
   .setWidth(500)
-  .setHeight(500);
+  .setHeight(600);
 
-  SpreadsheetApp.getUi().showModalDialog(html, '連絡先から追加');
+  SpreadsheetApp.getUi().showModalDialog(html, 'Google連絡先から追加');
 }
 
 /**
@@ -124,6 +131,8 @@ function showContactPicker() {
 function getGoogleContacts() {
   try {
     const contacts = [];
+    const seenEmails = new Set();
+    const seenNames = new Set();
     const people = People.People.Connections.list('people/me', {
       personFields: 'names,emailAddresses',
       pageSize: 1000
@@ -135,18 +144,24 @@ function getGoogleContacts() {
           const name = person.names && person.names.length > 0
             ? person.names[0].displayName
             : '';
-          person.emailAddresses.forEach(email => {
+          const email = person.emailAddresses[0].value.toLowerCase();
+          const nameKey = name.toLowerCase().trim();
+
+          // メールと名前の両方で重複チェック
+          if (!seenEmails.has(email) && (!nameKey || !seenNames.has(nameKey))) {
+            seenEmails.add(email);
+            if (nameKey) seenNames.add(nameKey);
             contacts.push({
               name: name,
-              email: email.value
+              email: person.emailAddresses[0].value
             });
-          });
+          }
         }
       });
     }
 
-    // メールアドレスでソート
-    contacts.sort((a, b) => a.email.localeCompare(b.email));
+    // 名前でソート
+    contacts.sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email));
 
     return contacts;
   } catch (error) {
@@ -190,56 +205,3 @@ function addUsersFromContacts(users) {
   return { success: true, message: message, added: addedCount, skipped: skippedCount };
 }
 
-/**
- * 重複メールアドレスを削除（B列で重複判定）
- */
-function removeDuplicateEmails() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('シート1') || ss.getSheets()[0];
-  const ui = SpreadsheetApp.getUi();
-
-  if (sheet.getLastRow() < 2) {
-    ui.alert('ユーザーが登録されていません。');
-    return;
-  }
-
-  const data = sheet.getDataRange().getValues();
-  const header = data[0];
-  const rows = data.slice(1);
-
-  const seen = new Set();
-  const uniqueRows = [];
-
-  rows.forEach(row => {
-    const email = row[1] ? row[1].toString().toLowerCase().trim() : ''; // B列（インデックス1）
-    if (email && !seen.has(email)) {
-      seen.add(email);
-      uniqueRows.push(row);
-    }
-  });
-
-  const removedCount = rows.length - uniqueRows.length;
-
-  if (removedCount > 0) {
-    sheet.clear();
-    sheet.getRange(1, 1, 1, header.length).setValues([header]);
-    if (uniqueRows.length > 0) {
-      sheet.getRange(2, 1, uniqueRows.length, uniqueRows[0].length).setValues(uniqueRows);
-    }
-    ui.alert('✅ 完了', removedCount + '件の重複を削除しました。', ui.ButtonSet.OK);
-  } else {
-    ui.alert('重複はありませんでした。');
-  }
-}
-
-/**
- * ユーザー数を表示
- */
-function showUserCount() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('シート1') || ss.getSheets()[0];
-  const ui = SpreadsheetApp.getUi();
-
-  const count = Math.max(0, sheet.getLastRow() - 1);
-  ui.alert('📊 ユーザー数', '現在 ' + count + ' 人のユーザーが登録されています。', ui.ButtonSet.OK);
-}
