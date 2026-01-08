@@ -140,7 +140,9 @@ function saveReviewsByProduct(ss, reviews) {
 
     if (rows.length > 0) {
       const lastRow = sheet.getLastRow();
-      sheet.getRange(lastRow + 1, 1, rows.length, rows[0].length).setValues(rows);
+      const dataRange = sheet.getRange(lastRow + 1, 1, rows.length, rows[0].length);
+      dataRange.setValues(rows);
+      dataRange.setVerticalAlignment('middle');
       totalSaved += rows.length;
     }
   }
@@ -167,7 +169,9 @@ function saveReviewsToSingleSheet(ss, reviews) {
 
   if (rows.length > 0) {
     const lastRow = sheet.getLastRow();
-    sheet.getRange(lastRow + 1, 1, rows.length, rows[0].length).setValues(rows);
+    const dataRange = sheet.getRange(lastRow + 1, 1, rows.length, rows[0].length);
+    dataRange.setValues(rows);
+    dataRange.setVerticalAlignment('middle');
   }
   return rows.length;
 }
@@ -197,6 +201,8 @@ function addHeader(sheet) {
   headerRange.setBackground('#BF0000');
   headerRange.setFontColor('#ffffff');
   headerRange.setFontWeight('bold');
+  headerRange.setVerticalAlignment('middle');
+  headerRange.setHorizontalAlignment('center');
   sheet.setFrozenRows(1);
 }
 
@@ -221,6 +227,8 @@ function initializeSheet(sheet) {
   headerRange.setBackground('#BF0000');
   headerRange.setFontColor('#ffffff');
   headerRange.setFontWeight('bold');
+  headerRange.setVerticalAlignment('middle');
+  headerRange.setHorizontalAlignment('center');
   sheet.setFrozenRows(1);
 }
 
@@ -233,7 +241,31 @@ function onOpen() {
     .addItem('📊 スプレッドシートを初期化', 'initializeSpreadsheet')
     .addItem('🗑️ 空のシートを削除', 'deleteEmptySheets')
     .addItem('🔄 重複レビューを削除', 'removeDuplicates')
+    .addItem('🎨 ヘッダーを赤色に修正', 'fixAllHeaders')
     .addToUi();
+}
+
+function fixAllHeaders() {
+  const ss = getSpreadsheet();
+  const sheets = ss.getSheets();
+  let fixedCount = 0;
+  sheets.forEach(sheet => {
+    if (sheet.getLastRow() === 0) return;
+    const lastCol = sheet.getLastColumn();
+    if (lastCol === 0) return;
+    const headerRange = sheet.getRange(1, 1, 1, lastCol);
+    headerRange.setBackground('#BF0000');
+    headerRange.setFontColor('#ffffff');
+    headerRange.setFontWeight('bold');
+    headerRange.setVerticalAlignment('middle');
+    headerRange.setHorizontalAlignment('center');
+    sheet.setFrozenRows(1);
+    if (sheet.getLastRow() > 1) {
+      sheet.getRange(2, 1, sheet.getLastRow() - 1, lastCol).setVerticalAlignment('middle');
+    }
+    fixedCount++;
+  });
+  SpreadsheetApp.getUi().alert(fixedCount + '個のシートのヘッダーを赤色に修正しました');
 }
 
 function initializeSpreadsheet() {
