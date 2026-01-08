@@ -9,6 +9,186 @@ let activeCollectionTabs = new Set();
 let collectionWindowId = null;
 
 /**
+ * ===== 認証機能 =====
+ */
+
+/**
+ * Googleログインを実行
+ * @returns {Promise<Object>} ユーザー情報 {email, name, picture}
+ */
+async function googleLogin() {
+  try {
+    // OAuth2トークンを取得
+    const token = await new Promise((resolve, reject) => {
+      chrome.identity.getAuthToken({ interactive: true }, (token) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else {
+          resolve(token);
+        }
+      });
+    });
+
+    // ユーザー情報を取得
+    const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (!response.ok) {
+      throw new Error('ユーザー情報の取得に失敗しました');
+    }
+
+    const userInfo = await response.json();
+
+    return {
+      email: userInfo.email,
+      name: userInfo.name || userInfo.email,
+      picture: userInfo.picture || null
+    };
+  } catch (error) {
+    console.error('Googleログインエラー:', error);
+    throw error;
+  }
+}
+
+/**
+ * GASで許可チェック
+ * @param {string} email - チェックするメールアドレス
+ * @returns {Promise<Object>} 許可チェック結果
+ */
+async function checkUserPermission(email) {
+  try {
+    // GAS URLを取得
+    const settings = await chrome.storage.sync.get(['gasUrl']);
+    if (!settings.gasUrl) {
+      // GAS URLが設定されていない場合は許可（後でGAS設定が必要になる）
+      return { allowed: true, message: 'GAS未設定のため許可' };
+    }
+
+    // GASに許可チェックリクエスト
+    const response = await fetch(settings.gasUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'checkAuth', email: email })
+    });
+
+    if (!response.ok) {
+      throw new Error('許可チェックに失敗しました');
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('許可チェックエラー:', error);
+    // エラー時は安全のため許可しない
+    return { allowed: false, message: error.message };
+  }
+}
+
+/**
+ * 認証フロー全体を実行（ログイン + 許可チェック + 保存）
+ * @returns {Promise<Object>} 認証結果
+ */
+async function authenticate() {
+  try {
+    // 1. Googleログイン
+    const userInfo = await googleLogin();
+
+    // 2. 許可チェック
+    const permissionResult = await checkUserPermission(userInfo.email);
+
+    if (!permissionResult.allowed) {
+      // 許可されていない場合、トークンを無効化
+      await revokeToken();
+      return {
+        success: false,
+        authenticated: false,
+        message: 'このメールアドレスは許可されていません: ' + userInfo.email
+      };
+    }
+
+    // 3. 認証情報を保存
+    await chrome.storage.local.set({
+      authUser: {
+        email: userInfo.email,
+        name: userInfo.name,
+        picture: userInfo.picture,
+        authenticatedAt: Date.now()
+      }
+    });
+
+    return {
+      success: true,
+      authenticated: true,
+      user: userInfo,
+      message: '認証成功'
+    };
+  } catch (error) {
+    console.error('認証エラー:', error);
+    return {
+      success: false,
+      authenticated: false,
+      message: error.message
+    };
+  }
+}
+
+/**
+ * 認証状態を確認
+ * @returns {Promise<Object>} 認証状態
+ */
+async function checkAuthStatus() {
+  const data = await chrome.storage.local.get(['authUser']);
+  if (data.authUser && data.authUser.email) {
+    return {
+      authenticated: true,
+      user: data.authUser
+    };
+  }
+  return {
+    authenticated: false,
+    user: null
+  };
+}
+
+/**
+ * ログアウト（トークン無効化 + 保存データ削除）
+ */
+async function logout() {
+  try {
+    await revokeToken();
+    await chrome.storage.local.remove(['authUser']);
+    return { success: true, message: 'ログアウトしました' };
+  } catch (error) {
+    console.error('ログアウトエラー:', error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * OAuthトークンを無効化
+ */
+async function revokeToken() {
+  return new Promise((resolve) => {
+    chrome.identity.getAuthToken({ interactive: false }, (token) => {
+      if (token) {
+        chrome.identity.removeCachedAuthToken({ token }, () => {
+          // トークンをGoogleサーバーからも無効化
+          fetch(`https://accounts.google.com/o/oauth2/revoke?token=${token}`)
+            .finally(() => resolve());
+        });
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+/**
+ * ===== 認証機能ここまで =====
+ */
+
+/**
  * デスクトップ通知を表示
  */
 async function showNotification(title, message, productId = null) {
@@ -39,6 +219,26 @@ async function showNotification(title, message, productId = null) {
 // メッセージリスナー
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.action) {
+    // ===== 認証関連 =====
+    case 'authenticate':
+      authenticate()
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ success: false, message: error.message }));
+      return true;
+
+    case 'checkAuthStatus':
+      checkAuthStatus()
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ authenticated: false, error: error.message }));
+      return true;
+
+    case 'logout':
+      logout()
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ success: false, message: error.message }));
+      return true;
+
+    // ===== 既存の機能 =====
     case 'saveReviews':
       handleSaveReviews(message.reviews)
         .then(() => sendResponse({ success: true }))

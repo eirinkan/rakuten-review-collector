@@ -7,6 +7,52 @@
 // スプレッドシートURLの https://docs.google.com/spreadsheets/d/XXXXX/edit の XXXXX 部分
 const SPREADSHEET_ID = 'YOUR_SPREADSHEET_ID_HERE';
 
+// ユーザー管理用スプレッドシートID（許可ユーザーリスト）
+const USER_MANAGEMENT_SPREADSHEET_ID = '1Hqi8CRXJObO1DOJ9dBVEnnd1SYUs5FPB3Kb5RW9LF6w';
+
+/**
+ * ユーザーが許可リストに含まれているかチェック
+ * @param {string} email - チェックするメールアドレス
+ * @returns {boolean} - 許可されている場合はtrue
+ */
+function isUserAllowed(email) {
+  if (!email) return false;
+
+  try {
+    const ss = SpreadsheetApp.openById(USER_MANAGEMENT_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName('シート1') || ss.getSheets()[0];
+
+    if (!sheet || sheet.getLastRow() < 2) {
+      // シートが空または存在しない場合は全員許可（初期設定前）
+      return true;
+    }
+
+    // A列のメールアドレスを取得（2行目以降、ヘッダーを除く）
+    const emails = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
+    const emailList = emails.map(row => row[0].toString().toLowerCase().trim());
+
+    return emailList.includes(email.toLowerCase().trim());
+  } catch (error) {
+    console.error('許可チェックエラー:', error);
+    // エラー時は安全のため許可しない
+    return false;
+  }
+}
+
+/**
+ * ユーザー認証をチェックするエンドポイント
+ * Chrome拡張機能からのリクエストを処理
+ */
+function checkUserAuth(email) {
+  const allowed = isUserAllowed(email);
+  return {
+    success: true,
+    allowed: allowed,
+    email: email,
+    message: allowed ? '認証成功' : 'このメールアドレスは許可されていません'
+  };
+}
+
 /**
  * スプレッドシートを取得
  */
@@ -22,6 +68,12 @@ function doPost(e) {
   try {
     // リクエストボディをパース
     const data = JSON.parse(e.postData.contents);
+
+    // 認証チェックリクエストの場合
+    if (data.action === 'checkAuth') {
+      const result = checkUserAuth(data.email);
+      return createResponse(result);
+    }
 
     // スプレッドシートのURLを取得
     const ss = getSpreadsheet();

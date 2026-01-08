@@ -59,6 +59,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // テーマ管理を初期化
   new ThemeManager();
 
+  const loginScreen = document.getElementById('loginScreen');
+  const mainContent = document.getElementById('mainContent');
+  const loginBtn = document.getElementById('loginBtn');
+  const loginError = document.getElementById('loginError');
+  const userInfo = document.getElementById('userInfo');
+  const userEmail = document.getElementById('userEmail');
+  const logoutBtn = document.getElementById('logoutBtn');
+
   const pageWarning = document.getElementById('pageWarning');
   const message = document.getElementById('message');
   const rankingMessage = document.getElementById('rankingMessage');
@@ -72,7 +80,137 @@ document.addEventListener('DOMContentLoaded', () => {
   const addRankingBtn = document.getElementById('addRankingBtn');
   const rankingCountInput = document.getElementById('rankingCount');
 
-  init();
+  // ログインボタン
+  if (loginBtn) {
+    loginBtn.addEventListener('click', handleLogin);
+  }
+
+  // ログアウトボタン
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', handleLogout);
+  }
+
+  // 認証チェックしてからinit
+  checkAuth();
+
+  /**
+   * 認証状態をチェック
+   */
+  async function checkAuth() {
+    try {
+      chrome.runtime.sendMessage({ action: 'checkAuthStatus' }, (response) => {
+        if (chrome.runtime.lastError) {
+          showLoginScreen();
+          return;
+        }
+
+        if (response && response.authenticated) {
+          // 認証済み - メイン画面を表示
+          showMainContent(response.user);
+        } else {
+          // 未認証 - ログイン画面を表示
+          showLoginScreen();
+        }
+      });
+    } catch (error) {
+      console.error('認証チェックエラー:', error);
+      showLoginScreen();
+    }
+  }
+
+  /**
+   * ログイン画面を表示
+   */
+  function showLoginScreen() {
+    if (loginScreen) loginScreen.style.display = 'block';
+    if (mainContent) mainContent.style.display = 'none';
+    if (userInfo) userInfo.style.display = 'none';
+    if (loginError) loginError.style.display = 'none';
+  }
+
+  /**
+   * メインコンテンツを表示
+   */
+  function showMainContent(user) {
+    if (loginScreen) loginScreen.style.display = 'none';
+    if (mainContent) mainContent.style.display = 'block';
+
+    // ユーザー情報を表示
+    if (userInfo && user) {
+      userInfo.style.display = 'flex';
+      if (userEmail) userEmail.textContent = user.email;
+    }
+
+    // メイン機能を初期化
+    init();
+  }
+
+  /**
+   * ログイン処理
+   */
+  async function handleLogin() {
+    if (loginBtn) {
+      loginBtn.disabled = true;
+      loginBtn.textContent = 'ログイン中...';
+    }
+    if (loginError) loginError.style.display = 'none';
+
+    try {
+      chrome.runtime.sendMessage({ action: 'authenticate' }, (response) => {
+        if (chrome.runtime.lastError) {
+          showLoginError('認証に失敗しました');
+          resetLoginButton();
+          return;
+        }
+
+        if (response && response.success && response.authenticated) {
+          showMainContent(response.user);
+        } else {
+          showLoginError(response?.message || 'このアカウントは許可されていません');
+          resetLoginButton();
+        }
+      });
+    } catch (error) {
+      console.error('ログインエラー:', error);
+      showLoginError('ログインに失敗しました');
+      resetLoginButton();
+    }
+  }
+
+  /**
+   * ログアウト処理
+   */
+  async function handleLogout() {
+    try {
+      chrome.runtime.sendMessage({ action: 'logout' }, (response) => {
+        if (response && response.success) {
+          showLoginScreen();
+        }
+      });
+    } catch (error) {
+      console.error('ログアウトエラー:', error);
+    }
+  }
+
+  /**
+   * ログインエラーを表示
+   */
+  function showLoginError(message) {
+    if (loginError) {
+      loginError.textContent = message;
+      loginError.style.display = 'block';
+    }
+  }
+
+  /**
+   * ログインボタンをリセット
+   */
+  function resetLoginButton() {
+    if (loginBtn) {
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'Googleでログイン';
+    }
+  }
 
   async function init() {
     // 現在のタブを確認
