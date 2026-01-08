@@ -5,7 +5,6 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   // DOM要素
-  const totalReviews = document.getElementById('totalReviews');
   const currentPage = document.getElementById('currentPage');
   const queueRemaining = document.getElementById('queueRemaining');
   const spreadsheetLink = document.getElementById('spreadsheetLink');
@@ -87,7 +86,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function loadState() {
     chrome.storage.local.get(['collectionState'], (result) => {
       const state = result.collectionState || {};
-      totalReviews.textContent = state.reviewCount || 0;
       currentPage.textContent = `${state.pageCount || 0}/${state.totalPages || 0}`;
 
       const hasData = (state.reviewCount || 0) > 0;
@@ -361,7 +359,6 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'collectionComplete':
         loadState();
         loadQueue();
-        addLog('収集完了', 'success');
         break;
       case 'queueUpdated':
         loadQueue();

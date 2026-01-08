@@ -149,7 +149,6 @@ function saveReviewsByProduct(ss, reviews) {
       review.usage || '',
       review.recipient || '',
       review.purchaseCount || '',
-      review.purchaseInfo || '',
       review.helpfulCount || 0,
       review.shopName || '',
       review.pageUrl || '',
@@ -159,7 +158,9 @@ function saveReviewsByProduct(ss, reviews) {
     // データを追加
     if (rows.length > 0) {
       const lastRow = sheet.getLastRow();
-      sheet.getRange(lastRow + 1, 1, rows.length, rows[0].length).setValues(rows);
+      const dataRange = sheet.getRange(lastRow + 1, 1, rows.length, rows[0].length);
+      dataRange.setValues(rows);
+      dataRange.setVerticalAlignment('middle');
       totalSaved += rows.length;
     }
   }
@@ -201,7 +202,6 @@ function saveReviewsToSingleSheet(ss, reviews) {
     review.usage || '',
     review.recipient || '',
     review.purchaseCount || '',
-    review.purchaseInfo || '',
     review.helpfulCount || 0,
     review.shopName || '',
     review.pageUrl || '',
@@ -211,7 +211,9 @@ function saveReviewsToSingleSheet(ss, reviews) {
   // データを追加
   if (rows.length > 0) {
     const lastRow = sheet.getLastRow();
-    sheet.getRange(lastRow + 1, 1, rows.length, rows[0].length).setValues(rows);
+    const dataRange = sheet.getRange(lastRow + 1, 1, rows.length, rows[0].length);
+    dataRange.setValues(rows);
+    dataRange.setVerticalAlignment('middle');
   }
 
   return rows.length;
@@ -285,10 +287,9 @@ function addHeader(sheet) {
     '用途',
     '贈り先',
     '購入回数',
-    '購入情報',
     '参考になった数',
     'ショップ名',
-    'ページURL',
+    'レビュー掲載URL',
     '収集日時'
   ];
 
@@ -296,9 +297,11 @@ function addHeader(sheet) {
 
   // ヘッダーのスタイルを設定
   const headerRange = sheet.getRange(1, 1, 1, headers.length);
-  headerRange.setBackground('#4285f4');
+  headerRange.setBackground('#BF0000');
   headerRange.setFontColor('#ffffff');
   headerRange.setFontWeight('bold');
+  headerRange.setVerticalAlignment('middle');
+  headerRange.setHorizontalAlignment('center');
 
   // 列幅を調整
   sheet.setColumnWidth(1, 100);  // レビュー日
@@ -316,11 +319,16 @@ function addHeader(sheet) {
   sheet.setColumnWidth(13, 120); // 用途
   sheet.setColumnWidth(14, 80);  // 贈り先
   sheet.setColumnWidth(15, 80);  // 購入回数
-  sheet.setColumnWidth(16, 150); // 購入情報
-  sheet.setColumnWidth(17, 100); // 参考になった数
-  sheet.setColumnWidth(18, 150); // ショップ名
-  sheet.setColumnWidth(19, 200); // ページURL
-  sheet.setColumnWidth(20, 150); // 収集日時
+  sheet.setColumnWidth(16, 100); // 参考になった数
+  sheet.setColumnWidth(17, 150); // ショップ名
+  sheet.setColumnWidth(18, 250); // レビュー掲載URL
+  sheet.setColumnWidth(19, 150); // 収集日時
+
+  // 不要な列を削除（20列目以降）
+  const maxColumns = sheet.getMaxColumns();
+  if (maxColumns > 19) {
+    sheet.deleteColumns(20, maxColumns - 19);
+  }
 
   // ヘッダー行を固定
   sheet.setFrozenRows(1);

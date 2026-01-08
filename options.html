@@ -345,7 +345,7 @@
     }
 
     .queue-list {
-      max-height: 300px;
+      max-height: 450px;
       overflow-y: auto;
       margin-bottom: 12px;
     }
@@ -556,10 +556,6 @@
         <h1>楽天レビュー収集</h1>
         <div class="header-stats">
           <div class="header-stat">
-            <div id="totalReviews" class="header-stat-value">0</div>
-            <div class="header-stat-label">レビュー数</div>
-          </div>
-          <div class="header-stat">
             <div id="currentPage" class="header-stat-value">0/0</div>
             <div class="header-stat-label">ページ</div>
           </div>
@@ -715,6 +711,15 @@
           <li>アクセスできるユーザー: 全員</li>
           <li>デプロイ後のURLをコピーして上記に貼り付け</li>
         </ol>
+        <h4 style="margin-top: 12px; margin-bottom: 8px; color: #667eea;">GASコードの更新方法</h4>
+        <ol>
+          <li>スプレッドシート → 拡張機能 → Apps Script を開く</li>
+          <li>Code.gs の内容を最新版に置き換え</li>
+          <li>デプロイ → デプロイを管理 → 編集（鉛筆アイコン）</li>
+          <li>バージョン: 「新バージョン」を選択</li>
+          <li>「デプロイ」をクリック</li>
+        </ol>
+        <p style="margin-top: 8px; color: #888;">※URLは変わりません。コード更新後は必ず新バージョンをデプロイしてください。</p>
       </div>
 
       <div id="dataButtons" class="btn-group" style="margin-top: 16px;">

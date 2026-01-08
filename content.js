@@ -23,7 +23,11 @@
             // 商品ページの場合、レビューページに遷移
             const reviewUrl = findReviewPageUrl();
             if (reviewUrl) {
-              log('レビューページに移動します');
+              // 商品IDを取得してログに表示
+              const itemUrlMatch = window.location.href.match(/item\.rakuten\.co\.jp\/[^\/]+\/([^\/\?]+)/);
+              const itemProductId = itemUrlMatch ? itemUrlMatch[1] : '';
+              const prefix = itemProductId ? `[${itemProductId}] ` : '';
+              log(prefix + 'レビューページに移動します');
               // 収集状態を設定してからリダイレクト
               chrome.storage.local.get(['collectionState'], (result) => {
                 const state = result.collectionState || {
@@ -295,7 +299,6 @@
     let author = '匿名';
     let body = '';
     let title = '';
-    let purchaseInfo = '';
     let helpfulCount = 0;
     let variation = ''; // バリエーション（サイズ、カラーなど）
     let age = ''; // 年代
@@ -309,6 +312,7 @@
     const ratingElem = elem.querySelector('[class*="number-wrapper"]');
     const reviewerElem = elem.querySelector('[class*="reviewer-name"]');
     const bodyElem = elem.querySelector('[class*="word-break-break-all"]');
+    const textDisplayElements = elem.querySelectorAll('[class*="text-display"]');
 
     if (ratingElem || reviewerElem || bodyElem) {
       // 新構造: CSS moduleクラスで要素がある場合
@@ -327,10 +331,15 @@
         author = reviewerElem.textContent.trim() || '匿名';
       }
 
-      // タイトルを取得（新構造）
-      const titleElem = elem.querySelector('[class*="review-title"], [class*="title"], h3, h4, [class*="heading"]');
-      if (titleElem) {
-        title = titleElem.textContent.trim();
+      // タイトルを取得（style-boldクラスを持つ要素、ショップコメント除外）
+      for (const el of textDisplayElements) {
+        const className = el.className || '';
+        const elText = el.textContent.trim();
+        if (className.includes('style-bold') && elText.length >= 5 && elText.length < 100 &&
+            !elText.includes('ショップからのコメント')) {
+          title = elText;
+          break;
+        }
       }
 
       // 本文を取得
@@ -354,32 +363,50 @@
         reviewDate = reviewDateMatch[1];
       }
 
-      // バリエーション（サイズ、カラー等）を取得
-      const variationPatterns = [
-        /カラー[：:]\s*([^\s、,]+)/,
-        /サイズ[：:]\s*([^\s、,]+)/,
-        /color[：:]\s*([^\s、,]+)/i,
-        /size[：:]\s*([^\s、,]+)/i,
-        /種類[：:]\s*([^\s、,]+)/,
-        /タイプ[：:]\s*([^\s、,]+)/
-      ];
-
-      const variationParts = [];
-      for (const pattern of variationPatterns) {
-        const match = text.match(pattern);
-        if (match) {
-          variationParts.push(match[0]);
+      // バリエーション（サイズ、カラー等）を取得 - 短いテキストから特定行を抽出
+      for (const el of textDisplayElements) {
+        const className = el.className || '';
+        const elText = el.textContent.trim();
+        if (className.includes('size-small') && elText.length < 100 &&
+            (elText.includes('種類:') || elText.includes('カラー:') ||
+             elText.includes('サイズ:') || elText.includes('タイプ:'))) {
+          const lines = elText.split('\n');
+          const varLine = lines.find(line =>
+            line.includes('種類:') || line.includes('カラー:') ||
+            line.includes('サイズ:') || line.includes('タイプ:')
+          );
+          if (varLine) {
+            variation = varLine.trim();
+          }
+          break;
         }
       }
-      if (variationParts.length > 0) {
-        variation = variationParts.join(' / ');
+
+      // フォールバック: テキストからパターンマッチング
+      if (!variation) {
+        const variationPatterns = [
+          /カラー[：:]\s*([^\s、,\n]+)/,
+          /サイズ[：:]\s*([^\s、,\n]+)/,
+          /種類[：:]\s*([^\s、,\n]+)/,
+          /タイプ[：:]\s*([^\s、,\n]+)/
+        ];
+        const variationParts = [];
+        for (const pattern of variationPatterns) {
+          const match = text.match(pattern);
+          if (match) {
+            variationParts.push(match[0]);
+          }
+        }
+        if (variationParts.length > 0) {
+          variation = variationParts.join(' / ');
+        }
       }
 
-      // バリエーション要素を探す（新構造）
-      if (!variation) {
-        const varElem = elem.querySelector('[class*="variation"], [class*="option"], [class*="sku"]');
-        if (varElem) {
-          variation = varElem.textContent.trim();
+      // ショップ名を商品URLから取得
+      if (productUrl) {
+        const shopMatch = productUrl.match(/item\.rakuten\.co\.jp\/([^\/]+)/);
+        if (shopMatch) {
+          shopName = shopMatch[1];
         }
       }
 
@@ -431,12 +458,6 @@
         if (countMatch) {
           purchaseCount = countMatch[0];
         }
-      }
-
-      // ショップ名を取得
-      const shopElem = elem.querySelector('[class*="shop-name"], [class*="store-name"]');
-      if (shopElem) {
-        shopName = shopElem.textContent.trim();
       }
     } else {
       // テキストベースで抽出（フォールバック）
@@ -511,9 +532,6 @@
         }
       }
 
-      const oldPurchaseElem = elem.querySelector('.revRvwUserEntryPurchase, .purchase-info');
-      purchaseInfo = oldPurchaseElem ? oldPurchaseElem.textContent.trim() : '';
-
       const oldHelpfulElem = elem.querySelector('.revRvwUserEntryHelpful, .helpful-count');
       if (oldHelpfulElem) {
         const helpfulMatch = oldHelpfulElem.textContent.match(/(\d+)/);
@@ -550,7 +568,6 @@
       usage: usage,
       recipient: recipient,
       purchaseCount: purchaseCount,
-      purchaseInfo: purchaseInfo,
       helpfulCount: helpfulCount,
       shopName: shopName,
       pageUrl: window.location.href
