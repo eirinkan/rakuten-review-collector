@@ -2,7 +2,63 @@
  * ポップアップUIのスクリプト（シンプル版）
  */
 
+/**
+ * テーマ管理クラス
+ * ダークモード/ライトモードの切り替えを管理
+ */
+class ThemeManager {
+  constructor() {
+    this.storageKey = 'rakuten-review-theme';
+    this.init();
+  }
+
+  init() {
+    // 保存された設定を読み込み、なければシステム設定に従う
+    const savedTheme = localStorage.getItem(this.storageKey);
+
+    if (savedTheme) {
+      this.setTheme(savedTheme);
+    } else {
+      // システム設定に従う
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      this.setTheme(prefersDark ? 'dark' : 'light');
+    }
+
+    // システム設定変更を監視
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+      if (!localStorage.getItem(this.storageKey)) {
+        this.setTheme(e.matches ? 'dark' : 'light');
+      }
+    });
+
+    // トグルボタンのイベント
+    this.bindToggle();
+  }
+
+  setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    const toggle = document.getElementById('themeToggle');
+    if (toggle) {
+      toggle.checked = theme === 'dark';
+    }
+  }
+
+  bindToggle() {
+    const toggle = document.getElementById('themeToggle');
+    if (toggle) {
+      toggle.addEventListener('change', (e) => {
+        const newTheme = e.target.checked ? 'dark' : 'light';
+        this.setTheme(newTheme);
+        localStorage.setItem(this.storageKey, newTheme);
+      });
+    }
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  // テーマ管理を初期化
+  new ThemeManager();
+
   const pageWarning = document.getElementById('pageWarning');
   const message = document.getElementById('message');
   const rankingMessage = document.getElementById('rankingMessage');
