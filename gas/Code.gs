@@ -113,6 +113,13 @@ function saveReviewsByProduct(ss, reviews) {
     reviewsByProduct[productId].push(review);
   });
 
+  // デバッグ: 商品IDの一覧をログ出力
+  const productIds = Object.keys(reviewsByProduct);
+  Logger.log('=== saveReviewsByProduct デバッグ ===');
+  Logger.log('受信レビュー数: ' + reviews.length);
+  Logger.log('商品ID数: ' + productIds.length);
+  Logger.log('商品ID一覧: ' + productIds.join(', '));
+
   // 各商品のシートに保存
   for (const productId in reviewsByProduct) {
     const productReviews = reviewsByProduct[productId];
@@ -412,11 +419,18 @@ function initializeSpreadsheet() {
   const ss = getSpreadsheet();
   const sheets = ss.getSheets();
 
-  // 最低1つのシートが必要なため、まず新しい空のシートを作成
-  const newSheet = ss.insertSheet('レビュー');
-  addHeader(newSheet);
+  // 「レビュー」シートを取得または作成
+  let reviewSheet = ss.getSheetByName('レビュー');
+  if (reviewSheet) {
+    // 既存の「レビュー」シートをクリアして再利用
+    reviewSheet.clear();
+  } else {
+    // なければ新規作成
+    reviewSheet = ss.insertSheet('レビュー');
+  }
+  addHeader(reviewSheet);
 
-  // 他のすべてのシートを削除
+  // 「レビュー」以外のすべてのシートを削除
   let deletedCount = 0;
   sheets.forEach(sheet => {
     if (sheet.getName() !== 'レビュー') {
@@ -427,7 +441,8 @@ function initializeSpreadsheet() {
 
   ui.alert(
     '✅ 初期化完了',
-    `${deletedCount}個のシートを削除しました。\nスプレッドシートは初期状態に戻りました。`
+    `${deletedCount}個のシートを削除しました。\nスプレッドシートは初期状態に戻りました。`,
+    ui.ButtonSet.OK
   );
 
   Logger.log('スプレッドシートを初期化しました。削除したシート数: ' + deletedCount);
@@ -487,9 +502,7 @@ function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('🛠️ レビュー管理')
     .addItem('📊 スプレッドシートを初期化', 'initializeSpreadsheet')
-    .addItem('🗑️ 空のシートを削除', 'deleteEmptySheets')
     .addItem('🔄 重複レビューを削除', 'removeDuplicates')
-    .addItem('🎨 ヘッダーを赤色に修正', 'fixAllHeaders')
     .addToUi();
 }
 
@@ -595,4 +608,105 @@ function removeDuplicates() {
   });
 
   Logger.log('合計: ' + totalRemoved + '件の重複を削除しました');
+}
+
+/**
+ * デバッグ用：複数商品のレビュー保存テスト
+ * GASエディタで実行してログを確認
+ */
+function debugMultipleProducts() {
+  const testReviews = [
+    {
+      productId: 'product-A',
+      productName: 'テスト商品A',
+      productUrl: 'https://item.rakuten.co.jp/shop/product-A/',
+      rating: 5,
+      title: '商品Aのレビュー1',
+      body: '商品Aのレビュー内容1',
+      author: 'ユーザー1',
+      reviewDate: '2024-01-01'
+    },
+    {
+      productId: 'product-B',
+      productName: 'テスト商品B',
+      productUrl: 'https://item.rakuten.co.jp/shop/product-B/',
+      rating: 4,
+      title: '商品Bのレビュー1',
+      body: '商品Bのレビュー内容1',
+      author: 'ユーザー2',
+      reviewDate: '2024-01-02'
+    },
+    {
+      productId: 'product-A',
+      productName: 'テスト商品A',
+      productUrl: 'https://item.rakuten.co.jp/shop/product-A/',
+      rating: 4,
+      title: '商品Aのレビュー2',
+      body: '商品Aのレビュー内容2',
+      author: 'ユーザー3',
+      reviewDate: '2024-01-03'
+    },
+    {
+      productId: 'product-C',
+      productName: 'テスト商品C',
+      productUrl: 'https://item.rakuten.co.jp/shop/product-C/',
+      rating: 3,
+      title: '商品Cのレビュー1',
+      body: '商品Cのレビュー内容1',
+      author: 'ユーザー4',
+      reviewDate: '2024-01-04'
+    }
+  ];
+
+  const ss = getSpreadsheet();
+  const savedCount = saveReviewsByProduct(ss, testReviews);
+  Logger.log('保存件数: ' + savedCount);
+  Logger.log('シート一覧: ' + ss.getSheets().map(s => s.getName()).join(', '));
+}
+
+/**
+ * デバッグ用：初期化テスト（UIなし）
+ * GASエディタで実行してログを確認
+ */
+function debugInitialize() {
+  const ss = getSpreadsheet();
+  const sheets = ss.getSheets();
+
+  Logger.log('=== デバッグ開始 ===');
+  Logger.log('シート数: ' + sheets.length);
+
+  sheets.forEach(sheet => {
+    Logger.log('シート名: ' + sheet.getName() + ', 行数: ' + sheet.getLastRow());
+  });
+
+  // 「レビュー」シートを確認
+  const reviewSheet = ss.getSheetByName('レビュー');
+  Logger.log('「レビュー」シート存在: ' + (reviewSheet !== null));
+
+  if (reviewSheet) {
+    Logger.log('「レビュー」シートをクリアします');
+    reviewSheet.clear();
+    addHeader(reviewSheet);
+    Logger.log('ヘッダー追加完了');
+  } else {
+    Logger.log('「レビュー」シートを新規作成します');
+    const newSheet = ss.insertSheet('レビュー');
+    addHeader(newSheet);
+    Logger.log('新規作成完了');
+  }
+
+  // 他のシートを削除
+  let deletedCount = 0;
+  const currentSheets = ss.getSheets();
+  currentSheets.forEach(sheet => {
+    const name = sheet.getName();
+    if (name !== 'レビュー') {
+      Logger.log('削除: ' + name);
+      ss.deleteSheet(sheet);
+      deletedCount++;
+    }
+  });
+
+  Logger.log('削除したシート数: ' + deletedCount);
+  Logger.log('=== デバッグ完了 ===');
 }

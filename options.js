@@ -451,11 +451,9 @@ function removeDuplicates() {
     chrome.storage.sync.get(['gasUrl', 'separateSheets', 'separateCsvFiles', 'spreadsheetUrl', 'enableNotification', 'notifyPerProduct'], (result) => {
       if (result.gasUrl) {
         gasUrlInput.value = result.gasUrl;
-        // スプレッドシートモードの場合、CSV/クリアボタンを非表示
-        dataButtons.style.display = 'none';
-      } else {
-        dataButtons.style.display = 'flex';
       }
+      // CSV機能は常に表示（スプレッドシートと併用可能）
+      dataButtons.style.display = 'flex';
       if (separateSheetsCheckbox) {
         separateSheetsCheckbox.checked = result.separateSheets !== false;
       }
