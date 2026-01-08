@@ -119,10 +119,21 @@ cp gas/.clasp.json.example gas/.clasp.json
 # scriptIdを自分のものに変更
 # Apps Script エディタのURL https://script.google.com/d/XXXXX/edit の XXXXX 部分
 
-# デプロイ
+# コードをプッシュ
 cd gas
 clasp push
+
+# デプロイIDを確認
+clasp deployments
+
+# 既存デプロイを更新（URLを変えずにコードを更新）
+clasp deploy --deploymentId <デプロイID>
+
+# または新規デプロイ
+clasp deploy --description "説明文"
 ```
+
+**注意**: `clasp push`だけではウェブアプリは更新されません。必ず`clasp deploy`でデプロイを更新してください。
 
 ## 使い方
 
