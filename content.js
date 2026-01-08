@@ -192,12 +192,15 @@
     // 商品管理番号を取得
     currentProductId = getProductId();
 
-    // 総ページ数から推定レビュー数を保存（収集完了時の検証用）
-    const totalPages = getTotalPages();
-    const estimatedTotal = totalPages > 1 ? totalPages * 30 : 0; // 1ページ約30件
-    chrome.storage.local.set({ expectedReviewTotal: estimatedTotal });
-
-    log('レビュー収集を開始します');
+    // レビュー総数を取得して保存（収集完了時の検証用）
+    const expectedTotal = getTotalReviewCount();
+    if (expectedTotal > 0) {
+      chrome.storage.local.set({ expectedReviewTotal: expectedTotal });
+      log(`レビュー収集を開始します（全${expectedTotal.toLocaleString()}件）`);
+    } else {
+      chrome.storage.local.set({ expectedReviewTotal: 0 });
+      log('レビュー収集を開始します');
+    }
 
     // 現在のページからレビューを収集
     await collectCurrentPage();
@@ -936,46 +939,31 @@
    * @returns {number} レビュー総数（取得できない場合は0）
    */
   function getTotalReviewCount() {
-    // 方法1: ページ上部の「○○件のレビュー」を探す
-    const headerElements = document.querySelectorAll('h1, h2, h3, .review-count, [class*="count"], [class*="total"]');
+    // 方法1: 新UI - メイン商品エリアの「(○○件)」を探す
+    // クラス名 text-container を持つspan要素の最初のもの（メインコンテンツ）
+    const textContainers = document.querySelectorAll('span[class*="text-container"]');
+    for (const elem of textContainers) {
+      const text = elem.textContent.trim();
+      // 「(1,318件)」のような形式にマッチ
+      const match = text.match(/^\(([\d,]+)件\)$/);
+      if (match) {
+        const count = parseInt(match[1].replace(/,/g, ''), 10);
+        if (count > 0 && count < 100000) {
+          return count;
+        }
+      }
+    }
+
+    // 方法2: 旧UI - ページ上部の「○○件のレビュー」を探す
+    const headerElements = document.querySelectorAll('h1, h2, h3, .review-count');
     for (const elem of headerElements) {
       const text = elem.textContent || '';
-      // カンマ区切りの数字に対応（例: 1,318件）
       const match = text.match(/([\d,]+)\s*件/);
       if (match) {
         const count = parseInt(match[1].replace(/,/g, ''), 10);
         if (count > 0 && count < 100000) {
           return count;
         }
-      }
-    }
-
-    // 方法2: body全体から探す（より緩い検索）
-    const bodyText = document.body.textContent || '';
-    // 「レビュー」「評価」の近くにある件数を探す
-    const reviewPatterns = [
-      /レビュー[（(]?\s*([\d,]+)\s*件/,
-      /([\d,]+)\s*件のレビュー/,
-      /全\s*([\d,]+)\s*件/,
-      /レビュー数[：:]\s*([\d,]+)/
-    ];
-
-    for (const pattern of reviewPatterns) {
-      const match = bodyText.match(pattern);
-      if (match) {
-        const count = parseInt(match[1].replace(/,/g, ''), 10);
-        if (count > 0 && count < 100000) {
-          return count;
-        }
-      }
-    }
-
-    // 方法3: 単純な「○○件」を探す（最後の手段）
-    const simpleMatch = bodyText.match(/([\d,]+)件/);
-    if (simpleMatch) {
-      const count = parseInt(simpleMatch[1].replace(/,/g, ''), 10);
-      if (count > 0 && count < 100000) {
-        return count;
       }
     }
 
