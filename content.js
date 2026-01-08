@@ -944,9 +944,9 @@
     const textContainers = document.querySelectorAll('span[class*="text-container"]');
     for (const elem of textContainers) {
       const text = elem.textContent.trim();
-      // 「(1,318件)」のような形式にマッチ
-      const match = text.match(/^\(([\d,]+)件\)$/);
-      if (match) {
+      // 「(1,318件)」のような形式にマッチ（[0-9]を使用）
+      const match = text.match(/([0-9,]+)件/);
+      if (match && text.startsWith('(') && text.endsWith(')')) {
         const count = parseInt(match[1].replace(/,/g, ''), 10);
         if (count > 0 && count < 100000) {
           return count;
@@ -958,7 +958,7 @@
     const headerElements = document.querySelectorAll('h1, h2, h3, .review-count');
     for (const elem of headerElements) {
       const text = elem.textContent || '';
-      const match = text.match(/([\d,]+)\s*件/);
+      const match = text.match(/([0-9,]+)\s*件/);
       if (match) {
         const count = parseInt(match[1].replace(/,/g, ''), 10);
         if (count > 0 && count < 100000) {
