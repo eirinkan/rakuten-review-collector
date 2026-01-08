@@ -18,7 +18,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const queueList = document.getElementById('queueList');
   const startQueueBtn = document.getElementById('startQueueBtn');
+  const stopQueueBtn = document.getElementById('stopQueueBtn');
   const clearQueueBtn = document.getElementById('clearQueueBtn');
+  const copyLogBtn = document.getElementById('copyLogBtn');
 
   const productUrl = document.getElementById('productUrl');
   const rankingCount = document.getElementById('rankingCount');
@@ -52,9 +54,11 @@ document.addEventListener('DOMContentLoaded', () => {
     downloadBtn.addEventListener('click', downloadCSV);
     clearDataBtn.addEventListener('click', clearData);
     startQueueBtn.addEventListener('click', startQueueCollection);
+    stopQueueBtn.addEventListener('click', stopQueueCollection);
     clearQueueBtn.addEventListener('click', clearQueue);
     addToQueueBtn.addEventListener('click', addToQueue);
     clearLogBtn.addEventListener('click', clearLogs);
+    copyLogBtn.addEventListener('click', copyLogs);
 
     // ヘッダーボタンのイベント
     settingsToggleBtn.addEventListener('click', () => {
@@ -107,27 +111,47 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function loadState() {
-    chrome.storage.local.get(['collectionState'], (result) => {
+    chrome.storage.local.get(['collectionState', 'isQueueCollecting', 'collectingItems'], (result) => {
       const state = result.collectionState || {};
+      const isQueueCollecting = result.isQueueCollecting || false;
 
       const hasData = (state.reviewCount || 0) > 0;
       downloadBtn.disabled = !hasData;
       clearDataBtn.disabled = !hasData;
+
+      // 収集中かどうかでボタンを切り替え
+      updateQueueButtons(isQueueCollecting);
     });
   }
 
   function loadQueue() {
-    chrome.storage.local.get(['queue'], (result) => {
+    chrome.storage.local.get(['queue', 'collectingItems'], (result) => {
       const queue = result.queue || [];
-      queueRemaining.textContent = `${queue.length}件`;
-      startQueueBtn.disabled = queue.length === 0;
+      const collectingItems = result.collectingItems || [];
+      const totalCount = queue.length + collectingItems.length;
+      queueRemaining.textContent = `${totalCount}件`;
+      startQueueBtn.disabled = totalCount === 0;
 
-      if (queue.length === 0) {
+      if (totalCount === 0) {
         queueList.innerHTML = '<div class="queue-empty">キューは空です</div>';
         return;
       }
 
-      queueList.innerHTML = queue.map((item, index) => `
+      // 収集中アイテムを先頭に表示
+      const collectingHtml = collectingItems.map(item => `
+        <div class="queue-item collecting">
+          <div class="queue-item-info">
+            <div class="queue-item-title">
+              <span class="collecting-badge">収集中</span>
+              ${escapeHtml(item.title || '商品')}
+            </div>
+            <div class="queue-item-url">${escapeHtml(item.url)}</div>
+          </div>
+        </div>
+      `).join('');
+
+      // 待機中アイテム
+      const waitingHtml = queue.map((item, index) => `
         <div class="queue-item">
           <div class="queue-item-info">
             <div class="queue-item-title">${escapeHtml(item.title || '商品')}</div>
@@ -136,6 +160,8 @@ document.addEventListener('DOMContentLoaded', () => {
           <button class="queue-item-remove" data-index="${index}">×</button>
         </div>
       `).join('');
+
+      queueList.innerHTML = collectingHtml + waitingHtml;
 
       // 削除ボタンのイベント
       queueList.querySelectorAll('.queue-item-remove').forEach(btn => {
@@ -150,7 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.local.get(['logs'], (result) => {
       const logs = result.logs || [];
       if (logs.length === 0) {
-        logContainer.innerHTML = '<div class="log-entry"><span class="time">[--:--:--]</span> 待機中...</div>';
+        logContainer.innerHTML = '';
         return;
       }
 
@@ -166,14 +192,13 @@ document.addEventListener('DOMContentLoaded', () => {
   async function saveSettings() {
     const gasUrl = gasUrlInput.value.trim();
     const separateSheets = separateSheetsCheckbox.checked;
-    const maxConcurrent = parseInt(maxConcurrentSelect.value) || 1;
 
     if (gasUrl && !isValidGasUrl(gasUrl)) {
       showStatus(settingsStatus, 'error', 'URLの形式が正しくありません');
       return;
     }
 
-    chrome.storage.sync.set({ gasUrl, separateSheets, maxConcurrent }, async () => {
+    chrome.storage.sync.set({ gasUrl, separateSheets }, async () => {
       if (chrome.runtime.lastError) {
         showStatus(settingsStatus, 'error', '保存に失敗しました');
         return;
@@ -264,10 +289,53 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.runtime.sendMessage({ action: 'startQueueCollection' }, (response) => {
       if (response && response.success) {
         addLog('キュー一括収集を開始しました', 'success');
+        updateQueueButtons(true);
       } else {
         addLog('開始に失敗: ' + (response?.error || ''), 'error');
       }
     });
+  }
+
+  function stopQueueCollection() {
+    chrome.runtime.sendMessage({ action: 'stopQueueCollection' }, (response) => {
+      if (response && response.success) {
+        addLog('収集を中止しました', 'error');
+        updateQueueButtons(false);
+      } else {
+        addLog('中止に失敗: ' + (response?.error || ''), 'error');
+      }
+    });
+  }
+
+  function copyLogs() {
+    chrome.storage.local.get(['logs'], (result) => {
+      const logs = result.logs || [];
+      if (logs.length === 0) {
+        return;
+      }
+
+      const logText = logs.map(log => `[${log.time}] ${log.text}`).join('\n');
+      navigator.clipboard.writeText(logText).then(() => {
+        // コピー成功のフィードバック
+        const originalTitle = copyLogBtn.title;
+        copyLogBtn.title = 'コピーしました!';
+        setTimeout(() => {
+          copyLogBtn.title = originalTitle;
+        }, 2000);
+      }).catch(err => {
+        console.error('コピーに失敗:', err);
+      });
+    });
+  }
+
+  function updateQueueButtons(isRunning) {
+    if (isRunning) {
+      startQueueBtn.style.display = 'none';
+      stopQueueBtn.style.display = 'inline-flex';
+    } else {
+      startQueueBtn.style.display = 'inline-flex';
+      stopQueueBtn.style.display = 'none';
+    }
   }
 
   async function addToQueue() {

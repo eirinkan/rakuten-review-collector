@@ -247,6 +247,15 @@
       background: #c82333;
     }
 
+    .btn-stop {
+      background: #dc3545;
+      color: white;
+    }
+
+    .btn-stop:hover {
+      background: #c82333;
+    }
+
     .btn-secondary {
       background: #f0f0f0;
       color: #666;
@@ -385,6 +394,28 @@
       margin-bottom: 0;
     }
 
+    .queue-item.collecting {
+      background: #fff3e0;
+      border-color: #ffcc80;
+    }
+
+    .collecting-badge {
+      display: inline-block;
+      background: #ff9800;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      margin-right: 6px;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
     .queue-item-info {
       flex: 1;
       min-width: 0;
@@ -446,6 +477,28 @@
       margin: 0;
       padding: 0;
       border: none;
+    }
+
+    .log-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .icon-btn {
+      background: #f0f0f0;
+      border: none;
+      padding: 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      color: #666;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .icon-btn:hover {
+      background: #e0e0e0;
+      color: #333;
     }
 
     .log-container {
@@ -721,6 +774,7 @@
 
       <div class="btn-group" style="margin-top: 12px;">
         <button id="startQueueBtn" class="btn btn-success" disabled>一括収集開始</button>
+        <button id="stopQueueBtn" class="btn btn-stop" style="display: none;">収集中止</button>
         <button id="clearQueueBtn" class="btn btn-secondary">キュークリア</button>
       </div>
     </div>
@@ -729,11 +783,16 @@
     <div class="card">
       <div class="log-header">
         <h2>ログ</h2>
-        <button id="clearLogBtn" class="btn btn-secondary btn-sm">クリア</button>
+        <div class="log-actions">
+          <button id="copyLogBtn" class="icon-btn" title="ログをコピー">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+          </button>
+          <button id="clearLogBtn" class="icon-btn" title="クリア">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+          </button>
+        </div>
       </div>
-      <div id="logContainer" class="log-container">
-        <div class="log-entry"><span class="time">[--:--:--]</span> 待機中...</div>
-      </div>
+      <div id="logContainer" class="log-container"></div>
     </div>
   </div>
 

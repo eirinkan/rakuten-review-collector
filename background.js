@@ -32,6 +32,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
 
+    case 'stopQueueCollection':
+      stopQueueCollection()
+        .then(() => sendResponse({ success: true }))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
     case 'fetchRanking':
       fetchRankingProducts(message.url, message.count)
         .then(result => sendResponse(result))
@@ -211,12 +217,26 @@ async function handleCollectionComplete(tabId) {
     // タブごとの状態をクリーンアップ
     const stateKey = `collectionState_${tabId}`;
     await chrome.storage.local.remove(stateKey);
+
+    // 収集中リストから削除
+    const collectingResult = await chrome.storage.local.get(['collectingItems']);
+    let collectingItems = collectingResult.collectingItems || [];
+    collectingItems = collectingItems.filter(item => item.tabId !== tabId);
+    await chrome.storage.local.set({ collectingItems });
+
+    // 収集完了したタブを閉じる
+    try {
+      await chrome.tabs.remove(tabId);
+    } catch (e) {
+      // タブが既に閉じられている場合は無視
+    }
   }
 
   // 状態を更新
-  const result = await chrome.storage.local.get(['collectionState', 'queue']);
+  const result = await chrome.storage.local.get(['collectionState', 'queue', 'collectingItems']);
   const state = result.collectionState || {};
   const queue = result.queue || [];
+  const collectingItems = result.collectingItems || [];
 
   state.isRunning = activeCollectionTabs.size > 0;
   await chrome.storage.local.set({ collectionState: state });
@@ -234,6 +254,8 @@ async function handleCollectionComplete(tabId) {
       processNextInQueue();
     }, 3000);
   } else if (activeCollectionTabs.size === 0) {
+    // すべて完了
+    await chrome.storage.local.set({ isQueueCollecting: false, collectingItems: [] });
     log('すべての収集が完了しました', 'success');
   }
 }
@@ -252,12 +274,41 @@ async function startQueueCollection() {
   // 同時収集数は固定値3
   const maxConcurrent = 3;
 
+  // 収集中フラグを立てる
+  await chrome.storage.local.set({ isQueueCollecting: true, collectingItems: [] });
+
   log(`${queue.length}件のキュー収集を開始します（同時${maxConcurrent}件）`, 'success');
 
   // 同時収集数分だけ開始
   for (let i = 0; i < maxConcurrent && i < queue.length; i++) {
     await processNextInQueue();
   }
+}
+
+/**
+ * キュー収集を停止
+ */
+async function stopQueueCollection() {
+  // すべてのアクティブタブに停止メッセージを送信
+  for (const tabId of activeCollectionTabs) {
+    try {
+      await chrome.tabs.sendMessage(tabId, { action: 'stopCollection' });
+      // タブを閉じる
+      await chrome.tabs.remove(tabId);
+    } catch (e) {
+      // タブが既に閉じられている場合は無視
+    }
+  }
+
+  // 状態をクリア
+  activeCollectionTabs.clear();
+  await chrome.storage.local.set({
+    isQueueCollecting: false,
+    collectingItems: []
+  });
+
+  log('すべての収集を停止しました', 'error');
+  forwardToAll({ action: 'queueUpdated' });
 }
 
 /**
@@ -273,19 +324,26 @@ async function processNextInQueue() {
     return;
   }
 
-  const result = await chrome.storage.local.get(['queue']);
+  const result = await chrome.storage.local.get(['queue', 'collectingItems']);
   const queue = result.queue || [];
+  const collectingItems = result.collectingItems || [];
 
   if (queue.length === 0) {
     if (activeCollectionTabs.size === 0) {
+      // すべて完了
+      await chrome.storage.local.set({ isQueueCollecting: false, collectingItems: [] });
       log('キューの処理が完了しました', 'success');
     }
     return;
   }
 
-  const nextItem = queue[0];
-  queue.shift();
-  await chrome.storage.local.set({ queue });
+  const nextItem = queue.shift();
+
+  // 収集中リストに追加
+  nextItem.tabId = null; // 後で設定
+  collectingItems.push(nextItem);
+
+  await chrome.storage.local.set({ queue, collectingItems });
 
   forwardToAll({ action: 'queueUpdated' });
 
@@ -293,6 +351,10 @@ async function processNextInQueue() {
 
   // 新しいタブで商品ページを開いて収集開始（バックグラウンドで開く）
   const tab = await chrome.tabs.create({ url: nextItem.url, active: false });
+
+  // tabIdを収集中アイテムに設定
+  nextItem.tabId = tab.id;
+  await chrome.storage.local.set({ collectingItems });
 
   // アクティブタブとして追跡
   activeCollectionTabs.add(tab.id);
