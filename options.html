@@ -238,6 +238,13 @@
       background: #218838;
     }
 
+    .btn-large {
+      width: 100%;
+      padding: 20px 16px;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
     .btn-danger {
       background: #dc3545;
       color: white;
@@ -772,9 +779,11 @@
         <div class="queue-empty">キューは空です</div>
       </div>
 
-      <div class="btn-group" style="margin-top: 12px;">
-        <button id="startQueueBtn" class="btn btn-success" disabled>一括収集開始</button>
-        <button id="stopQueueBtn" class="btn btn-stop" style="display: none;">収集中止</button>
+      <div style="margin-top: 12px;">
+        <button id="startQueueBtn" class="btn btn-success btn-large" disabled>一括収集開始</button>
+        <button id="stopQueueBtn" class="btn btn-stop btn-large" style="display: none;">収集中止</button>
+      </div>
+      <div style="margin-top: 8px; text-align: right;">
         <button id="clearQueueBtn" class="btn btn-secondary">キュークリア</button>
       </div>
     </div>
