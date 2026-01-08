@@ -373,12 +373,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const logText = logs.map(log => `[${log.time}] ${log.text}`).join('\n');
       navigator.clipboard.writeText(logText).then(() => {
-        // コピー成功のフィードバック
-        const originalTitle = copyLogBtn.title;
+        // コピー成功のフィードバック（色変化）
+        copyLogBtn.style.background = '#28a745';
+        copyLogBtn.style.color = 'white';
         copyLogBtn.title = 'コピーしました!';
         setTimeout(() => {
-          copyLogBtn.title = originalTitle;
-        }, 2000);
+          copyLogBtn.style.background = '';
+          copyLogBtn.style.color = '';
+          copyLogBtn.title = 'ログをコピー';
+        }, 1500);
       }).catch(err => {
         console.error('コピーに失敗:', err);
       });
@@ -472,8 +475,18 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function clearLogs() {
+    // クリア成功のフィードバック（色変化）
+    clearLogBtn.style.background = '#dc3545';
+    clearLogBtn.style.color = 'white';
+    clearLogBtn.title = 'クリアしました!';
+
     chrome.storage.local.set({ logs: [] }, () => {
       loadLogs();
+      setTimeout(() => {
+        clearLogBtn.style.background = '';
+        clearLogBtn.style.color = '';
+        clearLogBtn.title = 'クリア';
+      }, 1500);
     });
   }
 

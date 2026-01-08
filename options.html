@@ -180,6 +180,38 @@
       margin-bottom: 4px;
     }
 
+    .settings-section {
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .settings-section:last-child {
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+
+    .settings-section h3 {
+      font-size: 13px;
+      color: #333;
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+
+    .input-with-btn {
+      display: flex;
+      gap: 8px;
+    }
+
+    .input-with-btn input {
+      flex: 1;
+    }
+
+    .input-with-btn .btn {
+      flex-shrink: 0;
+    }
+
     .form-group input[type="text"],
     .form-group input[type="number"],
     .form-group select {
@@ -656,6 +688,9 @@
           <a id="spreadsheetLink" href="#" target="_blank" class="header-link" style="display: none;" title="スプレッドシートを開く">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"/></svg>
           </a>
+          <button id="downloadBtn" class="header-icon-btn" title="CSVダウンロード" disabled>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+          </button>
           <button id="settingsToggleBtn" class="header-icon-btn" title="出力設定">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
           </button>
@@ -669,53 +704,59 @@
     <!-- 出力設定（折りたたみ） -->
     <div id="settingsCard" class="help-card">
       <h2>出力設定</h2>
-      <div class="form-group">
-        <label>GAS Web App URL</label>
-        <input type="text" id="gasUrl" placeholder="https://script.google.com/macros/s/xxx/exec">
+
+      <!-- データ管理 -->
+      <div class="settings-section">
+        <h3>データ管理</h3>
+        <div id="dataButtons" class="btn-group">
+          <button id="clearDataBtn" class="btn btn-danger" disabled>収集データをクリア</button>
+        </div>
+        <p class="help-text" style="margin-top: 8px;">CSVダウンロードはヘッダーのアイコンから</p>
       </div>
 
-      <label class="checkbox-label">
-        <input type="checkbox" id="separateSheets" checked>
-        <span>商品ごとにシートを分ける</span>
-      </label>
+      <!-- スプレッドシート設定 -->
+      <div class="settings-section">
+        <h3>スプレッドシート出力</h3>
+        <div class="form-group">
+          <label>GAS Web App URL</label>
+          <div class="input-with-btn">
+            <input type="text" id="gasUrl" placeholder="https://script.google.com/macros/s/xxx/exec">
+            <button id="saveSettingsBtn" class="btn btn-primary">保存</button>
+          </div>
+        </div>
 
-      <div class="btn-group" style="margin-top: 12px;">
-        <button id="saveSettingsBtn" class="btn btn-primary">保存</button>
-      </div>
+        <label class="checkbox-label">
+          <input type="checkbox" id="separateSheets" checked>
+          <span>商品ごとにシートを分ける</span>
+        </label>
 
-      <div id="settingsStatus" class="status-message"></div>
+        <div id="settingsStatus" class="status-message"></div>
 
-      <p class="help-text">空欄の場合はCSVモードで動作します</p>
-
-      <button id="gasHelpToggle" class="collapsible">
-        <span id="gasHelpIcon">▶</span> GAS Web App URLの取得方法
-      </button>
-      <div id="gasHelp" class="collapsible-content">
-        <ol>
-          <li>Googleスプレッドシートを作成</li>
-          <li>拡張機能 → Apps Script を開く</li>
-          <li>以下のコードを貼り付け:
-            <br><code>gas/Code.gs</code> の内容をコピー
-          </li>
-          <li>デプロイ → 新しいデプロイ</li>
-          <li>種類: ウェブアプリ</li>
-          <li>アクセスできるユーザー: 全員</li>
-          <li>デプロイ後のURLをコピーして上記に貼り付け</li>
-        </ol>
-        <h4 style="margin-top: 12px; margin-bottom: 8px; color: #BF0000;">GASコードの更新方法</h4>
-        <ol>
-          <li>スプレッドシート → 拡張機能 → Apps Script を開く</li>
-          <li>Code.gs の内容を最新版に置き換え</li>
-          <li>デプロイ → デプロイを管理 → 編集（鉛筆アイコン）</li>
-          <li>バージョン: 「新バージョン」を選択</li>
-          <li>「デプロイ」をクリック</li>
-        </ol>
-        <p style="margin-top: 8px; color: #888;">※URLは変わりません。コード更新後は必ず新バージョンをデプロイしてください。</p>
-      </div>
-
-      <div id="dataButtons" class="btn-group" style="margin-top: 16px;">
-        <button id="downloadBtn" class="btn btn-secondary" disabled>CSVダウンロード</button>
-        <button id="clearDataBtn" class="btn btn-danger" disabled>データクリア</button>
+        <button id="gasHelpToggle" class="collapsible">
+          <span id="gasHelpIcon">▶</span> GAS Web App URLの取得方法
+        </button>
+        <div id="gasHelp" class="collapsible-content">
+          <ol>
+            <li>Googleスプレッドシートを作成</li>
+            <li>拡張機能 → Apps Script を開く</li>
+            <li>以下のコードを貼り付け:
+              <br><code>gas/Code.gs</code> の内容をコピー
+            </li>
+            <li>デプロイ → 新しいデプロイ</li>
+            <li>種類: ウェブアプリ</li>
+            <li>アクセスできるユーザー: 全員</li>
+            <li>デプロイ後のURLをコピーして上記に貼り付け</li>
+          </ol>
+          <h4 style="margin-top: 12px; margin-bottom: 8px; color: #BF0000;">GASコードの更新方法</h4>
+          <ol>
+            <li>スプレッドシート → 拡張機能 → Apps Script を開く</li>
+            <li>Code.gs の内容を最新版に置き換え</li>
+            <li>デプロイ → デプロイを管理 → 編集（鉛筆アイコン）</li>
+            <li>バージョン: 「新バージョン」を選択</li>
+            <li>「デプロイ」をクリック</li>
+          </ol>
+          <p style="margin-top: 8px; color: #888;">※URLは変わりません。コード更新後は必ず新バージョンをデプロイしてください。</p>
+        </div>
       </div>
     </div>
 
