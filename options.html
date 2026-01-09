@@ -1506,6 +1506,42 @@
       margin-bottom: 0;
     }
 
+    /* ビューナビゲーション */
+    .view-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
+
+    .nav-icon-btn {
+      background: var(--bg-glass);
+      border: 1px solid var(--border-glass);
+      color: var(--text-muted);
+      padding: 6px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--transition);
+    }
+
+    .nav-icon-btn:hover {
+      background: var(--bg-glass-hover);
+      color: var(--text-primary);
+    }
+
+    .nav-icon-btn.disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .nav-icon-btn.disabled:hover {
+      background: var(--bg-glass);
+      color: var(--text-muted);
+    }
+
     /* 戻るリンク */
     .back-link {
       background: none;
@@ -1514,7 +1550,6 @@
       font-size: 13px;
       cursor: pointer;
       padding: 4px 8px;
-      margin-left: auto;
       transition: color var(--transition);
     }
 
@@ -1538,6 +1573,44 @@
       20% { opacity: 1; }
       80% { opacity: 1; }
       100% { opacity: 0; }
+    }
+
+    /* キューカードのグレーアウト */
+    .scheduled-queue-card.disabled {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    .scheduled-queue-card.disabled::after {
+      content: 'スプレッドシートURLを設定してください';
+      display: block;
+      font-size: 11px;
+      color: var(--warning);
+      margin-top: 8px;
+      padding: 6px 10px;
+      background: rgba(245, 124, 0, 0.1);
+      border-radius: 4px;
+    }
+
+    .scheduled-queue-card.disabled .scheduled-queue-url-input {
+      pointer-events: auto;
+    }
+
+    /* ナビゲーションボタンのハイライト状態 */
+    .nav-icon-btn.highlight {
+      background: rgba(245, 124, 0, 0.15);
+      border-color: var(--warning);
+      color: var(--warning);
+      animation: pulseHighlight 2s infinite;
+    }
+
+    @keyframes pulseHighlight {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(245, 124, 0, 0.4); }
+      50% { box-shadow: 0 0 0 4px rgba(245, 124, 0, 0); }
+    }
+
+    .nav-icon-btn.highlight:hover {
+      background: rgba(245, 124, 0, 0.25);
     }
   </style>
 </head>
@@ -1576,285 +1649,6 @@
 
     <!-- ========== メインビュー ========== -->
     <div id="main-view" class="view-container active">
-
-    <!-- Settings Card -->
-    <div id="settingsCard" class="help-card">
-      <h2>設定</h2>
-
-      <!-- Notification -->
-      <div class="settings-section">
-        <h3>通知</h3>
-        <label class="checkbox-label">
-          <input type="checkbox" id="enableNotification" checked>
-          <span>収集完了時にデスクトップ通知</span>
-        </label>
-        <label class="checkbox-label" style="margin-top: 8px;">
-          <input type="checkbox" id="notifyPerProduct">
-          <span>商品ごとに通知（全体完了のみの場合はOFF）</span>
-        </label>
-      </div>
-
-      <!-- CSV -->
-      <div class="settings-section">
-        <h3>CSV</h3>
-        <label class="checkbox-label">
-          <input type="checkbox" id="separateCsvFiles" checked>
-          <span>商品ごとにCSVを分ける</span>
-        </label>
-        <div id="dataButtons" class="btn-group" style="margin-top: 8px;">
-          <button id="clearDataBtn" class="btn btn-danger btn-sm" disabled>収集データをクリア</button>
-        </div>
-      </div>
-
-      <!-- Spreadsheet -->
-      <div class="settings-section">
-        <h3>スプレッドシート</h3>
-        <label class="checkbox-label" style="margin-bottom: 24px;">
-          <input type="checkbox" id="separateSheets" checked>
-          <span>商品ごとにシートを分ける</span>
-        </label>
-
-        <h4 style="font-size: 13px; color: var(--text-primary); margin-bottom: 12px;">スプレッドシート連携の設定方法</h4>
-        <div id="gasHelp">
-          <p style="margin-bottom: 16px; color: var(--text-secondary); font-size: 12px;">レビューをGoogleスプレッドシートに自動保存するための設定です。</p>
-
-          <div class="step-card">
-            <div class="step-header">
-              <span class="step-number">1</span>
-              <span class="step-title">スプレッドシートを作成</span>
-            </div>
-            <div class="step-content">
-              Googleドライブで新しいスプレッドシートを作成してください。
-            </div>
-          </div>
-
-          <div class="step-card">
-            <div class="step-header">
-              <span class="step-number">2</span>
-              <span class="step-title">スプレッドシートURLを入力</span>
-            </div>
-            <div class="step-content">
-              作成したスプレッドシートのURLをここに貼り付けてください。
-              <div style="margin-top: 8px;">
-                <input type="text" id="spreadsheetUrlForCode" placeholder="https://docs.google.com/spreadsheets/d/xxxxx/edit" style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border-input); border-radius: 6px; font-size: 12px; color: var(--text-primary);">
-                <div id="spreadsheetIdStatus" style="font-size: 11px; margin-top: 4px;"></div>
-              </div>
-            </div>
-          </div>
-
-          <div class="step-card">
-            <div class="step-header">
-              <span class="step-number">3</span>
-              <span class="step-title">Apps Scriptを開く</span>
-            </div>
-            <div class="step-content">
-              スプレッドシートのメニューから「拡張機能」→「Apps Script」をクリック。
-            </div>
-          </div>
-
-          <div class="step-card">
-            <div class="step-header">
-              <span class="step-number">4</span>
-              <span class="step-title">コードをコピーして貼り付け → 保存</span>
-            </div>
-            <div class="step-content">
-              <ol style="margin: 0 0 0 16px; padding: 0;">
-                <li><code>function myFunction() { }</code> と書かれている部分をクリック</li>
-                <li><strong>Ctrl+A</strong>（Macは⌘+A）で全選択 → <strong>Delete</strong>で削除</li>
-                <li style="margin-bottom: 8px;">下のボタンをクリック
-                  <div style="margin-top: 6px;">
-                    <button id="copyGasCodeBtn" class="copy-btn">📋 コードをコピー</button>
-                    <textarea id="gasCodeArea" readonly style="display: none;"></textarea>
-                  </div>
-                </li>
-                <li><strong>Ctrl+V</strong>（Macは⌘+V）で貼り付け</li>
-                <li>💾アイコン（またはCtrl+S）で保存</li>
-              </ol>
-            </div>
-          </div>
-
-          <div class="step-card">
-            <div class="step-header">
-              <span class="step-number">5</span>
-              <span class="step-title">デプロイ → ウェブアプリのURLを入手</span>
-            </div>
-            <div class="step-content">
-              <ol>
-                <li>右上の「デプロイ」→「新しいデプロイ」をクリック</li>
-                <li>⚙️歯車アイコンをクリック →「ウェブアプリ」を選択</li>
-                <li>「アクセスできるユーザー」を<strong>「全員」</strong>に変更</li>
-                <li>「デプロイ」をクリック</li>
-                <li>Googleアカウントでのアクセスを許可</li>
-                <li>表示された<strong>「ウェブアプリのURL」をコピー</strong></li>
-              </ol>
-            </div>
-          </div>
-
-          <div class="step-card">
-            <div class="step-header">
-              <span class="step-number">6</span>
-              <span class="step-title">ウェブアプリのURLを貼り付けて保存</span>
-            </div>
-            <div class="step-content">
-              <div style="margin-top: 4px;">
-                <div class="input-with-btn">
-                  <input type="text" id="gasUrl" placeholder="https://script.google.com/macros/s/xxx/exec" style="flex: 1; padding: 10px 12px; background: var(--bg-input); border: 1px solid var(--border-input); border-radius: 8px; font-size: 12px; color: var(--text-primary);">
-                  <button id="saveSettingsBtn" class="btn btn-primary">保存</button>
-                </div>
-                <div id="settingsStatus" class="status-message" style="margin-top: 8px;"></div>
-              </div>
-            </div>
-          </div>
-
-          <div class="success-box">
-            <strong>✅ 設定完了後</strong>
-            <ul style="margin: 8px 0 0 16px; padding: 0; font-size: 12px; color: var(--text-secondary); line-height: 1.8;">
-              <li>ヘッダーに📊アイコンが表示され、クリックでスプレッドシートを開けます</li>
-              <li>レビュー収集時に自動でスプレッドシートにも保存されます（CSVダウンロードと併用可能）</li>
-              <li>スプレッドシートを更新すると「🛠️ レビュー管理」メニューが追加されます</li>
-              <li>メニューから「スプレッドシート初期化」「重複レビュー削除」などの機能が使えます</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Help Card -->
-    <div id="helpCard" class="help-card">
-      <h2>ヘルプ</h2>
-      <div class="help-section">
-        <h3>基本的な使い方</h3>
-        <ol>
-          <li><strong>単一商品のレビュー収集:</strong>
-            <br>楽天市場の商品ページまたはレビューページを開き、拡張機能アイコンをクリック → 「収集開始」ボタンを押す
-            <br>※商品ページからは自動でレビューページに遷移します
-          </li>
-          <li><strong>複数商品の一括収集（キュー）:</strong>
-            <br>① 各商品ページで「キューに追加」ボタンを押す
-            <br>② この管理画面で「一括収集開始」をクリック
-            <br>※最大3商品を同時に収集（バックグラウンドの別ウィンドウで実行）
-          </li>
-          <li><strong>ランキングから一括追加:</strong>
-            <br>【方法1】楽天ランキングページを開き、拡張機能アイコンをクリック → 商品数を指定して追加
-            <br>【方法2】この管理画面でランキングURLを入力 → 上位N商品を指定 → 「追加」
-          </li>
-        </ol>
-
-        <h3>データの保存方法</h3>
-        <ul>
-          <li><strong>CSVダウンロード:</strong>
-            <br>ヘッダーの📥アイコンでダウンロード（常に利用可能）
-            <br>「商品ごとにCSVを分ける」ONの場合はZIPファイルで一括ダウンロード
-          </li>
-          <li><strong>スプレッドシート自動保存（推奨）:</strong>
-            <br>ウェブアプリのURLを設定すると、収集時に自動でGoogleスプレッドシートに保存
-            <br>「商品ごとにシートを分ける」ONで商品別にシート作成
-            <br>※CSVダウンロードと併用可能
-          </li>
-        </ul>
-
-        <h3>スプレッドシートのカスタムメニュー</h3>
-        <p>GASコードを設定すると、スプレッドシートに「🛠️ レビュー管理」メニューが追加されます（要更新）</p>
-        <ul>
-          <li><strong>📊 スプレッドシートを初期化:</strong>
-            <br>すべてのシートを削除し、初期化済みの「レビュー」シートを作成
-          </li>
-          <li><strong>🔄 重複レビューを削除:</strong>
-            <br>全シートから重複レビューを検出して削除（本文+投稿者+日付で判定）
-          </li>
-        </ul>
-
-        <h3>収集できるデータ（20項目）</h3>
-        <table>
-          <tr>
-            <td>レビュー日</td>
-            <td>商品管理番号</td>
-            <td>商品名</td>
-            <td>商品URL</td>
-          </tr>
-          <tr>
-            <td>評価（1-5）</td>
-            <td>タイトル</td>
-            <td>本文</td>
-            <td>投稿者</td>
-          </tr>
-          <tr>
-            <td>年代</td>
-            <td>性別</td>
-            <td>注文日</td>
-            <td>バリエーション</td>
-          </tr>
-          <tr>
-            <td>用途</td>
-            <td>贈り先</td>
-            <td>購入回数</td>
-            <td>参考になった数</td>
-          </tr>
-          <tr>
-            <td>ショップからの返信</td>
-            <td>ショップ名</td>
-            <td>レビュー掲載URL</td>
-            <td>収集日時</td>
-          </tr>
-        </table>
-
-        <h3>キーボードショートカット</h3>
-        <ul>
-          <li><strong>Alt + R:</strong> ポップアップを開く（収集開始/停止）</li>
-          <li><strong>Alt + Shift + R:</strong> 管理画面（この画面）を開く</li>
-        </ul>
-
-        <h3>通知設定</h3>
-        <ul>
-          <li><strong>収集完了時にデスクトップ通知:</strong> 全商品の収集が完了した時に通知</li>
-          <li><strong>商品ごとに通知:</strong> 各商品の収集完了時にも通知（大量収集時は OFF 推奨）</li>
-        </ul>
-
-        <h3>対応ページ</h3>
-        <ul>
-          <li><strong>商品ページ:</strong> item.rakuten.co.jp/*</li>
-          <li><strong>レビューページ:</strong> review.rakuten.co.jp/*</li>
-          <li><strong>ランキングページ:</strong> ranking.rakuten.co.jp/*</li>
-        </ul>
-
-        <h3>収集の仕組み</h3>
-        <ul>
-          <li>キュー収集時は最大<strong>3商品を同時に並列処理</strong></li>
-          <li>サーバー負荷軽減のため、ページ間に<strong>3〜6秒のランダム待機</strong></li>
-          <li>収集用の最小化ウィンドウで自動実行（通常の作業を妨げません）</li>
-          <li>各商品の収集完了後、タブは自動で閉じられます</li>
-        </ul>
-
-        <h3>注意事項</h3>
-        <ul>
-          <li><strong>単一収集時:</strong> 収集中のタブを閉じると中断されます</li>
-          <li><strong>キュー収集時:</strong> 収集用ウィンドウを閉じると全て中断されます</li>
-          <li>楽天市場のページ構造変更により、収集できない場合があります</li>
-          <li>大量のレビュー収集には時間がかかります（1ページ約15件、3-6秒/ページ）</li>
-          <li>レビューページから直接収集を開始することも可能です</li>
-        </ul>
-
-        <h3>トラブルシューティング</h3>
-        <ul>
-          <li><strong>「ページをリロードしてください」と表示される:</strong>
-            <br>→ ページをF5でリロードしてから再度収集を開始してください
-          </li>
-          <li><strong>スプレッドシートに保存されない:</strong>
-            <br>→ ウェブアプリのURLが正しいか確認。デプロイ後の「ウェブアプリのURL」を使用
-          </li>
-          <li><strong>カスタムメニューが表示されない:</strong>
-            <br>→ スプレッドシートを更新（Ctrl+R）してください
-          </li>
-          <li><strong>レビューが収集されない:</strong>
-            <br>→ 楽天の新しいページ構造に対応していない可能性。拡張機能の更新を確認
-          </li>
-        </ul>
-
-        <h3>バージョン情報</h3>
-        <p>楽天市場レビュー収集 v1.4.0</p>
-      </div>
-    </div>
-
     <!-- Queue Card -->
     <div class="card">
       <div class="queue-header">
@@ -1927,9 +1721,15 @@
       <div class="card">
         <div class="scheduled-view-header">
           <h2>⏰ 定期収集</h2>
-          <button id="backToMainBtn" class="back-link" title="メイン画面に戻る">
-            ← 戻る
-          </button>
+          <div class="view-nav">
+            <button id="scheduledToSettingsBtn" class="nav-icon-btn" title="設定">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+            </button>
+            <button id="scheduledToHelpBtn" class="nav-icon-btn" title="ヘルプ">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>
+            </button>
+            <button id="backToMainBtn" class="back-link" title="メイン画面に戻る">← 戻る</button>
+          </div>
         </div>
 
         <p class="scheduled-description">保存済みキューを毎日指定時刻に自動収集します。Chromeが起動している必要があります。</p>
@@ -2009,6 +1809,312 @@
         <div id="scheduledLogContainer" class="log-container"></div>
       </div>
     </div><!-- /scheduled-view -->
+
+    <!-- ========== 設定ビュー ========== -->
+    <div id="settings-view" class="view-container">
+      <div class="card">
+        <div class="scheduled-view-header">
+          <h2>⚙️ 設定</h2>
+          <div class="view-nav">
+            <button id="settingsToScheduledBtn" class="nav-icon-btn" title="定期収集">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+            </button>
+            <button id="settingsToHelpBtn" class="nav-icon-btn" title="ヘルプ">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>
+            </button>
+            <button id="settingsBackBtn" class="back-link" title="メイン画面に戻る">← 戻る</button>
+          </div>
+        </div>
+
+        <!-- 通知 -->
+        <div class="settings-section">
+          <h3>通知</h3>
+          <label class="checkbox-label">
+            <input type="checkbox" id="enableNotification" checked>
+            <span>収集完了時にデスクトップ通知</span>
+          </label>
+          <label class="checkbox-label" style="margin-top: 8px;">
+            <input type="checkbox" id="notifyPerProduct">
+            <span>商品ごとに通知（全体完了のみの場合はOFF）</span>
+          </label>
+        </div>
+
+        <!-- CSV -->
+        <div class="settings-section">
+          <h3>CSV</h3>
+          <label class="checkbox-label">
+            <input type="checkbox" id="separateCsvFiles" checked>
+            <span>商品ごとにCSVを分ける</span>
+          </label>
+          <div id="dataButtons" class="btn-group" style="margin-top: 8px;">
+            <button id="clearDataBtn" class="btn btn-danger btn-sm" disabled>収集データをクリア</button>
+          </div>
+        </div>
+
+        <!-- スプレッドシート -->
+        <div class="settings-section">
+          <h3>スプレッドシート</h3>
+          <label class="checkbox-label" style="margin-bottom: 24px;">
+            <input type="checkbox" id="separateSheets" checked>
+            <span>商品ごとにシートを分ける</span>
+          </label>
+
+          <h4 style="font-size: 13px; color: var(--text-primary); margin-bottom: 12px;">スプレッドシート連携の設定方法</h4>
+          <div id="gasHelp">
+            <p style="margin-bottom: 16px; color: var(--text-secondary); font-size: 12px;">レビューをGoogleスプレッドシートに自動保存するための設定です。</p>
+
+            <div class="step-card">
+              <div class="step-header">
+                <span class="step-number">1</span>
+                <span class="step-title">スプレッドシートを作成</span>
+              </div>
+              <div class="step-content">
+                Googleドライブで新しいスプレッドシートを作成してください。
+              </div>
+            </div>
+
+            <div class="step-card">
+              <div class="step-header">
+                <span class="step-number">2</span>
+                <span class="step-title">スプレッドシートURLを入力</span>
+              </div>
+              <div class="step-content">
+                作成したスプレッドシートのURLをここに貼り付けてください。
+                <div style="margin-top: 8px;">
+                  <input type="text" id="spreadsheetUrlForCode" placeholder="https://docs.google.com/spreadsheets/d/xxxxx/edit" style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border-input); border-radius: 6px; font-size: 12px; color: var(--text-primary);">
+                  <div id="spreadsheetIdStatus" style="font-size: 11px; margin-top: 4px;"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="step-card">
+              <div class="step-header">
+                <span class="step-number">3</span>
+                <span class="step-title">Apps Scriptを開く</span>
+              </div>
+              <div class="step-content">
+                スプレッドシートのメニューから「拡張機能」→「Apps Script」をクリック。
+              </div>
+            </div>
+
+            <div class="step-card">
+              <div class="step-header">
+                <span class="step-number">4</span>
+                <span class="step-title">コードをコピーして貼り付け → 保存</span>
+              </div>
+              <div class="step-content">
+                <ol style="margin: 0 0 0 16px; padding: 0;">
+                  <li><code>function myFunction() { }</code> と書かれている部分をクリック</li>
+                  <li><strong>Ctrl+A</strong>（Macは⌘+A）で全選択 → <strong>Delete</strong>で削除</li>
+                  <li style="margin-bottom: 8px;">下のボタンをクリック
+                    <div style="margin-top: 6px;">
+                      <button id="copyGasCodeBtn" class="copy-btn">📋 コードをコピー</button>
+                      <textarea id="gasCodeArea" readonly style="display: none;"></textarea>
+                    </div>
+                  </li>
+                  <li><strong>Ctrl+V</strong>（Macは⌘+V）で貼り付け</li>
+                  <li>💾アイコン（またはCtrl+S）で保存</li>
+                </ol>
+              </div>
+            </div>
+
+            <div class="step-card">
+              <div class="step-header">
+                <span class="step-number">5</span>
+                <span class="step-title">デプロイ → ウェブアプリのURLを入手</span>
+              </div>
+              <div class="step-content">
+                <ol>
+                  <li>右上の「デプロイ」→「新しいデプロイ」をクリック</li>
+                  <li>⚙️歯車アイコンをクリック →「ウェブアプリ」を選択</li>
+                  <li>「アクセスできるユーザー」を<strong>「全員」</strong>に変更</li>
+                  <li>「デプロイ」をクリック</li>
+                  <li>Googleアカウントでのアクセスを許可</li>
+                  <li>表示された<strong>「ウェブアプリのURL」をコピー</strong></li>
+                </ol>
+              </div>
+            </div>
+
+            <div class="step-card">
+              <div class="step-header">
+                <span class="step-number">6</span>
+                <span class="step-title">ウェブアプリのURLを貼り付けて保存</span>
+              </div>
+              <div class="step-content">
+                <div style="margin-top: 4px;">
+                  <div class="input-with-btn">
+                    <input type="text" id="gasUrl" placeholder="https://script.google.com/macros/s/xxx/exec" style="flex: 1; padding: 10px 12px; background: var(--bg-input); border: 1px solid var(--border-input); border-radius: 8px; font-size: 12px; color: var(--text-primary);">
+                    <button id="saveSettingsBtn" class="btn btn-primary">保存</button>
+                  </div>
+                  <div id="settingsStatus" class="status-message" style="margin-top: 8px;"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="success-box">
+              <strong>✅ 設定完了後</strong>
+              <ul style="margin: 8px 0 0 16px; padding: 0; font-size: 12px; color: var(--text-secondary); line-height: 1.8;">
+                <li>ヘッダーに📊アイコンが表示され、クリックでスプレッドシートを開けます</li>
+                <li>レビュー収集時に自動でスプレッドシートにも保存されます（CSVダウンロードと併用可能）</li>
+                <li>スプレッドシートを更新すると「🛠️ レビュー管理」メニューが追加されます</li>
+                <li>メニューから「スプレッドシート初期化」「重複レビュー削除」などの機能が使えます</li>
+                <li><strong>⏰ 定期収集機能</strong>が利用可能になります（保存済みキューを毎日自動収集）</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /settings-view -->
+
+    <!-- ========== ヘルプビュー ========== -->
+    <div id="help-view" class="view-container">
+      <div class="card">
+        <div class="scheduled-view-header">
+          <h2>❓ ヘルプ</h2>
+          <div class="view-nav">
+            <button id="helpToSettingsBtn" class="nav-icon-btn" title="設定">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+            </button>
+            <button id="helpToScheduledBtn" class="nav-icon-btn" title="定期収集">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+            </button>
+            <button id="helpBackBtn" class="back-link" title="メイン画面に戻る">← 戻る</button>
+          </div>
+        </div>
+
+        <div class="help-section">
+          <h3>基本的な使い方</h3>
+          <ol>
+            <li><strong>単一商品のレビュー収集:</strong>
+              <br>楽天市場の商品ページまたはレビューページを開き、拡張機能アイコンをクリック → 「収集開始」ボタンを押す
+              <br>※商品ページからは自動でレビューページに遷移します
+            </li>
+            <li><strong>複数商品の一括収集（キュー）:</strong>
+              <br>① 各商品ページで「キューに追加」ボタンを押す
+              <br>② この管理画面で「一括収集開始」をクリック
+              <br>※最大3商品を同時に収集（バックグラウンドの別ウィンドウで実行）
+            </li>
+            <li><strong>ランキングから一括追加:</strong>
+              <br>【方法1】楽天ランキングページを開き、拡張機能アイコンをクリック → 商品数を指定して追加
+              <br>【方法2】この管理画面でランキングURLを入力 → 上位N商品を指定 → 「追加」
+            </li>
+          </ol>
+
+          <h3>データの保存方法</h3>
+          <ul>
+            <li><strong>CSVダウンロード:</strong>
+              <br>ヘッダーの📥アイコンでダウンロード（常に利用可能）
+              <br>「商品ごとにCSVを分ける」ONの場合はZIPファイルで一括ダウンロード
+            </li>
+            <li><strong>スプレッドシート自動保存（推奨）:</strong>
+              <br>ウェブアプリのURLを設定すると、収集時に自動でGoogleスプレッドシートに保存
+              <br>「商品ごとにシートを分ける」ONで商品別にシート作成
+              <br>※CSVダウンロードと併用可能
+            </li>
+          </ul>
+
+          <h3>スプレッドシートのカスタムメニュー</h3>
+          <p>GASコードを設定すると、スプレッドシートに「🛠️ レビュー管理」メニューが追加されます（要更新）</p>
+          <ul>
+            <li><strong>📊 スプレッドシートを初期化:</strong>
+              <br>すべてのシートを削除し、初期化済みの「レビュー」シートを作成
+            </li>
+            <li><strong>🔄 重複レビューを削除:</strong>
+              <br>全シートから重複レビューを検出して削除（本文+投稿者+日付で判定）
+            </li>
+          </ul>
+
+          <h3>収集できるデータ（20項目）</h3>
+          <table>
+            <tr>
+              <td>レビュー日</td>
+              <td>商品管理番号</td>
+              <td>商品名</td>
+              <td>商品URL</td>
+            </tr>
+            <tr>
+              <td>評価（1-5）</td>
+              <td>タイトル</td>
+              <td>本文</td>
+              <td>投稿者</td>
+            </tr>
+            <tr>
+              <td>年代</td>
+              <td>性別</td>
+              <td>注文日</td>
+              <td>バリエーション</td>
+            </tr>
+            <tr>
+              <td>用途</td>
+              <td>贈り先</td>
+              <td>購入回数</td>
+              <td>参考になった数</td>
+            </tr>
+            <tr>
+              <td>ショップからの返信</td>
+              <td>ショップ名</td>
+              <td>レビュー掲載URL</td>
+              <td>収集日時</td>
+            </tr>
+          </table>
+
+          <h3>キーボードショートカット</h3>
+          <ul>
+            <li><strong>Alt + R:</strong> ポップアップを開く（収集開始/停止）</li>
+            <li><strong>Alt + Shift + R:</strong> 管理画面（この画面）を開く</li>
+          </ul>
+
+          <h3>通知設定</h3>
+          <ul>
+            <li><strong>収集完了時にデスクトップ通知:</strong> 全商品の収集が完了した時に通知</li>
+            <li><strong>商品ごとに通知:</strong> 各商品の収集完了時にも通知（大量収集時は OFF 推奨）</li>
+          </ul>
+
+          <h3>対応ページ</h3>
+          <ul>
+            <li><strong>商品ページ:</strong> item.rakuten.co.jp/*</li>
+            <li><strong>レビューページ:</strong> review.rakuten.co.jp/*</li>
+            <li><strong>ランキングページ:</strong> ranking.rakuten.co.jp/*</li>
+          </ul>
+
+          <h3>収集の仕組み</h3>
+          <ul>
+            <li>キュー収集時は最大<strong>3商品を同時に並列処理</strong></li>
+            <li>サーバー負荷軽減のため、ページ間に<strong>3〜6秒のランダム待機</strong></li>
+            <li>収集用の最小化ウィンドウで自動実行（通常の作業を妨げません）</li>
+            <li>各商品の収集完了後、タブは自動で閉じられます</li>
+          </ul>
+
+          <h3>注意事項</h3>
+          <ul>
+            <li><strong>単一収集時:</strong> 収集中のタブを閉じると中断されます</li>
+            <li><strong>キュー収集時:</strong> 収集用ウィンドウを閉じると全て中断されます</li>
+            <li>楽天市場のページ構造変更により、収集できない場合があります</li>
+            <li>大量のレビュー収集には時間がかかります（1ページ約15件、3-6秒/ページ）</li>
+            <li>レビューページから直接収集を開始することも可能です</li>
+          </ul>
+
+          <h3>トラブルシューティング</h3>
+          <ul>
+            <li><strong>「ページをリロードしてください」と表示される:</strong>
+              <br>→ ページをF5でリロードしてから再度収集を開始してください
+            </li>
+            <li><strong>スプレッドシートに保存されない:</strong>
+              <br>→ ウェブアプリのURLが正しいか確認。デプロイ後の「ウェブアプリのURL」を使用
+            </li>
+            <li><strong>カスタムメニューが表示されない:</strong>
+              <br>→ スプレッドシートを更新（Ctrl+R）してください
+            </li>
+            <li><strong>レビューが収集されない:</strong>
+              <br>→ 楽天の新しいページ構造に対応していない可能性。拡張機能の更新を確認
+            </li>
+          </ul>
+
+          <h3>バージョン情報</h3>
+          <p>楽天市場レビュー収集 v1.4.0</p>
+        </div>
+      </div>
+    </div><!-- /help-view -->
   </div>
 
   <script src="jszip.min.js"></script>

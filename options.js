@@ -86,11 +86,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // ヘッダーボタン
   const settingsToggleBtn = document.getElementById('settingsToggleBtn');
   const helpToggleBtn = document.getElementById('helpToggleBtn');
-  const settingsCard = document.getElementById('settingsCard');
-  const helpCard = document.getElementById('helpCard');
-  const gasHelpToggle = document.getElementById('gasHelpToggle');
-  const gasHelp = document.getElementById('gasHelp');
-  const gasHelpIcon = document.getElementById('gasHelpIcon');
   const gasCodeArea = document.getElementById('gasCodeArea');
   const copyGasCodeBtn = document.getElementById('copyGasCodeBtn');
   const spreadsheetUrlForCode = document.getElementById('spreadsheetUrlForCode');
@@ -105,8 +100,20 @@ document.addEventListener('DOMContentLoaded', () => {
   // ビュー切り替え
   const mainView = document.getElementById('main-view');
   const scheduledView = document.getElementById('scheduled-view');
+  const settingsView = document.getElementById('settings-view');
+  const helpView = document.getElementById('help-view');
   const scheduledViewBtn = document.getElementById('scheduledViewBtn');
   const backToMainBtn = document.getElementById('backToMainBtn');
+
+  // ナビゲーションボタン
+  const scheduledToSettingsBtn = document.getElementById('scheduledToSettingsBtn');
+  const scheduledToHelpBtn = document.getElementById('scheduledToHelpBtn');
+  const settingsToScheduledBtn = document.getElementById('settingsToScheduledBtn');
+  const settingsToHelpBtn = document.getElementById('settingsToHelpBtn');
+  const settingsBackBtn = document.getElementById('settingsBackBtn');
+  const helpToSettingsBtn = document.getElementById('helpToSettingsBtn');
+  const helpToScheduledBtn = document.getElementById('helpToScheduledBtn');
+  const helpBackBtn = document.getElementById('helpBackBtn');
 
   // 定期収集関連
   const scheduledHour = document.getElementById('scheduledHour');
@@ -482,17 +489,33 @@ function removeDuplicates() {
     }
 
     // ヘッダーボタンのイベント
-    settingsToggleBtn.addEventListener('click', () => {
-      settingsCard.classList.toggle('show');
-    });
-    helpToggleBtn.addEventListener('click', () => {
-      helpCard.classList.toggle('show');
-    });
-    if (gasHelpToggle) {
-      gasHelpToggle.addEventListener('click', () => {
-        gasHelp.classList.toggle('show');
-        gasHelpToggle.classList.toggle('open');
-      });
+    settingsToggleBtn.addEventListener('click', showSettingsView);
+    helpToggleBtn.addEventListener('click', showHelpView);
+
+    // ナビゲーションボタンのイベント
+    if (scheduledToSettingsBtn) {
+      scheduledToSettingsBtn.addEventListener('click', showSettingsView);
+    }
+    if (scheduledToHelpBtn) {
+      scheduledToHelpBtn.addEventListener('click', showHelpView);
+    }
+    if (settingsToScheduledBtn) {
+      settingsToScheduledBtn.addEventListener('click', showScheduledView);
+    }
+    if (settingsToHelpBtn) {
+      settingsToHelpBtn.addEventListener('click', showHelpView);
+    }
+    if (settingsBackBtn) {
+      settingsBackBtn.addEventListener('click', showMainView);
+    }
+    if (helpToSettingsBtn) {
+      helpToSettingsBtn.addEventListener('click', showSettingsView);
+    }
+    if (helpToScheduledBtn) {
+      helpToScheduledBtn.addEventListener('click', showScheduledView);
+    }
+    if (helpBackBtn) {
+      helpBackBtn.addEventListener('click', showMainView);
     }
 
     // URL入力時にランキングかどうか判定して件数入力の表示を切り替え、URLカウントを表示
@@ -1409,15 +1432,74 @@ function removeDuplicates() {
   // ビュー切り替え機能
   // ========================================
 
-  function showMainView() {
-    if (mainView) mainView.classList.add('active');
+  function hideAllViews() {
+    if (mainView) mainView.classList.remove('active');
     if (scheduledView) scheduledView.classList.remove('active');
+    if (settingsView) settingsView.classList.remove('active');
+    if (helpView) helpView.classList.remove('active');
+  }
+
+  function showMainView() {
+    hideAllViews();
+    if (mainView) mainView.classList.add('active');
   }
 
   function showScheduledView() {
-    if (mainView) mainView.classList.remove('active');
+    hideAllViews();
     if (scheduledView) scheduledView.classList.add('active');
     loadScheduledSettings();
+    updateScheduledButtonsState();
+  }
+
+  function showSettingsView() {
+    hideAllViews();
+    if (settingsView) settingsView.classList.add('active');
+  }
+
+  function showHelpView() {
+    hideAllViews();
+    if (helpView) helpView.classList.add('active');
+  }
+
+  // 定期収集ボタンのグレーアウト状態を更新
+  function updateScheduledButtonsState() {
+    chrome.storage.sync.get(['gasUrl'], (result) => {
+      const hasGasUrl = result.gasUrl && result.gasUrl.trim() !== '';
+
+      // 定期収集画面の設定ボタンにグレーアウト状態を設定
+      if (scheduledToSettingsBtn) {
+        if (!hasGasUrl) {
+          scheduledToSettingsBtn.classList.add('highlight');
+          scheduledToSettingsBtn.title = '設定（スプレッドシート未設定）';
+        } else {
+          scheduledToSettingsBtn.classList.remove('highlight');
+          scheduledToSettingsBtn.title = '設定';
+        }
+      }
+
+      // キューカードのグレーアウト処理
+      const queueCards = document.querySelectorAll('.scheduled-queue-card');
+      queueCards.forEach(card => {
+        const queueId = card.dataset.id;
+        const toggle = card.querySelector('.scheduled-queue-toggle');
+        const runBtn = card.querySelector('.scheduled-queue-run-btn');
+        const urlInput = card.querySelector('.scheduled-queue-url-input');
+
+        // キュー個別のGAS URLまたはグローバルのGAS URLがあるか
+        const queueGasUrl = urlInput ? urlInput.value.trim() : '';
+        const hasValidUrl = queueGasUrl !== '' || hasGasUrl;
+
+        if (!hasValidUrl) {
+          card.classList.add('disabled');
+          if (toggle) toggle.disabled = true;
+          if (runBtn) runBtn.disabled = true;
+        } else {
+          card.classList.remove('disabled');
+          if (toggle) toggle.disabled = false;
+          if (runBtn) runBtn.disabled = false;
+        }
+      });
+    });
   }
 
   // ========================================
@@ -1518,9 +1600,14 @@ function removeDuplicates() {
         if (saveTimeout) clearTimeout(saveTimeout);
         saveTimeout = setTimeout(() => {
           saveQueueGasUrl(e.target.dataset.queueId, e.target.value, e.target);
+          // グレーアウト状態を更新
+          updateScheduledButtonsState();
         }, 500);
       });
     });
+
+    // 初期表示時にグレーアウト状態を更新
+    updateScheduledButtonsState();
   }
 
   // キューの定期収集ON/OFF切り替え
