@@ -84,6 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const clearLogBtn = document.getElementById('clearLogBtn');
 
   // ヘッダーボタン
+  const headerTitle = document.getElementById('headerTitle');
   const settingsToggleBtn = document.getElementById('settingsToggleBtn');
   const helpToggleBtn = document.getElementById('helpToggleBtn');
   const gasCodeArea = document.getElementById('gasCodeArea');
@@ -463,6 +464,11 @@ function removeDuplicates() {
         }
       }
     });
+
+    // ヘッダータイトルクリックで収集画面に遷移
+    if (headerTitle) {
+      headerTitle.addEventListener('click', showMainView);
+    }
 
     // ヘッダーボタンのイベント（トグル動作）
     settingsToggleBtn.addEventListener('click', () => {

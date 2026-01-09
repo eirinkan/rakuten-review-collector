@@ -598,6 +598,7 @@
       margin: 0;
       padding: 0;
       border: none;
+      line-height: 38px;
     }
 
     .queue-count {
@@ -1787,7 +1788,7 @@
     .checkbox-label-compact input[type="checkbox"] {
       width: 14px;
       height: 14px;
-      accent-color: var(--success);
+      accent-color: #888;
     }
   </style>
 </head>
@@ -1796,7 +1797,7 @@
     <!-- Header -->
     <div class="header">
       <div class="header-top">
-        <h1>楽天レビュー収集</h1>
+        <h1 id="headerTitle" style="cursor: pointer;">楽天レビュー収集</h1>
         <div class="header-actions">
           <a id="spreadsheetLink" href="#" target="_blank" class="header-link" style="display: none;" title="スプレッドシートを開く">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"/></svg>
