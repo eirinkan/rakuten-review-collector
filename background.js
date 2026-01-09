@@ -55,7 +55,7 @@ async function googleLogin() {
 
 
 /**
- * 認証フロー全体を実行（ログイン + 許可チェック + 保存）
+ * 認証フロー全体を実行（ログイン + 保存）
  * @returns {Promise<Object>} 認証結果
  */
 async function authenticate() {
@@ -63,20 +63,7 @@ async function authenticate() {
     // 1. Googleログイン
     const userInfo = await googleLogin();
 
-    // 2. 許可チェック
-    const permissionResult = await checkUserPermission(userInfo.email);
-
-    if (!permissionResult.allowed) {
-      // 許可されていない場合、トークンを無効化
-      await revokeToken();
-      return {
-        success: false,
-        authenticated: false,
-        message: 'このメールアドレスは許可されていません: ' + userInfo.email
-      };
-    }
-
-    // 3. 認証情報を保存
+    // 2. 認証情報を保存
     await chrome.storage.local.set({
       authUser: {
         email: userInfo.email,
