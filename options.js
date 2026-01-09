@@ -51,6 +51,10 @@ class ThemeManager {
 document.addEventListener('DOMContentLoaded', () => {
   // テーマ管理を初期化
   new ThemeManager();
+
+  // クイックスタートガイド（初回表示）
+  initQuickStartGuide();
+
   // DOM要素
   const queueRemaining = document.getElementById('queueRemaining');
   const spreadsheetLink = document.getElementById('spreadsheetLink');
@@ -1484,6 +1488,34 @@ document.addEventListener('DOMContentLoaded', () => {
         action: 'updateScheduledAlarm',
         settings: { queues: enabledQueues }
       });
+    });
+  }
+
+  // クイックスタートガイドの初期化
+  function initQuickStartGuide() {
+    const quickStartKey = 'rakuten-review-quickstart-shown';
+    const overlay = document.getElementById('quickStartOverlay');
+    const closeBtn = document.getElementById('quickStartCloseBtn');
+
+    if (!overlay || !closeBtn) return;
+
+    // 初回表示チェック
+    if (!localStorage.getItem(quickStartKey)) {
+      overlay.style.display = 'flex';
+    }
+
+    // 閉じるボタン
+    closeBtn.addEventListener('click', () => {
+      localStorage.setItem(quickStartKey, 'done');
+      overlay.style.display = 'none';
+    });
+
+    // オーバーレイクリックでも閉じる
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        localStorage.setItem(quickStartKey, 'done');
+        overlay.style.display = 'none';
+      }
     });
   }
 

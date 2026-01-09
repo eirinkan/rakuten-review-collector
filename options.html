@@ -199,6 +199,83 @@
       cursor: default;
     }
 
+    /* Quick Start Guide */
+    .quick-start-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      backdrop-filter: blur(4px);
+    }
+
+    .quick-start-modal {
+      background: var(--bg-card);
+      border-radius: var(--border-radius-lg);
+      padding: 24px;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: var(--shadow-glass);
+      border: 1px solid var(--border-glass);
+    }
+
+    .quick-start-modal h2 {
+      text-align: center;
+      color: var(--text-primary);
+      margin-bottom: 20px;
+      font-size: 1.3em;
+    }
+
+    .quick-start-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .quick-start-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .step-number {
+      background: var(--rakuten-red);
+      color: white;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85em;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+
+    .step-content strong {
+      color: var(--text-primary);
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .step-content p {
+      color: var(--text-secondary);
+      font-size: 0.9em;
+      margin: 0;
+    }
+
+    .quick-start-modal .btn-primary {
+      width: 100%;
+      padding: 12px;
+      font-size: 1em;
+    }
+
     /* Theme Toggle */
     .theme-toggle {
       position: relative;
@@ -2175,6 +2252,44 @@
         </div>
       </div>
     </div><!-- /settings-view -->
+  </div>
+
+  <!-- クイックスタートガイド（初回表示） -->
+  <div id="quickStartOverlay" class="quick-start-overlay" style="display: none;">
+    <div class="quick-start-modal">
+      <h2>はじめに</h2>
+      <div class="quick-start-steps">
+        <div class="quick-start-step">
+          <span class="step-number">1</span>
+          <div class="step-content">
+            <strong>キューに追加</strong>
+            <p>商品URLを入力して「追加」ボタンをクリック</p>
+          </div>
+        </div>
+        <div class="quick-start-step">
+          <span class="step-number">2</span>
+          <div class="step-content">
+            <strong>一括収集</strong>
+            <p>「一括収集開始」で複数商品を同時に収集</p>
+          </div>
+        </div>
+        <div class="quick-start-step">
+          <span class="step-number">3</span>
+          <div class="step-content">
+            <strong>スプレッドシート連携</strong>
+            <p>歯車アイコンからスプレッドシートURLを設定</p>
+          </div>
+        </div>
+        <div class="quick-start-step">
+          <span class="step-number">4</span>
+          <div class="step-content">
+            <strong>データ活用</strong>
+            <p>CSVダウンロードまたはスプレッドシートで分析</p>
+          </div>
+        </div>
+      </div>
+      <button id="quickStartCloseBtn" class="btn btn-primary">始める</button>
+    </div>
   </div>
 
   <script src="jszip.min.js"></script>

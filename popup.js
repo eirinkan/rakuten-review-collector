@@ -124,6 +124,14 @@ document.addEventListener('DOMContentLoaded', () => {
    * メインコンテンツを表示
    */
   function showMainContent(user) {
+    // 初回ログインの場合は管理画面を開く
+    const firstLoginKey = 'rakuten-review-first-login';
+    if (!localStorage.getItem(firstLoginKey)) {
+      localStorage.setItem(firstLoginKey, 'done');
+      chrome.runtime.openOptionsPage();
+      return; // ポップアップは閉じる（管理画面に誘導）
+    }
+
     if (loginScreen) loginScreen.style.display = 'none';
     if (mainContent) mainContent.style.display = 'block';
 
