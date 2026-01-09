@@ -1189,11 +1189,13 @@ document.addEventListener('DOMContentLoaded', () => {
       scheduledQueuesList.innerHTML = '';
       scheduledQueuesList.style.display = 'none';
       if (parentCard) {
-        parentCard.style.paddingBottom = '12px';
+        // 上下対称にして中央揃え
+        parentCard.style.paddingTop = '16px';
+        parentCard.style.paddingBottom = '16px';
       }
       if (queueHeader) {
-        queueHeader.style.marginBottom = '0';
-        queueHeader.style.paddingBottom = '0';
+        queueHeader.style.margin = '0';
+        queueHeader.style.padding = '0';
         queueHeader.style.borderBottom = 'none';
       }
       return;
@@ -1202,11 +1204,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // キューがある場合は表示
     scheduledQueuesList.style.display = 'block';
     if (parentCard) {
+      parentCard.style.paddingTop = '';
       parentCard.style.paddingBottom = '';
     }
     if (queueHeader) {
-      queueHeader.style.marginBottom = '';
-      queueHeader.style.paddingBottom = '';
+      queueHeader.style.margin = '';
+      queueHeader.style.padding = '';
       queueHeader.style.borderBottom = '';
     }
 
