@@ -512,18 +512,6 @@ function removeDuplicates() {
         u.includes('ranking.rakuten.co.jp')
       );
 
-      if (urlCountLabel) {
-        if (validUrls.length > 0) {
-          urlCountLabel.textContent = `${validUrls.length}件のURL`;
-          urlCountLabel.className = 'url-count-label has-urls';
-        } else if (urls.length > 0) {
-          urlCountLabel.textContent = '有効なURLがありません';
-          urlCountLabel.className = 'url-count-label';
-        } else {
-          urlCountLabel.textContent = '';
-          urlCountLabel.className = 'url-count-label';
-        }
-      }
 
       // 追加ボタンの色を変更
       if (addToQueueBtn) {
