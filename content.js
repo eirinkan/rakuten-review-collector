@@ -13,6 +13,7 @@
   let totalPages = 0; // 総ページ数（ログ表示用）
   let incrementalOnly = false; // 差分取得モード
   let lastCollectedDate = null; // 前回収集日
+  let currentQueueName = null; // 定期収集のキュー名
 
   // ページタイプを判定
   const isReviewPage = window.location.hostname === 'review.rakuten.co.jp';
@@ -44,11 +45,18 @@
             // 差分取得パラメータを設定
             incrementalOnly = message.incrementalOnly || false;
             lastCollectedDate = message.lastCollectedDate || null;
+            currentQueueName = message.queueName || null;
 
             // 商品IDを取得してログに表示
             const itemUrlMatch = window.location.href.match(/item\.rakuten\.co\.jp\/[^\/]+\/([^\/\?]+)/);
             const itemProductId = itemUrlMatch ? itemUrlMatch[1] : '';
-            const prefix = itemProductId ? `[${itemProductId}] ` : '';
+            // 定期収集の場合は[キュー名][商品ID]形式
+            let prefix = '';
+            if (currentQueueName && itemProductId) {
+              prefix = `[${currentQueueName}][${itemProductId}] `;
+            } else if (itemProductId) {
+              prefix = `[${itemProductId}] `;
+            }
             log(prefix + 'レビューページに移動します');
             // 収集状態を設定してからリダイレクト
             chrome.storage.local.get(['collectionState'], (result) => {
@@ -64,6 +72,7 @@
               // 差分取得設定を保存
               state.incrementalOnly = incrementalOnly;
               state.lastCollectedDate = lastCollectedDate;
+              state.queueName = currentQueueName;
               chrome.storage.local.set({ collectionState: state }, () => {
                 window.location.href = reviewUrl;
               });
@@ -77,6 +86,7 @@
           // 差分取得パラメータを設定
           incrementalOnly = message.incrementalOnly || false;
           lastCollectedDate = message.lastCollectedDate || null;
+          currentQueueName = message.queueName || null;
           startCollection();
           sendResponse({ success: true });
         }
@@ -1187,7 +1197,13 @@
    * ログをポップアップに送信（商品管理番号・ページ番号を自動プレフィックス）
    */
   function log(text, type = '') {
-    const productPrefix = currentProductId ? `[${currentProductId}] ` : '';
+    // 定期収集の場合は[キュー名][商品ID]形式
+    let productPrefix = '';
+    if (currentQueueName && currentProductId) {
+      productPrefix = `[${currentQueueName}][${currentProductId}] `;
+    } else if (currentProductId) {
+      productPrefix = `[${currentProductId}] `;
+    }
     // ページ情報を追加（総ページ数が設定されている場合のみ）
     const currentPage = getCurrentPageNumber();
     const pagePrefix = totalPages > 0 ? `[${currentPage}/${totalPages}] ` : '';
@@ -1208,6 +1224,7 @@
         // 差分取得設定を復元
         incrementalOnly = state.incrementalOnly || false;
         lastCollectedDate = state.lastCollectedDate || null;
+        currentQueueName = state.queueName || null;
         // 前のページからの続きで自動的に収集を再開
         log('収集を再開します');
         startCollection();

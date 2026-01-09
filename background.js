@@ -349,13 +349,13 @@ async function handleSaveReviews(reviews, tabId = null) {
   const productId = newReviews[0]?.productId || '';
   let prefix = productId ? `[${productId}] ` : '';
 
-  // 定期収集の場合はキュー名を使用
+  // 定期収集の場合は[キュー名][商品ID]形式
   if (tabId) {
     const collectingResult = await chrome.storage.local.get(['collectingItems']);
     const collectingItems = collectingResult.collectingItems || [];
     const currentItem = collectingItems.find(item => item.tabId === tabId);
     if (currentItem?.queueName) {
-      prefix = `[${currentItem.queueName}] `;
+      prefix = `[${currentItem.queueName}][${productId}] `;
     }
   }
 
@@ -997,8 +997,8 @@ async function handleCollectionComplete(tabId) {
     // 商品の収集完了ログを出力
     if (completedItem) {
       const productId = extractProductIdFromUrl(completedItem.url);
-      // 定期収集の場合はキュー名、それ以外は商品管理番号を表示
-      const logPrefix = completedItem.queueName ? `[${completedItem.queueName}]` : `[${productId}]`;
+      // 定期収集の場合は[キュー名][商品ID]形式
+      const logPrefix = completedItem.queueName ? `[${completedItem.queueName}][${productId}]` : `[${productId}]`;
       log(`${logPrefix} 収集が完了しました`, 'success');
       // 商品ごとの通知（設定で有効な場合のみ）
       showNotification('楽天レビュー収集', `${logPrefix} 収集が完了しました`, productId);
@@ -1246,7 +1246,10 @@ async function processNextInQueue() {
 
   forwardToAll({ action: 'queueUpdated' });
 
-  log(`収集中: ${nextItem.title || nextItem.url}`);
+  // 定期収集の場合は[キュー名]を表示
+  const productId = extractProductIdFromUrl(nextItem.url);
+  const queuePrefix = nextItem.queueName ? `[${nextItem.queueName}][${productId}]` : '';
+  log(`${queuePrefix ? queuePrefix + ' ' : ''}収集中: ${nextItem.title || nextItem.url}`);
 
   // 収集用ウィンドウにタブを作成（最小化ウィンドウ内）
   let tab;
@@ -1325,7 +1328,8 @@ async function processNextInQueue() {
         chrome.tabs.sendMessage(tab.id, {
           action: 'startCollection',
           incrementalOnly: nextItem.incrementalOnly || false,
-          lastCollectedDate: lastCollectedDate
+          lastCollectedDate: lastCollectedDate,
+          queueName: nextItem.queueName || null
         }).catch(() => {});
       }, 2000);
     }
