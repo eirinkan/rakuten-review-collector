@@ -59,6 +59,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const dataButtons = document.getElementById('dataButtons');
 
   const gasUrlInput = document.getElementById('gasUrl');
+  const spreadsheetUrlInput = document.getElementById('spreadsheetUrl');
+  const spreadsheetUrlStatus = document.getElementById('spreadsheetUrlStatus');
   const separateSheetsCheckbox = document.getElementById('separateSheets');
   const separateCsvFilesCheckbox = document.getElementById('separateCsvFiles');
   const enableNotificationCheckbox = document.getElementById('enableNotification');
@@ -97,11 +99,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ビュー切り替え
   const mainView = document.getElementById('main-view');
-  const scheduledView = document.getElementById('scheduled-view');
   const settingsView = document.getElementById('settings-view');
   const helpView = document.getElementById('help-view');
-  const scheduledViewBtn = document.getElementById('scheduledViewBtn');
-  const backToMainBtn = document.getElementById('backToMainBtn');
 
   // 戻るボタン
   const settingsBackBtn = document.getElementById('settingsBackBtn');
@@ -115,12 +114,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const addScheduledQueueBtn = document.getElementById('addScheduledQueueBtn');
   const addScheduledQueueDropdown = document.getElementById('addScheduledQueueDropdown');
   const addScheduledQueueList = document.getElementById('addScheduledQueueList');
-
-  // 定期収集ログ関連
-  const scheduledLogCard = document.getElementById('scheduledLogCard');
-  const scheduledLogContainer = document.getElementById('scheduledLogContainer');
-  const copyScheduledLogBtn = document.getElementById('copyScheduledLogBtn');
-  const clearScheduledLogBtn = document.getElementById('clearScheduledLogBtn');
 
   // 現在のスプレッドシートID
   let currentSpreadsheetId = '';
@@ -457,19 +450,6 @@ function removeDuplicates() {
       }
     });
 
-    // ビュー切り替えイベント（トグル動作）
-    if (scheduledViewBtn) {
-      scheduledViewBtn.addEventListener('click', () => {
-        if (currentView === 'scheduled') {
-          showMainView();
-        } else {
-          showScheduledView();
-        }
-      });
-    }
-    if (backToMainBtn) {
-      backToMainBtn.addEventListener('click', showMainView);
-    }
 
     // 定期収集キュー追加ドロップダウン
     if (addScheduledQueueBtn) {
@@ -483,12 +463,6 @@ function removeDuplicates() {
         }
       }
     });
-    if (copyScheduledLogBtn) {
-      copyScheduledLogBtn.addEventListener('click', copyScheduledLogs);
-    }
-    if (clearScheduledLogBtn) {
-      clearScheduledLogBtn.addEventListener('click', clearScheduledLogs);
-    }
 
     // ヘッダーボタンのイベント（トグル動作）
     settingsToggleBtn.addEventListener('click', () => {
@@ -570,7 +544,18 @@ function removeDuplicates() {
       spreadsheetUrlForCode.addEventListener('input', handleSpreadsheetUrlInput);
     }
 
-    // ウェブアプリURL入力（自動保存）
+    // スプレッドシートURL入力（自動保存 - Sheets API直接連携）
+    if (spreadsheetUrlInput) {
+      let spreadsheetUrlSaveTimeout = null;
+      spreadsheetUrlInput.addEventListener('input', () => {
+        if (spreadsheetUrlSaveTimeout) clearTimeout(spreadsheetUrlSaveTimeout);
+        spreadsheetUrlSaveTimeout = setTimeout(() => {
+          saveSpreadsheetUrlAuto();
+        }, 500);
+      });
+    }
+
+    // ウェブアプリURL入力（自動保存 - GAS方式）
     if (gasUrlInput) {
       let gasUrlSaveTimeout = null;
       gasUrlInput.addEventListener('input', () => {
@@ -593,8 +578,14 @@ function removeDuplicates() {
 
   function loadSettings() {
     chrome.storage.sync.get(['gasUrl', 'separateSheets', 'separateCsvFiles', 'spreadsheetUrl', 'enableNotification', 'notifyPerProduct'], (result) => {
-      if (result.gasUrl) {
+      if (result.gasUrl && gasUrlInput) {
         gasUrlInput.value = result.gasUrl;
+      }
+      // スプレッドシートURL（Sheets API直接連携）
+      if (result.spreadsheetUrl && spreadsheetUrlInput) {
+        spreadsheetUrlInput.value = result.spreadsheetUrl;
+        spreadsheetLink.href = result.spreadsheetUrl;
+        spreadsheetLink.style.display = 'inline-flex';
       }
       // CSV機能は常に表示（スプレッドシートと併用可能）
       dataButtons.style.display = 'flex';
@@ -610,11 +601,6 @@ function removeDuplicates() {
       }
       if (notifyPerProductCheckbox) {
         notifyPerProductCheckbox.checked = result.notifyPerProduct === true;
-      }
-
-      if (result.spreadsheetUrl) {
-        spreadsheetLink.href = result.spreadsheetUrl;
-        spreadsheetLink.style.display = 'inline-flex';
       }
     });
   }
@@ -638,7 +624,7 @@ function removeDuplicates() {
       const queue = result.queue || [];
       const collectingItems = result.collectingItems || [];
       const totalCount = queue.length + collectingItems.length;
-      queueRemaining.textContent = `${totalCount}件`;
+      queueRemaining.textContent = `${totalCount}`;
       startQueueBtn.disabled = totalCount === 0;
 
       if (totalCount === 0) {
@@ -700,7 +686,41 @@ function removeDuplicates() {
     });
   }
 
-  // ウェブアプリURLの自動保存
+  // スプレッドシートURLの自動保存（Sheets API直接連携）
+  async function saveSpreadsheetUrlAuto() {
+    const url = spreadsheetUrlInput.value.trim();
+
+    // URLが空の場合はクリア
+    if (!url) {
+      chrome.storage.sync.set({ spreadsheetUrl: '' }, () => {
+        showStatus(spreadsheetUrlStatus, 'info', '設定をクリアしました');
+        spreadsheetLink.style.display = 'none';
+      });
+      return;
+    }
+
+    // URL形式チェック
+    const spreadsheetIdMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    if (!spreadsheetIdMatch) {
+      showStatus(spreadsheetUrlStatus, 'error', 'スプレッドシートURLの形式が正しくありません');
+      return;
+    }
+
+    // 保存
+    chrome.storage.sync.set({ spreadsheetUrl: url }, () => {
+      if (chrome.runtime.lastError) {
+        showStatus(spreadsheetUrlStatus, 'error', '保存に失敗しました');
+        return;
+      }
+
+      showStatus(spreadsheetUrlStatus, 'success', '✓ 保存しました');
+      spreadsheetLink.href = url;
+      spreadsheetLink.style.display = 'inline-flex';
+      showAutoSaveIndicator(spreadsheetUrlInput);
+    });
+  }
+
+  // ウェブアプリURLの自動保存（GAS方式）
   async function saveGasUrlAuto() {
     const gasUrl = gasUrlInput.value.trim();
     const settingsStatus = document.getElementById('settingsStatus');
@@ -1435,7 +1455,6 @@ function removeDuplicates() {
 
   function hideAllViews() {
     if (mainView) mainView.classList.remove('active');
-    if (scheduledView) scheduledView.classList.remove('active');
     if (settingsView) settingsView.classList.remove('active');
     if (helpView) helpView.classList.remove('active');
   }
@@ -1444,14 +1463,6 @@ function removeDuplicates() {
     hideAllViews();
     if (mainView) mainView.classList.add('active');
     currentView = 'main';
-  }
-
-  function showScheduledView() {
-    hideAllViews();
-    if (scheduledView) scheduledView.classList.add('active');
-    currentView = 'scheduled';
-    loadScheduledSettings();
-    updateScheduledButtonsState();
   }
 
   function showSettingsView() {
@@ -1466,33 +1477,9 @@ function removeDuplicates() {
     currentView = 'help';
   }
 
-  // 定期収集ボタンのグレーアウト状態を更新
+  // 定期収集ボタンの状態を更新（グレーアウトなし）
   function updateScheduledButtonsState() {
-    chrome.storage.sync.get(['gasUrl'], (result) => {
-      const globalGasUrl = result.gasUrl && result.gasUrl.trim() !== '';
-
-      // キューカードのグレーアウト処理
-      const queueCards = document.querySelectorAll('.scheduled-queue-card');
-      queueCards.forEach(card => {
-        const toggle = card.querySelector('.scheduled-queue-toggle');
-        const runBtn = card.querySelector('.scheduled-queue-run-btn');
-        const urlInput = card.querySelector('.scheduled-queue-url-input');
-
-        // キュー個別のGAS URLまたはグローバルのGAS URLがあるか
-        const queueGasUrl = urlInput ? urlInput.value.trim() : '';
-        const hasValidUrl = queueGasUrl !== '' || globalGasUrl;
-
-        if (!hasValidUrl) {
-          card.classList.add('disabled');
-          if (toggle) toggle.disabled = true;
-          if (runBtn) runBtn.disabled = true;
-        } else {
-          card.classList.remove('disabled');
-          if (toggle) toggle.disabled = false;
-          if (runBtn) runBtn.disabled = false;
-        }
-      });
-    });
+    // グレーアウト処理を削除済み
   }
 
   // ========================================
@@ -1577,7 +1564,7 @@ function removeDuplicates() {
 
       chrome.storage.local.set({ scheduledQueues }, () => {
         loadScheduledSettings();
-        addScheduledLog(`「${sourceQueue.name}」を定期収集に追加`, 'success');
+        addLog(`「${sourceQueue.name}」を定期収集に追加`, 'success');
         updateScheduledAlarm();
       });
     });
@@ -1655,11 +1642,6 @@ function removeDuplicates() {
                 <span>差分取得（新着のみ）</span>
               </label>
             </div>
-            <div class="scheduled-queue-url-row">
-              <span class="scheduled-queue-url-label">GAS URL:</span>
-              <input type="text" class="scheduled-queue-url-input" data-queue-id="${queue.id}"
-                     value="${escapeHtml(queue.gasUrl || '')}" placeholder="（通常設定を使用）">
-            </div>
             <div class="scheduled-queue-last-run">
               最終実行: ${lastRunText}
             </div>
@@ -1702,16 +1684,6 @@ function removeDuplicates() {
     scheduledQueuesList.querySelectorAll('.scheduled-queue-incremental').forEach(checkbox => {
       checkbox.addEventListener('change', (e) => {
         updateScheduledQueueProperty(e.target.dataset.queueId, 'incrementalOnly', e.target.checked);
-      });
-    });
-
-    scheduledQueuesList.querySelectorAll('.scheduled-queue-url-input').forEach(input => {
-      let saveTimeout = null;
-      input.addEventListener('input', (e) => {
-        if (saveTimeout) clearTimeout(saveTimeout);
-        saveTimeout = setTimeout(() => {
-          updateScheduledQueueProperty(e.target.dataset.queueId, 'gasUrl', e.target.value.trim(), e.target);
-        }, 500);
       });
     });
 
@@ -1761,7 +1733,7 @@ function removeDuplicates() {
       const newQueues = scheduledQueues.filter(q => q.id !== queueId);
       chrome.storage.local.set({ scheduledQueues: newQueues }, () => {
         loadScheduledSettings();
-        addScheduledLog(`「${queue.name}」を定期収集から削除`, 'success');
+        addLog(`「${queue.name}」を定期収集から削除`, 'success');
         updateScheduledAlarm();
       });
     });
@@ -1774,7 +1746,7 @@ function removeDuplicates() {
       const targetQueue = scheduledQueues.find(q => q.id === queueId);
 
       if (!targetQueue || targetQueue.items.length === 0) {
-        addScheduledLog('キューが見つからないか、空です', 'error');
+        addLog('キューが見つからないか、空です', 'error');
         return;
       }
 
@@ -1798,13 +1770,13 @@ function removeDuplicates() {
         });
 
         if (addedCount === 0) {
-          addScheduledLog(`「${targetQueue.name}」は全て収集済みまたはキューに追加済みです`, 'error');
+          addLog(`「${targetQueue.name}」は全て収集済みまたはキューに追加済みです`, 'error');
           return;
         }
 
         chrome.storage.local.set({ queue: currentQueue }, () => {
           loadQueue();
-          addScheduledLog(`「${targetQueue.name}」の収集を開始（${addedCount}件）`, 'success');
+          addLog(`「${targetQueue.name}」の収集を開始（${addedCount}件）`, 'success');
           chrome.runtime.sendMessage({ action: 'startQueueCollection' });
         });
       });
@@ -1837,76 +1809,4 @@ function removeDuplicates() {
     });
   }
 
-  // ========================================
-  // 定期収集ログ機能
-  // ========================================
-
-  function addScheduledLog(text, type = '') {
-    const timestamp = new Date().toLocaleTimeString('ja-JP', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
-
-    const logEntry = document.createElement('div');
-    logEntry.className = 'log-entry' + (type ? ` log-${type}` : '');
-    logEntry.innerHTML = `<span class="log-time">${timestamp}</span><span class="log-text">${escapeHtml(text)}</span>`;
-
-    if (scheduledLogContainer) {
-      scheduledLogContainer.appendChild(logEntry);
-      scheduledLogContainer.scrollTop = scheduledLogContainer.scrollHeight;
-    }
-
-    // ストレージにも保存
-    chrome.storage.local.get(['scheduledLogs'], (result) => {
-      const logs = result.scheduledLogs || [];
-      logs.push({ timestamp: new Date().toISOString(), text, type });
-      // 最新500件のみ保持
-      const trimmedLogs = logs.slice(-500);
-      chrome.storage.local.set({ scheduledLogs: trimmedLogs });
-    });
-  }
-
-  function loadScheduledLogs() {
-    chrome.storage.local.get(['scheduledLogs'], (result) => {
-      const logs = result.scheduledLogs || [];
-      if (scheduledLogContainer) {
-        scheduledLogContainer.innerHTML = '';
-        logs.forEach(log => {
-          const timestamp = new Date(log.timestamp).toLocaleTimeString('ja-JP', {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-          });
-          const logEntry = document.createElement('div');
-          logEntry.className = 'log-entry' + (log.type ? ` log-${log.type}` : '');
-          logEntry.innerHTML = `<span class="log-time">${timestamp}</span><span class="log-text">${escapeHtml(log.text)}</span>`;
-          scheduledLogContainer.appendChild(logEntry);
-        });
-        scheduledLogContainer.scrollTop = scheduledLogContainer.scrollHeight;
-      }
-    });
-  }
-
-  function clearScheduledLogs() {
-    chrome.storage.local.set({ scheduledLogs: [] }, () => {
-      if (scheduledLogContainer) {
-        scheduledLogContainer.innerHTML = '';
-      }
-    });
-  }
-
-  function copyScheduledLogs() {
-    chrome.storage.local.get(['scheduledLogs'], (result) => {
-      const logs = result.scheduledLogs || [];
-      const text = logs.map(log => {
-        const timestamp = new Date(log.timestamp).toLocaleString('ja-JP');
-        return `[${timestamp}] ${log.text}`;
-      }).join('\n');
-
-      navigator.clipboard.writeText(text).then(() => {
-        addScheduledLog('ログをクリップボードにコピーしました', 'success');
-      });
-    });
-  }
 });

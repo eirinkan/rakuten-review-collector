@@ -306,6 +306,8 @@
 
     .help-section h3:first-child {
       margin-top: 0;
+      border-bottom: none;
+      padding-bottom: 0;
     }
 
     .help-section ol,
@@ -346,6 +348,10 @@
       margin-bottom: 20px;
       padding-bottom: 16px;
       border-bottom: 1px solid var(--border-glass);
+    }
+
+    .settings-section:first-child {
+      margin-top: 0;
     }
 
     .settings-section:last-child {
@@ -1124,12 +1130,16 @@
       right: 0;
       margin-top: 8px;
       min-width: 280px;
-      background: var(--bg-card);
+      background: #ffffff;
       border: 1px solid var(--border-glass);
       border-radius: var(--border-radius);
-      box-shadow: var(--shadow-card);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
       z-index: 100;
       overflow: hidden;
+    }
+
+    [data-theme="dark"] .saved-queues-dropdown {
+      background: #2a2a3e;
     }
 
     .saved-queues-dropdown-header {
@@ -1212,12 +1222,16 @@
     .scheduled-view-header {
       display: flex;
       align-items: center;
-      gap: 12px;
+      justify-content: space-between;
+      padding-bottom: 12px;
       margin-bottom: 16px;
+      border-bottom: 1px solid var(--border-glass);
     }
 
     .scheduled-view-header h2 {
       margin: 0;
+      padding-bottom: 0;
+      border-bottom: none;
     }
 
     .scheduled-description {
@@ -1340,37 +1354,6 @@
       padding-top: 12px;
       margin-top: 12px;
       border-top: 1px solid var(--border-glass);
-    }
-
-    .scheduled-queue-url-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .scheduled-queue-url-label {
-      font-size: 13px;
-      color: var(--text-secondary);
-      white-space: nowrap;
-    }
-
-    .scheduled-queue-url-input {
-      flex: 1;
-      padding: 6px 10px;
-      border: 1px solid var(--border-glass);
-      border-radius: 6px;
-      background: var(--bg-input);
-      color: var(--text-primary);
-      font-size: 12px;
-    }
-
-    .scheduled-queue-url-input:focus {
-      outline: none;
-      border-color: var(--success);
-    }
-
-    .scheduled-queue-url-input::placeholder {
-      color: var(--text-muted);
     }
 
     .scheduled-queue-last-run {
@@ -1575,26 +1558,6 @@
       100% { opacity: 0; }
     }
 
-    /* キューカードのグレーアウト */
-    .scheduled-queue-card.disabled {
-      opacity: 0.5;
-      pointer-events: none;
-    }
-
-    .scheduled-queue-card.disabled::after {
-      content: 'スプレッドシートURLを設定してください';
-      display: block;
-      font-size: 11px;
-      color: var(--warning);
-      margin-top: 8px;
-      padding: 6px 10px;
-      background: rgba(245, 124, 0, 0.1);
-      border-radius: 4px;
-    }
-
-    .scheduled-queue-card.disabled .scheduled-queue-url-input {
-      pointer-events: auto;
-    }
 
     /* ナビゲーションボタンのハイライト状態 */
     .nav-icon-btn.highlight {
@@ -1615,12 +1578,18 @@
 
     /* 定期収集追加セクション */
     .scheduled-add-section {
-      margin-bottom: 16px;
+      margin-bottom: 20px;
+    }
+
+    .scheduled-add-section .saved-queues-dropdown-container {
+      display: inline-block;
     }
 
     .scheduled-add-section .btn {
       display: inline-flex;
       align-items: center;
+      padding: 10px 16px;
+      font-size: 13px;
     }
 
     /* 定期収集キューカード改善 */
@@ -1664,21 +1633,11 @@
       <div class="header-top">
         <h1>楽天レビュー収集</h1>
         <div class="header-actions">
-          <div class="theme-toggle">
-            <input type="checkbox" id="themeToggle" class="theme-toggle-input">
-            <label for="themeToggle" class="theme-toggle-label">
-              <span class="theme-icon sun">☀️</span>
-              <span class="theme-icon moon">🌙</span>
-            </label>
-          </div>
           <a id="spreadsheetLink" href="#" target="_blank" class="header-link" style="display: none;" title="スプレッドシートを開く">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"/></svg>
           </a>
           <button id="downloadBtn" class="header-icon-btn" title="CSVダウンロード" disabled>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-          </button>
-          <button id="scheduledViewBtn" class="header-icon-btn" title="定期収集">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
           </button>
           <button id="settingsToggleBtn" class="header-icon-btn" title="設定">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
@@ -1695,9 +1654,8 @@
     <!-- Queue Card -->
     <div class="card">
       <div class="queue-header">
-        <h2>キュー</h2>
+        <h2>通常</h2>
         <div style="display: flex; align-items: center; gap: 8px;">
-          <span id="queueRemaining" class="queue-count">0件</span>
           <div class="saved-queues-dropdown-container">
             <button id="loadSavedQueuesBtn" class="icon-btn" title="保存済みキュー">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/></svg>
@@ -1733,13 +1691,41 @@
       </div>
       <div id="addStatus" class="status-message"></div>
 
-      <div style="margin-top: 8px; margin-bottom: 8px;">
-        <button id="startQueueBtn" class="btn btn-success btn-large" style="width: 100%;" disabled>一括収集開始</button>
+      <div style="margin-top: 3px; margin-bottom: 3px;">
+        <button id="startQueueBtn" class="btn btn-success btn-large" style="width: 100%;" disabled>一括収集開始・<span id="queueRemaining">0</span>件</button>
         <button id="stopQueueBtn" class="btn btn-stop btn-large" style="width: 100%; display: none;">収集中止</button>
       </div>
 
       <!-- Queue List -->
       <div id="queueList" class="queue-list"></div>
+    </div>
+
+    <!-- 定期収集 Card -->
+    <div class="card">
+      <div class="queue-header">
+        <h2>定期</h2>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div class="saved-queues-dropdown-container">
+            <button id="addScheduledQueueBtn" class="icon-btn" title="保存キューから追加">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+            </button>
+            <div id="addScheduledQueueDropdown" class="saved-queues-dropdown" style="display: none;">
+              <div class="saved-queues-dropdown-header">追加する保存キューを選択</div>
+              <div id="addScheduledQueueList" class="saved-queues-dropdown-list">
+                <div class="saved-queues-empty">保存済みキューがありません</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 定期収集キュー一覧 -->
+      <div id="scheduledQueuesList" class="scheduled-queues-list">
+        <div class="scheduled-queues-empty">
+          定期収集キューがありません。<br>
+          「+」で保存キューから追加してください。
+        </div>
+      </div>
     </div>
 
     <!-- Log Card -->
@@ -1759,57 +1745,6 @@
     </div>
     </div><!-- /main-view -->
 
-    <!-- ========== 定期収集ビュー ========== -->
-    <div id="scheduled-view" class="view-container">
-      <div class="card">
-        <div class="scheduled-view-header">
-          <h2>⏰ 定期収集</h2>
-          <button id="backToMainBtn" class="back-link" title="メイン画面に戻る">← 戻る</button>
-        </div>
-
-        <p class="scheduled-description">保存済みキューを毎日指定時刻に自動収集します。Chromeが起動している必要があります。</p>
-
-        <!-- 定期収集キュー追加 -->
-        <div class="scheduled-add-section">
-          <div class="saved-queues-dropdown-container">
-            <button id="addScheduledQueueBtn" class="btn btn-primary">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-              保存キューから追加
-            </button>
-            <div id="addScheduledQueueDropdown" class="saved-queues-dropdown" style="display: none;">
-              <div class="saved-queues-dropdown-header">追加する保存キューを選択</div>
-              <div id="addScheduledQueueList" class="saved-queues-dropdown-list">
-                <div class="saved-queues-empty">保存済みキューがありません</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 定期収集キュー一覧 -->
-        <div id="scheduledQueuesList" class="scheduled-queues-list">
-          <div class="scheduled-queues-empty">
-            定期収集キューがありません。<br>
-            「保存キューから追加」で追加してください。
-          </div>
-        </div>
-      </div>
-
-      <!-- 定期収集ログカード -->
-      <div id="scheduledLogCard" class="card">
-        <div class="log-header">
-          <h2>定期収集ログ</h2>
-          <div class="log-actions">
-            <button id="copyScheduledLogBtn" class="icon-btn" title="ログをコピー">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-            </button>
-            <button id="clearScheduledLogBtn" class="icon-btn" title="クリア">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-            </button>
-          </div>
-        </div>
-        <div id="scheduledLogContainer" class="log-container"></div>
-      </div>
-    </div><!-- /scheduled-view -->
 
     <!-- ========== 設定ビュー ========== -->
     <div id="settings-view" class="view-container">
@@ -1832,6 +1767,15 @@
           </label>
         </div>
 
+        <!-- テーマ -->
+        <div class="settings-section">
+          <h3>テーマ</h3>
+          <label class="checkbox-label">
+            <input type="checkbox" id="themeToggle">
+            <span>ダークモード</span>
+          </label>
+        </div>
+
         <!-- CSV -->
         <div class="settings-section">
           <h3>CSV</h3>
@@ -1847,111 +1791,11 @@
         <!-- スプレッドシート -->
         <div class="settings-section">
           <h3>スプレッドシート</h3>
-          <label class="checkbox-label" style="margin-bottom: 24px;">
+
+          <label class="checkbox-label" style="margin-bottom: 16px;">
             <input type="checkbox" id="separateSheets" checked>
             <span>商品ごとにシートを分ける</span>
           </label>
-
-          <h4 style="font-size: 13px; color: var(--text-primary); margin-bottom: 12px;">スプレッドシート連携の設定方法</h4>
-          <div id="gasHelp">
-            <p style="margin-bottom: 16px; color: var(--text-secondary); font-size: 12px;">レビューをGoogleスプレッドシートに自動保存するための設定です。</p>
-
-            <div class="step-card">
-              <div class="step-header">
-                <span class="step-number">1</span>
-                <span class="step-title">スプレッドシートを作成</span>
-              </div>
-              <div class="step-content">
-                Googleドライブで新しいスプレッドシートを作成してください。
-              </div>
-            </div>
-
-            <div class="step-card">
-              <div class="step-header">
-                <span class="step-number">2</span>
-                <span class="step-title">スプレッドシートURLを入力</span>
-              </div>
-              <div class="step-content">
-                作成したスプレッドシートのURLをここに貼り付けてください。
-                <div style="margin-top: 8px;">
-                  <input type="text" id="spreadsheetUrlForCode" placeholder="https://docs.google.com/spreadsheets/d/xxxxx/edit" style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border-input); border-radius: 6px; font-size: 12px; color: var(--text-primary);">
-                  <div id="spreadsheetIdStatus" style="font-size: 11px; margin-top: 4px;"></div>
-                </div>
-              </div>
-            </div>
-
-            <div class="step-card">
-              <div class="step-header">
-                <span class="step-number">3</span>
-                <span class="step-title">Apps Scriptを開く</span>
-              </div>
-              <div class="step-content">
-                スプレッドシートのメニューから「拡張機能」→「Apps Script」をクリック。
-              </div>
-            </div>
-
-            <div class="step-card">
-              <div class="step-header">
-                <span class="step-number">4</span>
-                <span class="step-title">コードをコピーして貼り付け → 保存</span>
-              </div>
-              <div class="step-content">
-                <ol style="margin: 0 0 0 16px; padding: 0;">
-                  <li><code>function myFunction() { }</code> と書かれている部分をクリック</li>
-                  <li><strong>Ctrl+A</strong>（Macは⌘+A）で全選択 → <strong>Delete</strong>で削除</li>
-                  <li style="margin-bottom: 8px;">下のボタンをクリック
-                    <div style="margin-top: 6px;">
-                      <button id="copyGasCodeBtn" class="copy-btn">📋 コードをコピー</button>
-                      <textarea id="gasCodeArea" readonly style="display: none;"></textarea>
-                    </div>
-                  </li>
-                  <li><strong>Ctrl+V</strong>（Macは⌘+V）で貼り付け</li>
-                  <li>💾アイコン（またはCtrl+S）で保存</li>
-                </ol>
-              </div>
-            </div>
-
-            <div class="step-card">
-              <div class="step-header">
-                <span class="step-number">5</span>
-                <span class="step-title">デプロイ → ウェブアプリのURLを入手</span>
-              </div>
-              <div class="step-content">
-                <ol>
-                  <li>右上の「デプロイ」→「新しいデプロイ」をクリック</li>
-                  <li>⚙️歯車アイコンをクリック →「ウェブアプリ」を選択</li>
-                  <li>「アクセスできるユーザー」を<strong>「全員」</strong>に変更</li>
-                  <li>「デプロイ」をクリック</li>
-                  <li>Googleアカウントでのアクセスを許可</li>
-                  <li>表示された<strong>「ウェブアプリのURL」をコピー</strong></li>
-                </ol>
-              </div>
-            </div>
-
-            <div class="step-card">
-              <div class="step-header">
-                <span class="step-number">6</span>
-                <span class="step-title">ウェブアプリのURLを貼り付け</span>
-              </div>
-              <div class="step-content">
-                <div style="margin-top: 4px;">
-                  <input type="text" id="gasUrl" placeholder="https://script.google.com/macros/s/xxx/exec" style="width: 100%; padding: 10px 12px; background: var(--bg-input); border: 1px solid var(--border-input); border-radius: 8px; font-size: 12px; color: var(--text-primary);">
-                  <div id="settingsStatus" class="status-message" style="margin-top: 8px;"></div>
-                </div>
-              </div>
-            </div>
-
-            <div class="success-box">
-              <strong>✅ 設定完了後</strong>
-              <ul style="margin: 8px 0 0 16px; padding: 0; font-size: 12px; color: var(--text-secondary); line-height: 1.8;">
-                <li>ヘッダーに📊アイコンが表示され、クリックでスプレッドシートを開けます</li>
-                <li>レビュー収集時に自動でスプレッドシートにも保存されます（CSVダウンロードと併用可能）</li>
-                <li>スプレッドシートを更新すると「🛠️ レビュー管理」メニューが追加されます</li>
-                <li>メニューから「スプレッドシート初期化」「重複レビュー削除」などの機能が使えます</li>
-                <li><strong>⏰ 定期収集機能</strong>が利用可能になります（保存済みキューを毎日自動収集）</li>
-              </ul>
-            </div>
-          </div>
         </div>
       </div>
     </div><!-- /settings-view -->
