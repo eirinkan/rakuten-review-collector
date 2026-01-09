@@ -421,10 +421,12 @@ function removeDuplicates() {
     helpToggleBtn.addEventListener('click', () => {
       helpCard.classList.toggle('show');
     });
-    gasHelpToggle.addEventListener('click', () => {
-      gasHelp.classList.toggle('show');
-      gasHelpToggle.classList.toggle('open');
-    });
+    if (gasHelpToggle) {
+      gasHelpToggle.addEventListener('click', () => {
+        gasHelp.classList.toggle('show');
+        gasHelpToggle.classList.toggle('open');
+      });
+    }
 
     // URL入力時にランキングかどうか判定して件数入力の表示を切り替え、URLカウントを表示
     productUrl.addEventListener('input', () => {
