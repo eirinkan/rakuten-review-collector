@@ -1575,12 +1575,7 @@ function removeDuplicates() {
     if (!scheduledQueuesList) return;
 
     if (scheduledQueues.length === 0) {
-      scheduledQueuesList.innerHTML = `
-        <div class="scheduled-queues-empty">
-          定期収集キューがありません。<br>
-          「保存キューから追加」で追加してください。
-        </div>
-      `;
+      scheduledQueuesList.innerHTML = '';
       return;
     }
 

@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
   "name": "楽天市場レビュー収集",
-  "version": "1.4.0",
+  "version": "1.4.1",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAo1d1u9c1bNW5ykBQ8Byc6M8x6DdBOk02MfMKWyxVOBrQyFbTr4tyDMXTKHKBBZqqEaEOmm4z7+GfLU3uSvSPDZUkem8+iB4+couYiSziZt0yzslJvGOg4tr5t7Wzd24ecxeAZ6HMm93H5jEFzzfPOMnGLJ82yU4jR1CTOsmMLVyDiz2+MFm3V+mM5cPBce72N3NanlZm+K9/laxd+Va/tdFqdZ2Sr+WDRG2d6M0chrBJmU89cQRrZIaJvH9c+KkO1NINMVhPTssQ7LkU1T1snNgFFOUzWG6BGcTgAmD/CWOtswMXz5i3BWLFvhHWZ0+TSl8/9IbIebK00AlnMZpWHwIDAQAB",
   "description": "楽天市場の商品レビューを収集してスプレッドシートに保存またはCSVダウンロードします",
   "permissions": [
     "storage",
@@ -17,7 +18,8 @@
     "client_id": "1045774191284-j6bkvvi8pe78tp353prob7ouqm5kmo3g.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/userinfo.profile"
+      "https://www.googleapis.com/auth/userinfo.profile",
+      "https://www.googleapis.com/auth/spreadsheets"
     ]
   },
   "commands": {
@@ -38,7 +40,8 @@
     "https://review.rakuten.co.jp/*",
     "https://item.rakuten.co.jp/*",
     "https://ranking.rakuten.co.jp/*",
-    "https://script.google.com/*"
+    "https://script.google.com/*",
+    "https://sheets.googleapis.com/*"
   ],
   "action": {
     "default_popup": "popup.html",

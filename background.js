@@ -318,31 +318,36 @@ async function handleSaveReviews(reviews, tabId = null) {
   // 重複を除外してローカルストレージに保存
   const newReviews = await saveToLocalStorage(reviews);
 
-  // 新規レビューがない場合はGASへの送信をスキップ
+  // 新規レビューがない場合はスプレッドシートへの送信をスキップ
   if (newReviews.length === 0) {
     return;
   }
 
-  // GAS URLを取得（タブ固有のURL > グローバル設定の順で優先）
+  const { separateSheets, spreadsheetUrl, gasUrl: globalGasUrl } = await chrome.storage.sync.get(['separateSheets', 'spreadsheetUrl', 'gasUrl']);
+
+  // タブ固有のGAS URLを取得
   let gasUrl = null;
   if (tabId && tabGasUrls.has(tabId)) {
     gasUrl = tabGasUrls.get(tabId);
   }
-
-  // タブ固有のURLがない場合はグローバル設定を使用
   if (!gasUrl) {
-    const settings = await chrome.storage.sync.get(['gasUrl']);
-    gasUrl = settings.gasUrl;
+    gasUrl = globalGasUrl;
   }
 
-  const { separateSheets } = await chrome.storage.sync.get(['separateSheets']);
+  const productId = newReviews[0]?.productId || '';
+  const prefix = productId ? `[${productId}] ` : '';
 
-  if (gasUrl) {
+  // 優先順位: スプレッドシートURL（Sheets API直接） > GAS URL
+  if (spreadsheetUrl) {
+    try {
+      await sendToSheets(spreadsheetUrl, newReviews, separateSheets !== false);
+      log(prefix + 'スプレッドシートに保存しました');
+    } catch (error) {
+      log(`スプレッドシートへの保存に失敗: ${error.message}`, 'error');
+    }
+  } else if (gasUrl) {
     try {
       await sendToGas(gasUrl, newReviews, separateSheets !== false);
-      // 商品IDをログに表示
-      const productId = newReviews[0]?.productId || '';
-      const prefix = productId ? `[${productId}] ` : '';
       log(prefix + 'スプレッドシートに保存しました');
     } catch (error) {
       log(`スプレッドシートへの保存に失敗: ${error.message}`, 'error');
@@ -450,6 +455,173 @@ async function sendToGas(gasUrl, reviews, separateSheets = true) {
   });
 
   return true;
+}
+
+/**
+ * ===== Google Sheets API 直接書き込み =====
+ */
+
+/**
+ * スプレッドシートURLからIDを抽出
+ */
+function extractSpreadsheetId(url) {
+  const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  return match ? match[1] : null;
+}
+
+/**
+ * レビューを商品ごとにグループ化
+ */
+function groupReviewsByProduct(reviews) {
+  return reviews.reduce((acc, review) => {
+    const key = review.productId || 'その他';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(review);
+    return acc;
+  }, {});
+}
+
+/**
+ * シートが存在するか確認し、なければ作成
+ */
+async function ensureSheetExists(token, spreadsheetId, sheetName) {
+  const response = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error?.message || 'スプレッドシートの情報取得に失敗しました');
+  }
+
+  const data = await response.json();
+  const sheets = data.sheets || [];
+  const sheetExists = sheets.some(sheet => sheet.properties.title === sheetName);
+
+  if (!sheetExists) {
+    const createResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          requests: [{
+            addSheet: {
+              properties: { title: sheetName }
+            }
+          }]
+        })
+      }
+    );
+
+    if (!createResponse.ok) {
+      const error = await createResponse.json();
+      throw new Error(error.error?.message || 'シートの作成に失敗しました');
+    }
+  }
+}
+
+/**
+ * シートにデータを追加
+ */
+async function appendToSheet(token, spreadsheetId, sheetName, reviews) {
+  await ensureSheetExists(token, spreadsheetId, sheetName);
+
+  // データを行形式に変換
+  const values = reviews.map(review => [
+    review.reviewDate || '', review.productId || '', review.productName || '',
+    review.productUrl || '', review.rating || '', review.title || '', review.body || '',
+    review.author || '', review.age || '', review.gender || '', review.orderDate || '',
+    review.variation || '', review.usage || '', review.recipient || '',
+    review.purchaseCount || '', review.helpfulCount || 0, review.shopReply || '',
+    review.shopName || '', review.pageUrl || '', review.collectedAt || ''
+  ]);
+
+  // ヘッダー確認
+  const encodedSheetName = encodeURIComponent(sheetName);
+  const headerResponse = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A1:T1`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
+  const headerData = await headerResponse.json();
+  if (!headerData.values || headerData.values.length === 0) {
+    // ヘッダーがない場合は追加
+    const headers = [
+      'レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文',
+      '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先',
+      '購入回数', '参考になった数', 'ショップからの返信', 'ショップ名', 'レビュー掲載URL', '収集日時'
+    ];
+    await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A1:T1?valueInputOption=RAW`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ values: [headers] })
+      }
+    );
+  }
+
+  // データを追加
+  const response = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A:T:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ values })
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error?.message || 'スプレッドシートへの書き込みに失敗しました');
+  }
+}
+
+/**
+ * Sheets APIを使ってスプレッドシートに直接書き込み
+ */
+async function sendToSheets(spreadsheetUrl, reviews, separateSheets = true) {
+  const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
+  if (!spreadsheetId) {
+    throw new Error('無効なスプレッドシートURLです');
+  }
+
+  // OAuthトークンを取得
+  const token = await new Promise((resolve, reject) => {
+    chrome.identity.getAuthToken({ interactive: false }, (token) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve(token);
+      }
+    });
+  });
+
+  if (!token) {
+    throw new Error('認証が必要です。先にGoogleでログインしてください。');
+  }
+
+  if (separateSheets) {
+    // 商品ごとにシートを分ける
+    const reviewsByProduct = groupReviewsByProduct(reviews);
+    for (const [productId, productReviews] of Object.entries(reviewsByProduct)) {
+      await appendToSheet(token, spreadsheetId, productId, productReviews);
+    }
+  } else {
+    // 全て同じシートに保存
+    await appendToSheet(token, spreadsheetId, 'レビュー', reviews);
+  }
 }
 
 /**
