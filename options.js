@@ -717,7 +717,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const rankingUrl = urls.find(u => u.includes('ranking.rakuten.co.jp'));
     if (rankingUrl && urls.length === 1) {
       const count = parseInt(rankingCount.value) || 10;
-      showStatus(addStatus, 'info', 'ランキングを取得中...');
       addToQueueBtn.disabled = true;
 
       try {
@@ -729,6 +728,7 @@ document.addEventListener('DOMContentLoaded', () => {
           addToQueueBtn.disabled = false;
           if (response && response.success) {
             loadQueue();
+            showStatus(addStatus, 'success', `${response.addedCount}件追加しました`);
             addLog(`ランキングから${response.addedCount}件をキューに追加`, 'success');
             productUrl.value = '';
             rankingCountWrapper.style.display = 'none';
