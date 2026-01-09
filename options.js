@@ -58,7 +58,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const clearDataBtn = document.getElementById('clearDataBtn');
   const dataButtons = document.getElementById('dataButtons');
 
-  const gasUrlInput = document.getElementById('gasUrl');
   const spreadsheetUrlInput = document.getElementById('spreadsheetUrl');
   const spreadsheetUrlStatus = document.getElementById('spreadsheetUrlStatus');
   const separateSheetsCheckbox = document.getElementById('separateSheets');
@@ -560,17 +559,6 @@ function removeDuplicates() {
       });
     }
 
-    // ウェブアプリURL入力（自動保存 - GAS方式）
-    if (gasUrlInput) {
-      let gasUrlSaveTimeout = null;
-      gasUrlInput.addEventListener('input', () => {
-        if (gasUrlSaveTimeout) clearTimeout(gasUrlSaveTimeout);
-        gasUrlSaveTimeout = setTimeout(() => {
-          saveGasUrlAuto();
-        }, 500);
-      });
-    }
-
     // バックグラウンドからのメッセージ
     chrome.runtime.onMessage.addListener(handleMessage);
 
@@ -582,10 +570,7 @@ function removeDuplicates() {
   }
 
   function loadSettings() {
-    chrome.storage.sync.get(['gasUrl', 'separateSheets', 'separateCsvFiles', 'spreadsheetUrl', 'enableNotification', 'notifyPerProduct'], (result) => {
-      if (result.gasUrl && gasUrlInput) {
-        gasUrlInput.value = result.gasUrl;
-      }
+    chrome.storage.sync.get(['separateSheets', 'separateCsvFiles', 'spreadsheetUrl', 'enableNotification', 'notifyPerProduct'], (result) => {
       // スプレッドシートURL（Sheets API直接連携）
       if (result.spreadsheetUrl && spreadsheetUrlInput) {
         spreadsheetUrlInput.value = result.spreadsheetUrl;
@@ -697,6 +682,35 @@ function removeDuplicates() {
 
     // URLが空の場合はクリア
     if (!url) {
+      // 有効な定期キューで、個別スプレッドシートが未設定のものをチェック
+      const result = await chrome.storage.local.get(['scheduledQueues']);
+      const scheduledQueues = result.scheduledQueues || [];
+      const affectedQueues = scheduledQueues.filter(q => q.enabled && !q.spreadsheetUrl);
+
+      if (affectedQueues.length > 0) {
+        const queueNames = affectedQueues.map(q => `・${q.name}`).join('\n');
+        const confirmed = confirm(
+          `以下の定期収集キューはスプレッドシートが設定されていないため、無効になります。\n\n${queueNames}\n\n続行しますか？`
+        );
+
+        if (!confirmed) {
+          // キャンセル：元のURLに戻す
+          const syncResult = await chrome.storage.sync.get(['spreadsheetUrl']);
+          spreadsheetUrlInput.value = syncResult.spreadsheetUrl || '';
+          return;
+        }
+
+        // 確認OK：影響を受けるキューを無効化
+        const updatedQueues = scheduledQueues.map(q => {
+          if (q.enabled && !q.spreadsheetUrl) {
+            return { ...q, enabled: false };
+          }
+          return q;
+        });
+        await chrome.storage.local.set({ scheduledQueues: updatedQueues });
+        renderScheduledQueues(); // UIを更新
+      }
+
       chrome.storage.sync.set({ spreadsheetUrl: '' }, () => {
         showStatus(spreadsheetUrlStatus, 'info', '設定をクリアしました');
         spreadsheetLink.style.display = 'none';
@@ -723,53 +737,6 @@ function removeDuplicates() {
       spreadsheetLink.style.display = 'inline-flex';
       showAutoSaveIndicator(spreadsheetUrlInput);
     });
-  }
-
-  // ウェブアプリURLの自動保存（GAS方式）
-  async function saveGasUrlAuto() {
-    const gasUrl = gasUrlInput.value.trim();
-    const settingsStatus = document.getElementById('settingsStatus');
-
-    if (gasUrl && !isValidGasUrl(gasUrl)) {
-      showStatus(settingsStatus, 'error', 'URLの形式が正しくありません');
-      return;
-    }
-
-    chrome.storage.sync.set({ gasUrl }, async () => {
-      if (chrome.runtime.lastError) {
-        showStatus(settingsStatus, 'error', '保存に失敗しました');
-        return;
-      }
-
-      if (gasUrl) {
-        // 接続テスト
-        showStatus(settingsStatus, 'info', '接続テスト中...');
-        try {
-          const response = await fetch(gasUrl, { method: 'GET', mode: 'cors' });
-          const data = await response.json();
-
-          if (data.success) {
-            showStatus(settingsStatus, 'success', '✓ 接続成功・保存完了');
-            if (data.spreadsheetUrl) {
-              chrome.storage.sync.set({ spreadsheetUrl: data.spreadsheetUrl });
-              spreadsheetLink.href = data.spreadsheetUrl;
-              spreadsheetLink.style.display = 'inline-flex';
-            }
-          } else {
-            showStatus(settingsStatus, 'error', '接続失敗');
-          }
-        } catch (e) {
-          showStatus(settingsStatus, 'success', '✓ 保存しました');
-        }
-      } else {
-        spreadsheetLink.style.display = 'none';
-        showStatus(settingsStatus, 'info', 'URLが空のため、CSVモードになります');
-      }
-    });
-  }
-
-  function isValidGasUrl(url) {
-    return url.startsWith('https://script.google.com/macros/s/') && url.includes('/exec');
   }
 
   // スプレッドシートURLからIDを抽出
@@ -1681,12 +1648,14 @@ function removeDuplicates() {
 
     // イベントリスナー
     scheduledQueuesList.querySelectorAll('.scheduled-queue-toggle').forEach(toggle => {
-      toggle.addEventListener('change', async (e) => {
+      toggle.addEventListener('click', async (e) => {
         const queueId = e.target.dataset.queueId;
-        const isEnabled = e.target.checked;
+        const willBeEnabled = !e.target.checked; // クリック後の状態
 
         // オンにする場合、スプレッドシートが設定されているかチェック
-        if (isEnabled) {
+        if (willBeEnabled) {
+          e.preventDefault(); // デフォルトの動作を止める
+
           const result = await chrome.storage.local.get(['scheduledQueues']);
           const scheduledQueues = result.scheduledQueues || [];
           const queue = scheduledQueues.find(q => q.id === queueId);
@@ -1697,13 +1666,17 @@ function removeDuplicates() {
 
           // どちらも設定されていない場合は警告
           if (!queueSpreadsheetUrl && !globalSpreadsheetUrl) {
-            e.target.checked = false;
             alert('スプレッドシートが設定されていません。\n\n定期収集を有効にするには、このキューの「スプレッドシート」欄にURLを入力するか、設定画面で通常収集用のスプレッドシートを設定してください。');
             return;
           }
-        }
 
-        updateScheduledQueueProperty(queueId, 'enabled', isEnabled);
+          // 検証OK、手動でオンにする
+          e.target.checked = true;
+          updateScheduledQueueProperty(queueId, 'enabled', true);
+        } else {
+          // オフにする場合はそのまま
+          updateScheduledQueueProperty(queueId, 'enabled', false);
+        }
       });
     });
 
@@ -1751,24 +1724,53 @@ function removeDuplicates() {
   }
 
   // 定期収集キューのプロパティを更新
-  function updateScheduledQueueProperty(queueId, property, value, inputElement = null) {
-    chrome.storage.local.get(['scheduledQueues'], (result) => {
-      const scheduledQueues = result.scheduledQueues || [];
-      const queue = scheduledQueues.find(q => q.id === queueId);
-      if (queue) {
-        queue[property] = value;
-        chrome.storage.local.set({ scheduledQueues }, () => {
-          if (property === 'enabled') {
-            const card = scheduledQueuesList.querySelector(`.scheduled-queue-card[data-id="${queueId}"]`);
-            if (card) card.classList.toggle('enabled', value);
-          }
-          if (inputElement) {
-            showAutoSaveIndicator(inputElement);
-          }
+  async function updateScheduledQueueProperty(queueId, property, value, inputElement = null) {
+    const result = await chrome.storage.local.get(['scheduledQueues']);
+    const scheduledQueues = result.scheduledQueues || [];
+    const queue = scheduledQueues.find(q => q.id === queueId);
+
+    if (!queue) return;
+
+    // 個別スプレッドシートURLが削除される場合のチェック
+    if (property === 'spreadsheetUrl' && !value && queue.enabled) {
+      const syncResult = await chrome.storage.sync.get(['spreadsheetUrl']);
+      const globalSpreadsheetUrl = syncResult.spreadsheetUrl || '';
+
+      // グローバルもない場合は確認
+      if (!globalSpreadsheetUrl) {
+        const confirmed = confirm(
+          `「${queue.name}」の保存先スプレッドシートがなくなります。\n\nこのキューの定期収集を無効にしますか？`
+        );
+
+        if (confirmed) {
+          // 確認OK：キューを無効化
+          queue.spreadsheetUrl = '';
+          queue.enabled = false;
+          await chrome.storage.local.set({ scheduledQueues });
+          renderScheduledQueues(); // UIを更新
           updateScheduledAlarm();
-        });
+          return;
+        } else {
+          // キャンセル：元の値に戻す
+          if (inputElement) {
+            inputElement.value = queue.spreadsheetUrl || '';
+          }
+          return;
+        }
       }
-    });
+    }
+
+    queue[property] = value;
+    await chrome.storage.local.set({ scheduledQueues });
+
+    if (property === 'enabled') {
+      const card = scheduledQueuesList.querySelector(`.scheduled-queue-card[data-id="${queueId}"]`);
+      if (card) card.classList.toggle('enabled', value);
+    }
+    if (inputElement) {
+      showAutoSaveIndicator(inputElement);
+    }
+    updateScheduledAlarm();
   }
 
   // 定期収集キューの時刻を更新
