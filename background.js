@@ -840,6 +840,17 @@ async function processNextInQueue() {
     }
   });
 
+  // 共通のcollectionStateもリセット（レビュー蓄積を防ぐ）
+  await chrome.storage.local.set({
+    collectionState: {
+      isRunning: true,
+      reviewCount: 0,
+      pageCount: 0,
+      totalPages: 0,
+      reviews: []
+    }
+  });
+
   // ページ読み込み完了後に収集開始を指示
   chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
     if (tabId === tab.id && info.status === 'complete') {
@@ -900,6 +911,17 @@ async function startSingleCollection(productInfo, tabId) {
       totalPages: 0,
       reviews: [],
       tabId: tabId
+    }
+  });
+
+  // 共通のcollectionStateもリセット（レビュー蓄積を防ぐ）
+  await chrome.storage.local.set({
+    collectionState: {
+      isRunning: true,
+      reviewCount: 0,
+      pageCount: 0,
+      totalPages: 0,
+      reviews: []
     }
   });
 

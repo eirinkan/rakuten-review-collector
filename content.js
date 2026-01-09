@@ -10,6 +10,7 @@
   let isCollecting = false;
   let shouldStop = false;
   let currentProductId = ''; // 現在の商品管理番号
+  let totalPages = 0; // 総ページ数（ログ表示用）
 
   // ページタイプを判定
   const isReviewPage = window.location.hostname === 'review.rakuten.co.jp';
@@ -196,9 +197,12 @@
     const expectedTotal = getTotalReviewCount();
     if (expectedTotal > 0) {
       chrome.storage.local.set({ expectedReviewTotal: expectedTotal });
+      // 総ページ数を計算（1ページ15件）
+      totalPages = Math.ceil(expectedTotal / 15);
       log(`レビュー収集を開始します（全${expectedTotal.toLocaleString()}件）`);
     } else {
       chrome.storage.local.set({ expectedReviewTotal: 0 });
+      totalPages = 0;
       log('レビュー収集を開始します');
     }
 
@@ -1059,11 +1063,14 @@
   }
 
   /**
-   * ログをポップアップに送信（商品管理番号を自動プレフィックス）
+   * ログをポップアップに送信（商品管理番号・ページ番号を自動プレフィックス）
    */
   function log(text, type = '') {
-    const prefix = currentProductId ? `[${currentProductId}] ` : '';
-    const fullText = prefix + text;
+    const productPrefix = currentProductId ? `[${currentProductId}] ` : '';
+    // ページ情報を追加（総ページ数が設定されている場合のみ）
+    const currentPage = getCurrentPageNumber();
+    const pagePrefix = totalPages > 0 ? `[${currentPage}/${totalPages}] ` : '';
+    const fullText = productPrefix + pagePrefix + text;
     console.log(`[楽天レビュー収集] ${fullText}`);
     chrome.runtime.sendMessage({
       action: 'log',

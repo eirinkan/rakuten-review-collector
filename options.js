@@ -1149,11 +1149,6 @@ function removeDuplicates() {
       const logs = result.logs || [];
       logs.push({ time, text, type });
 
-      // 最新100件のみ保持
-      if (logs.length > 100) {
-        logs.splice(0, logs.length - 100);
-      }
-
       chrome.storage.local.set({ logs }, () => {
         loadLogs();
       });

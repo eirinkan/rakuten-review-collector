@@ -507,11 +507,7 @@
 
     <!-- ログイン画面 -->
     <div id="loginScreen" class="login-screen" style="display: none;">
-      <div class="login-logo">🛒</div>
       <div class="login-title">楽天レビュー収集</div>
-      <div class="login-description">
-        ご利用にはGoogleアカウントでの<br>ログインが必要です
-      </div>
       <button id="loginBtn" class="btn btn-google">
         <svg viewBox="0 0 24 24">
           <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -521,6 +517,9 @@
         </svg>
         Googleでログイン
       </button>
+      <div class="login-description">
+        ご利用には、開発者から承認済みの<br>Googleアカウントが必要です
+      </div>
       <div id="loginError" class="login-error"></div>
     </div>
 
