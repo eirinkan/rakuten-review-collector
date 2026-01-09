@@ -279,6 +279,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
 
+    case 'updateScheduledAlarm':
+      updateScheduledAlarm(message.settings)
+        .then(() => sendResponse({ success: true }))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
     case 'startSingleCollection':
       startSingleCollection(message.productInfo, message.tabId)
         .then(() => sendResponse({ success: true }))
@@ -566,6 +572,12 @@ async function handleCollectionComplete(tabId) {
       log(`[${productId}] 収集が完了しました`, 'success');
       // 商品ごとの通知（設定で有効な場合のみ）
       showNotification('楽天レビュー収集', `[${productId}] 収集が完了しました`, productId);
+
+      // 最終収集日を保存（差分取得用）
+      const lcResult = await chrome.storage.local.get(['productLastCollected']);
+      const productLastCollected = lcResult.productLastCollected || {};
+      productLastCollected[productId] = new Date().toISOString().split('T')[0]; // YYYY-MM-DD形式
+      await chrome.storage.local.set({ productLastCollected });
     }
 
     // キュー収集の場合のみタブを閉じる（単一収集ではユーザーがページに留まる）
@@ -855,8 +867,21 @@ async function processNextInQueue() {
   chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
     if (tabId === tab.id && info.status === 'complete') {
       chrome.tabs.onUpdated.removeListener(listener);
-      setTimeout(() => {
-        chrome.tabs.sendMessage(tab.id, { action: 'startCollection' }).catch(() => {});
+      setTimeout(async () => {
+        // 差分取得の設定を取得
+        let lastCollectedDate = null;
+        if (nextItem.incrementalOnly) {
+          const productId = extractProductIdFromUrl(nextItem.url);
+          const lcResult = await chrome.storage.local.get(['productLastCollected']);
+          const productLastCollected = lcResult.productLastCollected || {};
+          lastCollectedDate = productLastCollected[productId] || null;
+        }
+
+        chrome.tabs.sendMessage(tab.id, {
+          action: 'startCollection',
+          incrementalOnly: nextItem.incrementalOnly || false,
+          lastCollectedDate: lastCollectedDate
+        }).catch(() => {});
       }, 2000);
     }
   });
@@ -1089,5 +1114,122 @@ chrome.windows.onRemoved.addListener((windowId) => {
       });
       forwardToAll({ action: 'queueUpdated' });
     }
+  }
+});
+
+// ========================================
+// 定期収集機能
+// ========================================
+
+const SCHEDULED_ALARM_NAME = 'scheduledCollection';
+
+/**
+ * 定期収集アラームを設定/更新
+ * @param {Object} settings - 定期収集設定
+ */
+async function updateScheduledAlarm(settings) {
+  // 既存のアラームをクリア
+  await chrome.alarms.clear(SCHEDULED_ALARM_NAME);
+
+  if (!settings.enabled || !settings.targetQueueId) {
+    console.log('定期収集アラームを無効化');
+    return;
+  }
+
+  // 次の実行時刻を計算
+  const [hours, minutes] = (settings.time || '07:00').split(':').map(Number);
+  const now = new Date();
+  const nextRun = new Date(now);
+  nextRun.setHours(hours, minutes, 0, 0);
+
+  // 既に今日の時刻を過ぎていたら明日に設定
+  if (nextRun <= now) {
+    nextRun.setDate(nextRun.getDate() + 1);
+  }
+
+  const delayInMinutes = (nextRun.getTime() - now.getTime()) / 1000 / 60;
+
+  // アラームを設定（毎日繰り返し）
+  await chrome.alarms.create(SCHEDULED_ALARM_NAME, {
+    delayInMinutes: delayInMinutes,
+    periodInMinutes: 24 * 60  // 24時間ごと
+  });
+
+  console.log(`定期収集アラームを設定: 次回 ${nextRun.toLocaleString('ja-JP')}`);
+}
+
+/**
+ * 定期収集を実行
+ */
+async function runScheduledCollection() {
+  console.log('定期収集を開始');
+
+  const result = await chrome.storage.local.get(['scheduledCollection', 'savedQueues']);
+  const settings = result.scheduledCollection || {};
+  const savedQueues = result.savedQueues || [];
+
+  if (!settings.enabled || !settings.targetQueueId) {
+    console.log('定期収集が無効または対象キューが未設定');
+    return;
+  }
+
+  const targetQueue = savedQueues.find(q => q.id === settings.targetQueueId);
+  if (!targetQueue || targetQueue.items.length === 0) {
+    console.log('対象キューが見つからないか空');
+    return;
+  }
+
+  // キューに追加
+  const queueResult = await chrome.storage.local.get(['queue']);
+  const currentQueue = queueResult.queue || [];
+
+  let addedCount = 0;
+  targetQueue.items.forEach(item => {
+    const exists = currentQueue.some(q => q.url === item.url);
+    if (!exists) {
+      currentQueue.push({
+        url: item.url,
+        title: item.title,
+        addedAt: new Date().toISOString(),
+        scheduledRun: true,
+        incrementalOnly: settings.incrementalOnly
+      });
+      addedCount++;
+    }
+  });
+
+  if (addedCount === 0) {
+    console.log('追加するアイテムがありません（全て重複）');
+    return;
+  }
+
+  await chrome.storage.local.set({ queue: currentQueue });
+
+  // 収集開始
+  log(`定期収集開始: 「${targetQueue.name}」（${addedCount}件）`, 'success');
+  forwardToAll({ action: 'queueUpdated' });
+
+  await startQueueCollection();
+
+  // 実行記録を更新
+  settings.lastRun = new Date().toISOString();
+  await chrome.storage.local.set({ scheduledCollection: settings });
+}
+
+// アラームリスナー
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === SCHEDULED_ALARM_NAME) {
+    runScheduledCollection().catch(error => {
+      console.error('定期収集エラー:', error);
+      log('定期収集でエラーが発生しました: ' + error.message, 'error');
+    });
+  }
+});
+
+// 拡張機能起動時に定期収集設定を復元
+chrome.storage.local.get(['scheduledCollection'], (result) => {
+  const settings = result.scheduledCollection;
+  if (settings && settings.enabled) {
+    updateScheduledAlarm(settings).catch(console.error);
   }
 });

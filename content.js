@@ -11,6 +11,8 @@
   let shouldStop = false;
   let currentProductId = ''; // 現在の商品管理番号
   let totalPages = 0; // 総ページ数（ログ表示用）
+  let incrementalOnly = false; // 差分取得モード
+  let lastCollectedDate = null; // 前回収集日
 
   // ページタイプを判定
   const isReviewPage = window.location.hostname === 'review.rakuten.co.jp';
@@ -39,6 +41,10 @@
           // 商品ページの場合、レビューページに遷移
           const reviewUrl = findReviewPageUrl();
           if (reviewUrl) {
+            // 差分取得パラメータを設定
+            incrementalOnly = message.incrementalOnly || false;
+            lastCollectedDate = message.lastCollectedDate || null;
+
             // 商品IDを取得してログに表示
             const itemUrlMatch = window.location.href.match(/item\.rakuten\.co\.jp\/[^\/]+\/([^\/\?]+)/);
             const itemProductId = itemUrlMatch ? itemUrlMatch[1] : '';
@@ -55,6 +61,9 @@
                 logs: []
               };
               state.isRunning = true;
+              // 差分取得設定を保存
+              state.incrementalOnly = incrementalOnly;
+              state.lastCollectedDate = lastCollectedDate;
               chrome.storage.local.set({ collectionState: state }, () => {
                 window.location.href = reviewUrl;
               });
@@ -65,6 +74,9 @@
           }
         } else {
           // レビューページの場合、収集開始
+          // 差分取得パラメータを設定
+          incrementalOnly = message.incrementalOnly || false;
+          lastCollectedDate = message.lastCollectedDate || null;
           startCollection();
           sendResponse({ success: true });
         }
@@ -199,15 +211,33 @@
       chrome.storage.local.set({ expectedReviewTotal: expectedTotal });
       // 総ページ数を計算（1ページ15件）
       totalPages = Math.ceil(expectedTotal / 15);
-      log(`レビュー収集を開始します（全${expectedTotal.toLocaleString()}件）`);
+      if (incrementalOnly && lastCollectedDate) {
+        log(`差分収集を開始します（前回: ${lastCollectedDate}、全${expectedTotal.toLocaleString()}件中新着のみ）`);
+      } else {
+        log(`レビュー収集を開始します（全${expectedTotal.toLocaleString()}件）`);
+      }
     } else {
       chrome.storage.local.set({ expectedReviewTotal: 0 });
       totalPages = 0;
-      log('レビュー収集を開始します');
+      if (incrementalOnly && lastCollectedDate) {
+        log(`差分収集を開始します（前回: ${lastCollectedDate}）`);
+      } else {
+        log('レビュー収集を開始します');
+      }
     }
 
     // 現在のページからレビューを収集
-    await collectCurrentPage();
+    const reachedOldReviews = await collectCurrentPage();
+
+    // 差分取得で古いレビューに到達した場合は早期終了
+    if (reachedOldReviews) {
+      log('前回以降の新着レビューの収集が完了しました');
+      isCollecting = false;
+      if (!shouldStop) {
+        chrome.runtime.sendMessage({ action: 'collectionComplete' });
+      }
+      return;
+    }
 
     // ページネーションがある場合、次のページも収集
     // navigatedがtrueの場合、ページ遷移中なので完了通知を送らない
@@ -228,13 +258,38 @@
 
   /**
    * 現在のページからレビューを収集
+   * @returns {boolean} 差分取得で古いレビューに到達した場合はtrue
    */
   async function collectCurrentPage() {
-    const reviews = extractReviews();
+    let reviews = extractReviews();
 
     if (reviews.length === 0) {
       log('このページにレビューが見つかりませんでした', 'error');
-      return;
+      return false;
+    }
+
+    // 差分取得モードの場合、日付でフィルタリング
+    let reachedOldReviews = false;
+    if (incrementalOnly && lastCollectedDate) {
+      const originalCount = reviews.length;
+      reviews = filterReviewsByDate(reviews, lastCollectedDate);
+      const filteredCount = originalCount - reviews.length;
+
+      if (filteredCount > 0) {
+        log(`${originalCount}件中${filteredCount}件は前回収集済み（${lastCollectedDate}以前）`);
+      }
+
+      // 全てのレビューが古い場合、これ以上ページを進める必要がない
+      if (reviews.length === 0) {
+        log('前回以降の新着レビューがこのページにはありません');
+        reachedOldReviews = true;
+        return reachedOldReviews;
+      }
+
+      // 一部のレビューが古い場合、次のページはさらに古いので終了フラグを立てる
+      if (filteredCount > 0 && reviews.length < originalCount) {
+        reachedOldReviews = true;
+      }
     }
 
     log(`${reviews.length}件のレビューを検出`);
@@ -251,6 +306,8 @@
 
     // 状態を更新（saveReviews完了後に実行）
     await updateState(reviews.length);
+
+    return reachedOldReviews;
   }
 
   /**
@@ -294,13 +351,29 @@
         }
 
         // 新しいページのレビューを収集
-        await collectCurrentPage();
+        const reachedOldReviews = await collectCurrentPage();
+
+        // 差分取得で古いレビューに到達した場合は早期終了
+        if (reachedOldReviews) {
+          log('前回以降の新着レビューの収集が完了しました');
+          return false;
+        }
 
         // 次のループで次のページを探す
         continue;
 
       } else if (nextPage.type === 'link' || nextPage.type === 'url') {
         // リンク/URL方式（旧UI）
+        // 差分取得設定を保存してからページ遷移
+        await new Promise((resolve) => {
+          chrome.storage.local.get(['collectionState'], (result) => {
+            const state = result.collectionState || {};
+            state.incrementalOnly = incrementalOnly;
+            state.lastCollectedDate = lastCollectedDate;
+            chrome.storage.local.set({ collectionState: state }, resolve);
+          });
+        });
+
         window.location.href = nextPage.url;
 
         // ページ遷移後は新しいコンテンツスクリプトが起動するため、
@@ -766,6 +839,54 @@
   }
 
   /**
+   * 日付を比較可能な形式（YYYY-MM-DD）に正規化
+   * 2024/1/5 → 2024-01-05
+   */
+  function normalizeDateString(dateStr) {
+    if (!dateStr) return null;
+
+    // YYYY/M/D または YYYY/MM/DD 形式を YYYY-MM-DD に変換
+    const match = dateStr.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+    if (match) {
+      const year = match[1];
+      const month = match[2].padStart(2, '0');
+      const day = match[3].padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    // すでに YYYY-MM-DD 形式の場合
+    const isoMatch = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+      return dateStr.substring(0, 10);
+    }
+
+    return null;
+  }
+
+  /**
+   * レビューを日付でフィルタリング（差分取得用）
+   * @param {Array} reviews - レビュー配列
+   * @param {string} afterDate - この日付より後のレビューのみ取得（YYYY-MM-DD形式）
+   * @returns {Array} フィルタリングされたレビュー
+   */
+  function filterReviewsByDate(reviews, afterDate) {
+    if (!afterDate) return reviews;
+
+    const normalizedAfterDate = normalizeDateString(afterDate);
+    if (!normalizedAfterDate) return reviews;
+
+    return reviews.filter(review => {
+      const reviewDateNorm = normalizeDateString(review.reviewDate);
+      if (!reviewDateNorm) {
+        // 日付がないレビューは含める（安全側に倒す）
+        return true;
+      }
+      // レビュー日が前回収集日より後の場合のみ含める
+      return reviewDateNorm > normalizedAfterDate;
+    });
+  }
+
+  /**
    * 次のページへ移動する方法を探す
    * @returns {Object|null} { type: 'link'|'button', element: Element, url?: string } または null
    */
@@ -1084,6 +1205,9 @@
     chrome.storage.local.get(['collectionState'], (result) => {
       const state = result.collectionState;
       if (state && state.isRunning && !isCollecting) {
+        // 差分取得設定を復元
+        incrementalOnly = state.incrementalOnly || false;
+        lastCollectedDate = state.lastCollectedDate || null;
         // 前のページからの続きで自動的に収集を再開
         log('収集を再開します');
         startCollection();

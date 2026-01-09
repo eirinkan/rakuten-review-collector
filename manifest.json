@@ -10,7 +10,8 @@
     "downloads",
     "tabs",
     "notifications",
-    "identity"
+    "identity",
+    "alarms"
   ],
   "oauth2": {
     "client_id": "1045774191284-j6bkvvi8pe78tp353prob7ouqm5kmo3g.apps.googleusercontent.com",

@@ -1112,6 +1112,151 @@
     ::-webkit-scrollbar-thumb:hover {
       background: var(--text-muted);
     }
+
+    /* キュー保存セクション */
+    .queue-save-section {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border-glass);
+    }
+
+    .queue-save-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .queue-save-input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid var(--border-glass);
+      border-radius: 6px;
+      background: var(--bg-glass);
+      color: var(--text-primary);
+      font-size: 14px;
+    }
+
+    .queue-save-input:focus {
+      outline: none;
+      border-color: var(--accent-color);
+    }
+
+    .saved-queues-section {
+      margin-top: 16px;
+    }
+
+    .saved-queues-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .saved-queues-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .saved-queue-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: var(--bg-glass);
+      border: 1px solid var(--border-glass);
+      border-radius: 8px;
+    }
+
+    .saved-queue-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .saved-queue-name {
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .saved-queue-count {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .saved-queue-actions {
+      display: flex;
+      gap: 4px;
+    }
+
+    .saved-queue-actions .icon-btn {
+      padding: 4px 8px;
+      font-size: 12px;
+    }
+
+    /* 定期収集設定 */
+    .scheduled-settings {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border-glass);
+    }
+
+    .setting-label-inline {
+      display: inline-block;
+      width: 80px;
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    .time-input {
+      padding: 6px 10px;
+      border: 1px solid var(--border-glass);
+      border-radius: 6px;
+      background: var(--bg-glass);
+      color: var(--text-primary);
+      font-size: 14px;
+    }
+
+    .time-input:focus {
+      outline: none;
+      border-color: var(--accent-color);
+    }
+
+    .queue-select {
+      flex: 1;
+      padding: 6px 10px;
+      border: 1px solid var(--border-glass);
+      border-radius: 6px;
+      background: var(--bg-glass);
+      color: var(--text-primary);
+      font-size: 14px;
+      min-width: 200px;
+    }
+
+    .queue-select:focus {
+      outline: none;
+      border-color: var(--accent-color);
+    }
+
+    .scheduled-actions {
+      margin-top: 16px;
+    }
+
+    .scheduled-status {
+      margin-top: 12px;
+      padding: 10px;
+      background: var(--bg-glass);
+      border-radius: 6px;
+    }
+
+    .status-info {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .status-info:last-child {
+      margin-bottom: 0;
+    }
   </style>
 </head>
 <body>
@@ -1456,6 +1601,65 @@
 
       <!-- Queue List -->
       <div id="queueList" class="queue-list"></div>
+
+      <!-- キュー保存セクション -->
+      <div class="queue-save-section">
+        <div class="queue-save-row">
+          <input type="text" id="queueSaveName" class="queue-save-input" placeholder="キュー名を入力（例：特典商品）">
+          <button id="saveQueueBtn" class="btn btn-secondary">💾 保存</button>
+        </div>
+        <div id="saveQueueStatus" class="status-message"></div>
+
+        <!-- 保存済みキュー -->
+        <div id="savedQueuesSection" class="saved-queues-section" style="display: none;">
+          <h3 class="saved-queues-title">保存済みキュー</h3>
+          <div id="savedQueuesList" class="saved-queues-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 定期収集設定カード -->
+    <div class="card">
+      <div class="card-header">
+        <h2>⏰ 定期収集</h2>
+      </div>
+
+      <div class="setting-row">
+        <label class="setting-label">
+          <input type="checkbox" id="scheduledEnabled">
+          <span>定期収集を有効にする</span>
+        </label>
+      </div>
+
+      <div id="scheduledSettings" class="scheduled-settings" style="display: none;">
+        <div class="setting-row">
+          <label class="setting-label-inline">実行時刻:</label>
+          <input type="time" id="scheduledTime" value="07:00" class="time-input">
+        </div>
+
+        <div class="setting-row">
+          <label class="setting-label-inline">対象キュー:</label>
+          <select id="scheduledTargetQueue" class="queue-select">
+            <option value="">-- 保存済みキューを選択 --</option>
+          </select>
+        </div>
+
+        <div class="setting-row">
+          <label class="setting-label">
+            <input type="checkbox" id="incrementalOnly" checked>
+            <span>前回以降の新着レビューのみ取得（差分取得）</span>
+          </label>
+        </div>
+
+        <div class="scheduled-actions">
+          <button id="runScheduledNowBtn" class="btn btn-primary">▶ 今すぐ実行</button>
+        </div>
+
+        <div id="scheduledStatus" class="scheduled-status">
+          <div id="nextRunInfo" class="status-info"></div>
+          <div id="lastRunInfo" class="status-info"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Log Card -->
