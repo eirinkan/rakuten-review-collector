@@ -1606,21 +1606,21 @@ function removeDuplicates() {
         <div class="scheduled-queue-card ${queue.enabled ? 'enabled' : ''}" data-id="${queue.id}">
           <div class="scheduled-queue-header">
             <div class="scheduled-queue-title">
+              <label class="toggle-switch-small">
+                <input type="checkbox" class="scheduled-queue-toggle" data-queue-id="${queue.id}" ${queue.enabled ? 'checked' : ''}>
+                <span class="toggle-slider-small"></span>
+              </label>
               <span class="scheduled-queue-name">${escapeHtml(queue.name)}</span>
               <span class="scheduled-queue-count">${queue.items.length}件</span>
             </div>
             <div class="scheduled-queue-actions">
-              <button class="scheduled-queue-run-btn" data-queue-id="${queue.id}">今すぐ実行</button>
-              <label class="toggle-switch">
-                <input type="checkbox" class="scheduled-queue-toggle" data-queue-id="${queue.id}" ${queue.enabled ? 'checked' : ''}>
-                <span class="toggle-slider"></span>
-              </label>
-              <button class="scheduled-queue-delete-btn" data-queue-id="${queue.id}" title="削除">🗑️</button>
+              <button class="scheduled-queue-run-btn" data-queue-id="${queue.id}">実行</button>
+              <button class="scheduled-queue-delete-btn" data-queue-id="${queue.id}" title="削除">×</button>
             </div>
           </div>
           <div class="scheduled-queue-settings">
             <div class="scheduled-queue-row">
-              <span class="scheduled-queue-label">実行:</span>
+              <span class="scheduled-queue-label">時刻:</span>
               <div class="time-picker">
                 <select class="time-select scheduled-queue-hour" data-queue-id="${queue.id}">
                   ${generateHourOptions(hours)}
@@ -1630,16 +1630,16 @@ function removeDuplicates() {
                   ${generateMinuteOptions(minutes)}
                 </select>
               </div>
-              <label class="checkbox-label" style="margin-left: 12px;">
+              <label class="checkbox-label-compact">
                 <input type="checkbox" class="scheduled-queue-incremental" data-queue-id="${queue.id}" ${queue.incrementalOnly ? 'checked' : ''}>
-                <span>差分のみ収集</span>
+                <span>差分のみ</span>
               </label>
               <span class="scheduled-queue-last-run">前回: ${lastRunText}</span>
             </div>
             <div class="scheduled-queue-row">
               <span class="scheduled-queue-label">保存:</span>
               <input type="text" class="scheduled-queue-url-input" data-queue-id="${queue.id}"
-                     value="${escapeHtml(queue.spreadsheetUrl || '')}" placeholder="（設定のURLを使用）">
+                     value="${escapeHtml(queue.spreadsheetUrl || '')}" placeholder="未入力で通常収集と同じスプレッドシートを使用">
             </div>
           </div>
         </div>
