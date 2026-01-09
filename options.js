@@ -424,7 +424,6 @@ document.addEventListener('DOMContentLoaded', () => {
       showStatus(spreadsheetUrlStatus, 'success', '✓ 保存しました');
       spreadsheetLink.href = url;
       spreadsheetLink.style.display = 'inline-flex';
-      showAutoSaveIndicator(spreadsheetUrlInput);
     });
   }
 
