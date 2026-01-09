@@ -286,7 +286,7 @@
       const filteredCount = originalCount - reviews.length;
 
       if (filteredCount > 0) {
-        log(`${originalCount}件中${filteredCount}件は前回収集済み（${lastCollectedDate}以前）`);
+        log(`${originalCount}件中${filteredCount}件は前回収集済み（${lastCollectedDate}より前）`);
       }
 
       // 全てのレビューが古い場合、これ以上ページを進める必要がない
@@ -891,8 +891,8 @@
         // 日付がないレビューは含める（安全側に倒す）
         return true;
       }
-      // レビュー日が前回収集日より後の場合のみ含める
-      return reviewDateNorm > normalizedAfterDate;
+      // レビュー日が前回収集日以降の場合のみ含める（同日も含む）
+      return reviewDateNorm >= normalizedAfterDate;
     });
   }
 
