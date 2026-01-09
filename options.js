@@ -1149,7 +1149,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (!sourceQueue) return;
 
-      // 新しい定期収集キューを作成
+      // 新しい定期収集キューを作成（デフォルトは無効）
       const newScheduledQueue = {
         id: 'sched_' + Date.now(),
         sourceQueueId: savedQueueId,
@@ -1157,7 +1157,7 @@ document.addEventListener('DOMContentLoaded', () => {
         items: sourceQueue.items.slice(), // コピー
         time: '07:00',
         incrementalOnly: true,
-        enabled: true,
+        enabled: false,
         lastRun: null
       };
 

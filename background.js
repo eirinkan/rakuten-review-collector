@@ -282,11 +282,12 @@ async function handleSaveReviews(reviews, tabId = null) {
   // タブ固有のスプレッドシートURLを取得（定期収集用）
   // collectingItemsから取得（Service Workerのメモリがクリアされても対応）
   let spreadsheetUrl = null;
+  let currentItem = null;
 
   if (tabId) {
     const collectingResult = await chrome.storage.local.get(['collectingItems']);
     const collectingItems = collectingResult.collectingItems || [];
-    const currentItem = collectingItems.find(item => item.tabId === tabId);
+    currentItem = collectingItems.find(item => item.tabId === tabId);
     if (currentItem) {
       spreadsheetUrl = currentItem.spreadsheetUrl || null;
     }
@@ -297,18 +298,16 @@ async function handleSaveReviews(reviews, tabId = null) {
     spreadsheetUrl = globalSpreadsheetUrl;
   }
 
+  // 定期収集かどうかを判定（queueNameがあれば定期収集）
+  const isScheduled = !!(currentItem?.queueName);
+
   // ログ用のプレフィックスを決定（定期収集の場合はキュー名、それ以外は商品管理番号）
   const productId = newReviews[0]?.productId || '';
   let prefix = productId ? `[${productId}] ` : '';
 
   // 定期収集の場合は[キュー名・商品ID]形式
-  if (tabId) {
-    const collectingResult = await chrome.storage.local.get(['collectingItems']);
-    const collectingItems = collectingResult.collectingItems || [];
-    const currentItem = collectingItems.find(item => item.tabId === tabId);
-    if (currentItem?.queueName) {
-      prefix = `[${currentItem.queueName}・${productId}] `;
-    }
+  if (isScheduled) {
+    prefix = `[${currentItem.queueName}・${productId}] `;
   }
 
   // スプレッドシートに保存（累積した全レビューを送信）
@@ -319,7 +318,7 @@ async function handleSaveReviews(reviews, tabId = null) {
       const allReviews = stateResult.collectionState?.reviews || [];
 
       if (allReviews.length > 0) {
-        await sendToSheets(spreadsheetUrl, allReviews, separateSheets !== false);
+        await sendToSheets(spreadsheetUrl, allReviews, separateSheets !== false, isScheduled);
         log(prefix + 'スプレッドシートに保存しました');
       }
     } catch (error) {
@@ -732,7 +731,7 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews) {
 /**
  * Sheets APIを使ってスプレッドシートに直接書き込み
  */
-async function sendToSheets(spreadsheetUrl, reviews, separateSheets = true) {
+async function sendToSheets(spreadsheetUrl, reviews, separateSheets = true, isScheduled = false) {
   const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
   if (!spreadsheetId) {
     throw new Error('無効なスプレッドシートURLです');
@@ -768,11 +767,14 @@ async function sendToSheets(spreadsheetUrl, reviews, separateSheets = true) {
     // 商品ごとにシートを分ける
     const reviewsByProduct = groupReviewsByProduct(reviews);
     for (const [productId, productReviews] of Object.entries(reviewsByProduct)) {
-      await appendToSheet(token, spreadsheetId, productId, productReviews);
+      // 定期収集の場合は「定期・商品管理番号」形式
+      const sheetName = isScheduled ? `定期・${productId}` : productId;
+      await appendToSheet(token, spreadsheetId, sheetName, productReviews);
     }
   } else {
     // 全て同じシートに保存
-    await appendToSheet(token, spreadsheetId, 'レビュー', reviews);
+    const sheetName = isScheduled ? '定期・レビュー' : 'レビュー';
+    await appendToSheet(token, spreadsheetId, sheetName, reviews);
   }
 }
 
