@@ -597,19 +597,30 @@ async function sendToSheets(spreadsheetUrl, reviews, separateSheets = true) {
     throw new Error('無効なスプレッドシートURLです');
   }
 
-  // OAuthトークンを取得
-  const token = await new Promise((resolve, reject) => {
+  // OAuthトークンを取得（まずinteractive: falseで試行し、失敗したらinteractive: trueで再試行）
+  let token = await new Promise((resolve) => {
     chrome.identity.getAuthToken({ interactive: false }, (token) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
+      if (chrome.runtime.lastError || !token) {
+        resolve(null);
       } else {
         resolve(token);
       }
     });
   });
 
+  // トークンが取得できなかった場合、interactive: trueで再試行
   if (!token) {
-    throw new Error('認証が必要です。先にGoogleでログインしてください。');
+    token = await new Promise((resolve, reject) => {
+      chrome.identity.getAuthToken({ interactive: true }, (token) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error('Googleアカウントでログインしてください: ' + chrome.runtime.lastError.message));
+        } else if (!token) {
+          reject(new Error('認証がキャンセルされました'));
+        } else {
+          resolve(token);
+        }
+      });
+    });
   }
 
   if (separateSheets) {
