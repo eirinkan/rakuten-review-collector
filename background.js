@@ -1,14 +1,12 @@
 /**
  * バックグラウンドサービスワーカー
- * レビューデータの保存、GASへの送信、CSVダウンロード、キュー管理を処理
+ * レビューデータの保存、CSVダウンロード、キュー管理を処理
  */
 
 // アクティブな収集タブを追跡
 let activeCollectionTabs = new Set();
 // 収集用ウィンドウのID
 let collectionWindowId = null;
-// タブごとのGAS URL（キュー固有のURL用）
-const tabGasUrls = new Map();
 // タブごとのスプレッドシートURL（定期収集用）
 const tabSpreadsheetUrls = new Map();
 
@@ -55,39 +53,6 @@ async function googleLogin() {
   }
 }
 
-/**
- * GASで許可チェック
- * @param {string} email - チェックするメールアドレス
- * @returns {Promise<Object>} 許可チェック結果
- */
-async function checkUserPermission(email) {
-  try {
-    // GAS URLを取得
-    const settings = await chrome.storage.sync.get(['gasUrl']);
-    if (!settings.gasUrl) {
-      // GAS URLが設定されていない場合は許可（後でGAS設定が必要になる）
-      return { allowed: true, message: 'GAS未設定のため許可' };
-    }
-
-    // GASに許可チェックリクエスト
-    const response = await fetch(settings.gasUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'checkAuth', email: email })
-    });
-
-    if (!response.ok) {
-      throw new Error('許可チェックに失敗しました');
-    }
-
-    const result = await response.json();
-    return result;
-  } catch (error) {
-    console.error('許可チェックエラー:', error);
-    // エラー時は安全のため許可しない
-    return { allowed: false, message: error.message };
-  }
-}
 
 /**
  * 認証フロー全体を実行（ログイン + 許可チェック + 保存）
@@ -310,7 +275,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 /**
  * レビューを保存
  * @param {Array} reviews - レビューデータ
- * @param {number} tabId - 送信元タブID（キュー固有のGAS URL取得用）
+ * @param {number} tabId - 送信元タブID（定期収集用）
  */
 async function handleSaveReviews(reviews, tabId = null) {
   if (!reviews || reviews.length === 0) {
@@ -325,12 +290,11 @@ async function handleSaveReviews(reviews, tabId = null) {
     return;
   }
 
-  const { separateSheets, spreadsheetUrl: globalSpreadsheetUrl, gasUrl: globalGasUrl } = await chrome.storage.sync.get(['separateSheets', 'spreadsheetUrl', 'gasUrl']);
+  const { separateSheets, spreadsheetUrl: globalSpreadsheetUrl } = await chrome.storage.sync.get(['separateSheets', 'spreadsheetUrl']);
 
-  // タブ固有のスプレッドシートURL/GAS URLを取得（定期収集用）
+  // タブ固有のスプレッドシートURLを取得（定期収集用）
   // collectingItemsから取得（Service Workerのメモリがクリアされても対応）
   let spreadsheetUrl = null;
-  let gasUrl = null;
 
   if (tabId) {
     const collectingResult = await chrome.storage.local.get(['collectingItems']);
@@ -338,16 +302,12 @@ async function handleSaveReviews(reviews, tabId = null) {
     const currentItem = collectingItems.find(item => item.tabId === tabId);
     if (currentItem) {
       spreadsheetUrl = currentItem.spreadsheetUrl || null;
-      gasUrl = currentItem.gasUrl || null;
     }
   }
 
   // 定期収集用がなければグローバル設定を使用
   if (!spreadsheetUrl) {
     spreadsheetUrl = globalSpreadsheetUrl;
-  }
-  if (!gasUrl) {
-    gasUrl = globalGasUrl;
   }
 
   // ログ用のプレフィックスを決定（定期収集の場合はキュー名、それ以外は商品管理番号）
@@ -364,17 +324,10 @@ async function handleSaveReviews(reviews, tabId = null) {
     }
   }
 
-  // 優先順位: スプレッドシートURL（Sheets API直接） > GAS URL
+  // スプレッドシートに保存
   if (spreadsheetUrl) {
     try {
       await sendToSheets(spreadsheetUrl, newReviews, separateSheets !== false);
-      log(prefix + 'スプレッドシートに保存しました');
-    } catch (error) {
-      log(`スプレッドシートへの保存に失敗: ${error.message}`, 'error');
-    }
-  } else if (gasUrl) {
-    try {
-      await sendToGas(gasUrl, newReviews, separateSheets !== false);
       log(prefix + 'スプレッドシートに保存しました');
     } catch (error) {
       log(`スプレッドシートへの保存に失敗: ${error.message}`, 'error');
@@ -465,26 +418,6 @@ async function saveToLocalStorage(reviews) {
 }
 
 /**
- * GASにデータを送信
- */
-async function sendToGas(gasUrl, reviews, separateSheets = true) {
-  const response = await fetch(gasUrl, {
-    method: 'POST',
-    mode: 'no-cors',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      reviews: reviews,
-      separateSheets: separateSheets,
-      timestamp: new Date().toISOString()
-    })
-  });
-
-  return true;
-}
-
-/**
  * ===== Google Sheets API 直接書き込み =====
  */
 
@@ -513,7 +446,7 @@ function groupReviewsByProduct(reviews) {
  */
 async function hasSheetData(token, spreadsheetId, sheetTitle) {
   const valuesResponse = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodeURIComponent(sheetTitle)}'!A1:A10`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodeURIComponent(sheetTitle)}'!A1:Z1000`,
     { headers: { Authorization: `Bearer ${token}` } }
   );
   const valuesData = await valuesResponse.json();
@@ -1021,8 +954,6 @@ async function handleCollectionComplete(tabId) {
   // アクティブタブから削除
   if (tabId) {
     activeCollectionTabs.delete(tabId);
-    // タブ固有のGAS URLをクリーンアップ
-    tabGasUrls.delete(tabId);
     tabSpreadsheetUrls.delete(tabId);
     // タブごとの状態をクリーンアップ
     const stateKey = `collectionState_${tabId}`;
@@ -1126,9 +1057,7 @@ async function handleCollectionStopped(tabId) {
 
   // アクティブタブから削除
   activeCollectionTabs.delete(tabId);
-  // タブ固有のGAS URLをクリーンアップ
-  tabGasUrls.delete(tabId);
-    tabSpreadsheetUrls.delete(tabId);
+  tabSpreadsheetUrls.delete(tabId);
 
   // タブごとの状態をクリーンアップ
   const stateKey = `collectionState_${tabId}`;
@@ -1243,7 +1172,6 @@ async function stopQueueCollection() {
 
   // 状態をクリア
   activeCollectionTabs.clear();
-  tabGasUrls.clear();
   tabSpreadsheetUrls.clear();
   await chrome.storage.local.set({
     isQueueCollecting: false,
@@ -1316,11 +1244,6 @@ async function processNextInQueue() {
 
   // アクティブタブとして追跡
   activeCollectionTabs.add(tab.id);
-
-  // キュー固有のGAS URLがあれば保存
-  if (nextItem.gasUrl) {
-    tabGasUrls.set(tab.id, nextItem.gasUrl);
-  }
 
   // キュー固有のスプレッドシートURLがあれば保存
   if (nextItem.spreadsheetUrl) {
@@ -1581,8 +1504,6 @@ chrome.commands.onCommand.addListener((command) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   if (activeCollectionTabs.has(tabId)) {
     activeCollectionTabs.delete(tabId);
-    // タブ固有のGAS URLをクリーンアップ
-    tabGasUrls.delete(tabId);
     tabSpreadsheetUrls.delete(tabId);
     log(`タブ ${tabId} が閉じられました。収集を中断しました`, 'error');
 
@@ -1693,7 +1614,6 @@ async function runScheduledCollection() {
           addedAt: new Date().toISOString(),
           scheduledRun: true,
           incrementalOnly: targetQueue.incrementalOnly !== false,
-          gasUrl: targetQueue.gasUrl || null,
           spreadsheetUrl: targetQueue.spreadsheetUrl || null,
           queueName: targetQueue.name
         });
