@@ -1496,12 +1496,59 @@ document.addEventListener('DOMContentLoaded', () => {
     const quickStartKey = 'rakuten-review-quickstart-shown';
     const overlay = document.getElementById('quickStartOverlay');
     const closeBtn = document.getElementById('quickStartCloseBtn');
+    const urlInput = document.getElementById('quickStartSpreadsheetUrl');
+    const saveBtn = document.getElementById('quickStartSaveBtn');
+    const statusEl = document.getElementById('quickStartUrlStatus');
 
     if (!overlay || !closeBtn) return;
 
     // 初回表示チェック
     if (!localStorage.getItem(quickStartKey)) {
       overlay.style.display = 'flex';
+    }
+
+    // スプレッドシートURL保存ボタン
+    if (saveBtn && urlInput && statusEl) {
+      saveBtn.addEventListener('click', () => {
+        const url = urlInput.value.trim();
+
+        if (!url) {
+          statusEl.textContent = '';
+          statusEl.className = 'quick-start-status';
+          return;
+        }
+
+        // URL形式チェック
+        const spreadsheetIdMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+        if (!spreadsheetIdMatch) {
+          statusEl.textContent = 'URLの形式が正しくありません';
+          statusEl.className = 'quick-start-status error';
+          return;
+        }
+
+        // 保存
+        chrome.storage.sync.set({ spreadsheetUrl: url }, () => {
+          if (chrome.runtime.lastError) {
+            statusEl.textContent = '保存に失敗しました';
+            statusEl.className = 'quick-start-status error';
+            return;
+          }
+
+          statusEl.textContent = '✓ 保存しました';
+          statusEl.className = 'quick-start-status success';
+
+          // メインの設定画面の入力欄も更新
+          const mainInput = document.getElementById('spreadsheetUrl');
+          if (mainInput) mainInput.value = url;
+
+          // ヘッダーのスプレッドシートリンクも更新
+          const link = document.getElementById('spreadsheetLink');
+          if (link) {
+            link.href = url;
+            link.classList.remove('disabled');
+          }
+        });
+      });
     }
 
     // 閉じるボタン

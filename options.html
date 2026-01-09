@@ -270,6 +270,42 @@
       margin: 0;
     }
 
+    .quick-start-input-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .quick-start-input {
+      flex: 1;
+      padding: 8px 10px;
+      border: 1px solid var(--border-input);
+      border-radius: 6px;
+      background: var(--bg-input);
+      color: var(--text-primary);
+      font-size: 0.85em;
+    }
+
+    .quick-start-input:focus {
+      outline: none;
+      border-color: var(--rakuten-red);
+    }
+
+    .quick-start-status {
+      display: block;
+      font-size: 0.8em;
+      margin-top: 4px;
+      min-height: 1.2em;
+    }
+
+    .quick-start-status.success {
+      color: var(--success);
+    }
+
+    .quick-start-status.error {
+      color: var(--error);
+    }
+
     .quick-start-modal .btn-primary {
       width: 100%;
       padding: 12px;
@@ -2257,34 +2293,35 @@
   <!-- クイックスタートガイド（初回表示） -->
   <div id="quickStartOverlay" class="quick-start-overlay" style="display: none;">
     <div class="quick-start-modal">
-      <h2>はじめに</h2>
+      <h2>使い方</h2>
       <div class="quick-start-steps">
         <div class="quick-start-step">
           <span class="step-number">1</span>
           <div class="step-content">
-            <strong>キューに追加</strong>
-            <p>商品URLを入力して「追加」ボタンをクリック</p>
+            <p>レビューデータを入力するスプレッドシートを用意しましょう</p>
+            <div class="quick-start-input-group">
+              <input type="text" id="quickStartSpreadsheetUrl" class="quick-start-input" placeholder="スプレッドシートのURLを入力">
+              <button id="quickStartSaveBtn" class="btn btn-secondary btn-small">保存</button>
+            </div>
+            <span id="quickStartUrlStatus" class="quick-start-status"></span>
           </div>
         </div>
         <div class="quick-start-step">
           <span class="step-number">2</span>
           <div class="step-content">
-            <strong>一括収集</strong>
-            <p>「一括収集開始」で複数商品を同時に収集</p>
+            <p>キューに商品URLもしくはランキングページURLを追加</p>
           </div>
         </div>
         <div class="quick-start-step">
           <span class="step-number">3</span>
           <div class="step-content">
-            <strong>スプレッドシート連携</strong>
-            <p>歯車アイコンからスプレッドシートURLを設定</p>
+            <p>「一括収集開始」でレビューを収集</p>
           </div>
         </div>
         <div class="quick-start-step">
           <span class="step-number">4</span>
           <div class="step-content">
-            <strong>データ活用</strong>
-            <p>CSVダウンロードまたはスプレッドシートで分析</p>
+            <p>収集したレビューデータの活用</p>
           </div>
         </div>
       </div>
