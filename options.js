@@ -85,7 +85,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // ヘッダーボタン
   const headerTitle = document.getElementById('headerTitle');
   const settingsToggleBtn = document.getElementById('settingsToggleBtn');
-  const helpToggleBtn = document.getElementById('helpToggleBtn');
 
   // キュー保存関連（ヘッダーアイコン方式）
   const saveQueueBtn = document.getElementById('saveQueueBtn');
@@ -96,11 +95,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // ビュー切り替え
   const mainView = document.getElementById('main-view');
   const settingsView = document.getElementById('settings-view');
-  const helpView = document.getElementById('help-view');
 
   // 戻るボタン
   const settingsBackBtn = document.getElementById('settingsBackBtn');
-  const helpBackBtn = document.getElementById('helpBackBtn');
 
   // 現在のビュー状態
   let currentView = 'main';
@@ -175,20 +172,10 @@ document.addEventListener('DOMContentLoaded', () => {
         showSettingsView();
       }
     });
-    helpToggleBtn.addEventListener('click', () => {
-      if (currentView === 'help') {
-        showMainView();
-      } else {
-        showHelpView();
-      }
-    });
 
     // 戻るボタンのイベント
     if (settingsBackBtn) {
       settingsBackBtn.addEventListener('click', showMainView);
-    }
-    if (helpBackBtn) {
-      helpBackBtn.addEventListener('click', showMainView);
     }
 
     // URL入力時にランキングかどうか判定して件数入力の表示を切り替え、URLカウントを表示
@@ -263,7 +250,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (result.spreadsheetUrl && spreadsheetUrlInput) {
         spreadsheetUrlInput.value = result.spreadsheetUrl;
         spreadsheetLink.href = result.spreadsheetUrl;
-        spreadsheetLink.style.display = 'inline-flex';
+        spreadsheetLink.classList.remove('disabled');
       }
       // CSV機能は常に表示（スプレッドシートと併用可能）
       dataButtons.style.display = 'flex';
@@ -402,7 +389,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       chrome.storage.sync.set({ spreadsheetUrl: '' }, () => {
         showStatus(spreadsheetUrlStatus, 'info', '設定をクリアしました');
-        spreadsheetLink.style.display = 'none';
+        spreadsheetLink.classList.add('disabled');
       });
       return;
     }
@@ -423,7 +410,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       showStatus(spreadsheetUrlStatus, 'success', '✓ 保存しました');
       spreadsheetLink.href = url;
-      spreadsheetLink.style.display = 'inline-flex';
+      spreadsheetLink.classList.remove('disabled');
     });
   }
 
@@ -1058,7 +1045,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function hideAllViews() {
     if (mainView) mainView.classList.remove('active');
     if (settingsView) settingsView.classList.remove('active');
-    if (helpView) helpView.classList.remove('active');
   }
 
   function showMainView() {
@@ -1071,12 +1057,6 @@ document.addEventListener('DOMContentLoaded', () => {
     hideAllViews();
     if (settingsView) settingsView.classList.add('active');
     currentView = 'settings';
-  }
-
-  function showHelpView() {
-    hideAllViews();
-    if (helpView) helpView.classList.add('active');
-    currentView = 'help';
   }
 
   // 定期収集ボタンの状態を更新（グレーアウトなし）
