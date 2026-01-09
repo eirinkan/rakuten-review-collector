@@ -482,7 +482,7 @@ function groupReviewsByProduct(reviews) {
 }
 
 /**
- * シートが存在するか確認し、なければ作成
+ * シートが存在するか確認し、なければ作成（空シートがあればリネームして使用）
  */
 async function ensureSheetExists(token, spreadsheetId, sheetName) {
   const response = await fetch(
@@ -500,27 +500,78 @@ async function ensureSheetExists(token, spreadsheetId, sheetName) {
   const sheetExists = sheets.some(sheet => sheet.properties.title === sheetName);
 
   if (!sheetExists) {
-    const createResponse = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          requests: [{
-            addSheet: {
-              properties: { title: sheetName }
-            }
-          }]
-        })
-      }
-    );
+    // 空のシートを探す（行数が2以下 = ヘッダーのみまたは空）
+    let emptySheet = null;
+    for (const sheet of sheets) {
+      const rowCount = sheet.properties.gridProperties?.rowCount || 0;
+      // デフォルトシートは1000行あるので、実際のデータ行数を確認
+      const sheetTitle = sheet.properties.title;
+      const valuesResponse = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodeURIComponent(sheetTitle)}'!A:A`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const valuesData = await valuesResponse.json();
+      const actualRows = valuesData.values?.length || 0;
 
-    if (!createResponse.ok) {
-      const error = await createResponse.json();
-      throw new Error(error.error?.message || 'シートの作成に失敗しました');
+      // 1行以下（空またはヘッダーのみ）なら空シートとみなす
+      if (actualRows <= 1) {
+        emptySheet = sheet;
+        break;
+      }
+    }
+
+    if (emptySheet) {
+      // 空シートの名前を変更
+      const renameResponse = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            requests: [{
+              updateSheetProperties: {
+                properties: {
+                  sheetId: emptySheet.properties.sheetId,
+                  title: sheetName
+                },
+                fields: 'title'
+              }
+            }]
+          })
+        }
+      );
+
+      if (!renameResponse.ok) {
+        const error = await renameResponse.json();
+        throw new Error(error.error?.message || 'シート名の変更に失敗しました');
+      }
+    } else {
+      // 空シートがなければ新規作成
+      const createResponse = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            requests: [{
+              addSheet: {
+                properties: { title: sheetName }
+              }
+            }]
+          })
+        }
+      );
+
+      if (!createResponse.ok) {
+        const error = await createResponse.json();
+        throw new Error(error.error?.message || 'シートの作成に失敗しました');
+      }
     }
   }
 }
