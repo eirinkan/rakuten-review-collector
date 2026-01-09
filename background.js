@@ -9,6 +9,8 @@ let activeCollectionTabs = new Set();
 let collectionWindowId = null;
 // タブごとのGAS URL（キュー固有のURL用）
 const tabGasUrls = new Map();
+// タブごとのスプレッドシートURL（定期収集用）
+const tabSpreadsheetUrls = new Map();
 
 /**
  * ===== 認証機能 =====
@@ -323,7 +325,16 @@ async function handleSaveReviews(reviews, tabId = null) {
     return;
   }
 
-  const { separateSheets, spreadsheetUrl, gasUrl: globalGasUrl } = await chrome.storage.sync.get(['separateSheets', 'spreadsheetUrl', 'gasUrl']);
+  const { separateSheets, spreadsheetUrl: globalSpreadsheetUrl, gasUrl: globalGasUrl } = await chrome.storage.sync.get(['separateSheets', 'spreadsheetUrl', 'gasUrl']);
+
+  // タブ固有のスプレッドシートURLを取得（定期収集用）
+  let spreadsheetUrl = null;
+  if (tabId && tabSpreadsheetUrls.has(tabId)) {
+    spreadsheetUrl = tabSpreadsheetUrls.get(tabId);
+  }
+  if (!spreadsheetUrl) {
+    spreadsheetUrl = globalSpreadsheetUrl;
+  }
 
   // タブ固有のGAS URLを取得
   let gasUrl = null;
@@ -972,6 +983,7 @@ async function handleCollectionComplete(tabId) {
     activeCollectionTabs.delete(tabId);
     // タブ固有のGAS URLをクリーンアップ
     tabGasUrls.delete(tabId);
+    tabSpreadsheetUrls.delete(tabId);
     // タブごとの状態をクリーンアップ
     const stateKey = `collectionState_${tabId}`;
     await chrome.storage.local.remove(stateKey);
@@ -1076,6 +1088,7 @@ async function handleCollectionStopped(tabId) {
   activeCollectionTabs.delete(tabId);
   // タブ固有のGAS URLをクリーンアップ
   tabGasUrls.delete(tabId);
+    tabSpreadsheetUrls.delete(tabId);
 
   // タブごとの状態をクリーンアップ
   const stateKey = `collectionState_${tabId}`;
@@ -1191,6 +1204,7 @@ async function stopQueueCollection() {
   // 状態をクリア
   activeCollectionTabs.clear();
   tabGasUrls.clear();
+  tabSpreadsheetUrls.clear();
   await chrome.storage.local.set({
     isQueueCollecting: false,
     collectingItems: []
@@ -1263,6 +1277,11 @@ async function processNextInQueue() {
   // キュー固有のGAS URLがあれば保存
   if (nextItem.gasUrl) {
     tabGasUrls.set(tab.id, nextItem.gasUrl);
+  }
+
+  // キュー固有のスプレッドシートURLがあれば保存
+  if (nextItem.spreadsheetUrl) {
+    tabSpreadsheetUrls.set(tab.id, nextItem.spreadsheetUrl);
   }
 
   // 収集状態をセット（タブIDごとに管理）
@@ -1515,6 +1534,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     activeCollectionTabs.delete(tabId);
     // タブ固有のGAS URLをクリーンアップ
     tabGasUrls.delete(tabId);
+    tabSpreadsheetUrls.delete(tabId);
     log(`タブ ${tabId} が閉じられました。収集を中断しました`, 'error');
 
     // タブごとの状態をクリーンアップ
@@ -1623,8 +1643,9 @@ async function runScheduledCollection() {
           title: item.title,
           addedAt: new Date().toISOString(),
           scheduledRun: true,
-          incrementalOnly: settings.incrementalOnly !== false,
+          incrementalOnly: targetQueue.incrementalOnly !== false,
           gasUrl: targetQueue.gasUrl || null,
+          spreadsheetUrl: targetQueue.spreadsheetUrl || null,  // 定期収集用スプレッドシートURL
           queueName: targetQueue.name  // ログ用にキュー名を保持
         });
         addedCount++;
