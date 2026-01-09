@@ -213,11 +213,19 @@ document.addEventListener('DOMContentLoaded', () => {
       tab.url.includes('item.rakuten.co.jp')
     );
     const isRankingPage = tab.url && tab.url.includes('ranking.rakuten.co.jp');
+    const isRankingSitemap = tab.url && tab.url.includes('ranking.rakuten.co.jp/sitemap');
 
     if (isRankingPage) {
       // ランキングページの場合
       normalMode.style.display = 'none';
       rankingMode.style.display = 'block';
+
+      // サイトマップページの場合は特別処理
+      if (isRankingSitemap) {
+        startRankingBtn.disabled = true;
+        addRankingBtn.disabled = true;
+        showRankingMessage('任意のランキングを選んでください', 'info');
+      }
     } else if (!isRakutenPage) {
       // 楽天以外のページ
       pageWarning.style.display = 'block';
