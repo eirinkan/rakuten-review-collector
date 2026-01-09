@@ -539,6 +539,43 @@ async function getSheetId(token, spreadsheetId, sheetName) {
 }
 
 /**
+ * データ行に書式を適用（垂直中央揃え）
+ */
+async function formatDataRows(token, spreadsheetId, sheetId, startRow, endRow) {
+  const requests = [
+    {
+      repeatCell: {
+        range: {
+          sheetId: sheetId,
+          startRowIndex: startRow,
+          endRowIndex: endRow,
+          startColumnIndex: 0,
+          endColumnIndex: 20  // A-T列
+        },
+        cell: {
+          userEnteredFormat: {
+            verticalAlignment: 'MIDDLE'
+          }
+        },
+        fields: 'userEnteredFormat.verticalAlignment'
+      }
+    }
+  ];
+
+  await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ requests })
+    }
+  );
+}
+
+/**
  * ヘッダー行に書式を適用（赤背景・白テキスト・太字・行固定）
  */
 async function formatHeaderRow(token, spreadsheetId, sheetId) {
@@ -556,7 +593,7 @@ async function formatHeaderRow(token, spreadsheetId, sheetId) {
         cell: {
           userEnteredFormat: {
             backgroundColor: {
-              red: 0.75,  // #BF0000に近い赤
+              red: 191/255,  // #BF0000
               green: 0,
               blue: 0
             },
@@ -666,6 +703,19 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews) {
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.error?.message || 'スプレッドシートへの書き込みに失敗しました');
+  }
+
+  // 追加したデータ行に垂直中央揃えを適用
+  const appendResult = await response.json();
+  if (appendResult.updates && appendResult.updates.updatedRange) {
+    const sheetId = await getSheetId(token, spreadsheetId, sheetName);
+    // 追加された行の範囲を取得（例: 'シート名'!A2:T5 → 行2-5）
+    const rangeMatch = appendResult.updates.updatedRange.match(/!A(\d+):T(\d+)/);
+    if (rangeMatch) {
+      const startRow = parseInt(rangeMatch[1]) - 1;  // 0-indexed
+      const endRow = parseInt(rangeMatch[2]);        // exclusive
+      await formatDataRows(token, spreadsheetId, sheetId, startRow, endRow);
+    }
   }
 }
 
