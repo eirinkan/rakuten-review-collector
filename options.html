@@ -588,7 +588,7 @@
       justify-content: space-between;
       align-items: center;
       margin-bottom: 12px;
-      padding: 8px 0;
+      padding: 12px 0;
       border-bottom: 1px solid var(--border-glass);
     }
 
@@ -1314,6 +1314,12 @@
 
     .scheduled-queues-list:empty {
       display: none;
+    }
+
+    /* リストが空の時はヘッダーのマージンを削除 */
+    .card:has(.scheduled-queues-list:empty) .queue-header {
+      margin-bottom: 0;
+      border-bottom: none;
     }
 
     .scheduled-queues-empty {
