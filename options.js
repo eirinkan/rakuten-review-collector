@@ -1619,8 +1619,8 @@ function removeDuplicates() {
             </div>
           </div>
           <div class="scheduled-queue-settings">
-            <div class="scheduled-queue-time-row">
-              <span class="scheduled-queue-time-label">実行時刻:</span>
+            <div class="scheduled-queue-row">
+              <span class="scheduled-queue-label">実行:</span>
               <div class="time-picker">
                 <select class="time-select scheduled-queue-hour" data-queue-id="${queue.id}">
                   ${generateHourOptions(hours)}
@@ -1630,20 +1630,16 @@ function removeDuplicates() {
                   ${generateMinuteOptions(minutes)}
                 </select>
               </div>
-            </div>
-            <div class="scheduled-queue-checkbox-row">
-              <label class="checkbox-label">
+              <label class="checkbox-label" style="margin-left: 12px;">
                 <input type="checkbox" class="scheduled-queue-incremental" data-queue-id="${queue.id}" ${queue.incrementalOnly ? 'checked' : ''}>
-                <span>差分取得（新着のみ）</span>
+                <span>差分のみ</span>
               </label>
+              <span class="scheduled-queue-last-run">前回: ${lastRunText}</span>
             </div>
-            <div class="scheduled-queue-url-row">
-              <span class="scheduled-queue-url-label">保存先:</span>
+            <div class="scheduled-queue-row">
+              <span class="scheduled-queue-label">保存:</span>
               <input type="text" class="scheduled-queue-url-input" data-queue-id="${queue.id}"
                      value="${escapeHtml(queue.spreadsheetUrl || '')}" placeholder="（設定のURLを使用）">
-            </div>
-            <div class="scheduled-queue-last-run">
-              最終実行: ${lastRunText}
             </div>
           </div>
         </div>
