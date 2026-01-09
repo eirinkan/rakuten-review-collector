@@ -1616,12 +1616,12 @@ async function updateScheduledAlarm(settings) {
 async function runScheduledCollection() {
   console.log('定期収集を開始');
 
-  const result = await chrome.storage.local.get(['scheduledCollection', 'savedQueues']);
+  const result = await chrome.storage.local.get(['scheduledCollection', 'scheduledQueues']);
   const settings = result.scheduledCollection || {};
-  let savedQueues = result.savedQueues || [];
+  const scheduledQueues = result.scheduledQueues || [];
 
   // 有効なキューを取得
-  const enabledQueues = savedQueues.filter(q => q.scheduledEnabled);
+  const enabledQueues = scheduledQueues.filter(q => q.enabled);
 
   if (enabledQueues.length === 0) {
     console.log('定期収集が有効なキューがありません');
@@ -1649,8 +1649,8 @@ async function runScheduledCollection() {
           scheduledRun: true,
           incrementalOnly: targetQueue.incrementalOnly !== false,
           gasUrl: targetQueue.gasUrl || null,
-          spreadsheetUrl: targetQueue.spreadsheetUrl || null,  // 定期収集用スプレッドシートURL
-          queueName: targetQueue.name  // ログ用にキュー名を保持
+          spreadsheetUrl: targetQueue.spreadsheetUrl || null,
+          queueName: targetQueue.name
         });
         addedCount++;
       }
@@ -1661,10 +1661,7 @@ async function runScheduledCollection() {
       processedQueues.push({ name: targetQueue.name, count: addedCount });
 
       // キューごとの最終実行時刻を更新
-      const queueIndex = savedQueues.findIndex(q => q.id === targetQueue.id);
-      if (queueIndex >= 0) {
-        savedQueues[queueIndex].lastScheduledRun = new Date().toISOString();
-      }
+      targetQueue.lastRun = new Date().toISOString();
     }
   });
 
@@ -1674,7 +1671,7 @@ async function runScheduledCollection() {
   }
 
   // キューと最終実行時刻を保存
-  await chrome.storage.local.set({ queue: currentQueue, savedQueues });
+  await chrome.storage.local.set({ queue: currentQueue, scheduledQueues });
 
   // 収集開始
   const queueSummary = processedQueues.map(q => `「${q.name}」${q.count}件`).join('、');

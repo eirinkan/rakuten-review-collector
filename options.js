@@ -1802,7 +1802,9 @@ function removeDuplicates() {
               addedAt: new Date().toISOString(),
               scheduledRun: true,
               incrementalOnly: targetQueue.incrementalOnly,
-              gasUrl: targetQueue.gasUrl || null
+              gasUrl: targetQueue.gasUrl || null,
+              spreadsheetUrl: targetQueue.spreadsheetUrl || null,
+              queueName: targetQueue.name
             });
             addedCount++;
           }
