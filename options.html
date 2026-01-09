@@ -1182,16 +1182,6 @@
           <span>商品ごとにシートを分ける</span>
         </label>
 
-        <div class="form-group">
-          <label>GAS Web App URL</label>
-          <div class="input-with-btn">
-            <input type="text" id="gasUrl" placeholder="https://script.google.com/macros/s/xxx/exec">
-            <button id="saveSettingsBtn" class="btn btn-primary">保存</button>
-          </div>
-        </div>
-
-        <div id="settingsStatus" class="status-message"></div>
-
         <button id="gasHelpToggle" class="collapsible">
           <span id="gasHelpIcon" class="toggle-icon">▶</span>
           <span>スプレッドシート連携の設定方法</span>
@@ -1272,10 +1262,17 @@
           <div class="step-card">
             <div class="step-header">
               <span class="step-number">6</span>
-              <span class="step-title">Web App URLを貼り付け</span>
+              <span class="step-title">Web App URLを貼り付けて保存</span>
             </div>
             <div class="step-content">
-              デプロイ完了後に表示される「ウェブアプリのURL」をコピーし、上の「GAS Web App URL」欄に貼り付けて「保存」をクリック。
+              デプロイ完了後に表示される「ウェブアプリのURL」をコピーし、下の欄に貼り付けて「保存」をクリック。
+              <div style="margin-top: 10px;">
+                <div class="input-with-btn">
+                  <input type="text" id="gasUrl" placeholder="https://script.google.com/macros/s/xxx/exec" style="flex: 1; padding: 10px 12px; background: var(--bg-input); border: 1px solid var(--border-input); border-radius: 8px; font-size: 12px; color: var(--text-primary);">
+                  <button id="saveSettingsBtn" class="btn btn-primary">保存</button>
+                </div>
+                <div id="settingsStatus" class="status-message" style="margin-top: 8px;"></div>
+              </div>
             </div>
           </div>
 
