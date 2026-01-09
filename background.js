@@ -509,20 +509,21 @@ function groupReviewsByProduct(reviews) {
 }
 
 /**
- * シートのデータ行数を取得
+ * シートにデータがあるか確認（1セル以上にデータがあればtrue）
  */
-async function getSheetDataRowCount(token, spreadsheetId, sheetTitle) {
+async function hasSheetData(token, spreadsheetId, sheetTitle) {
   const valuesResponse = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodeURIComponent(sheetTitle)}'!A:A`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodeURIComponent(sheetTitle)}'!A1:T1000`,
     { headers: { Authorization: `Bearer ${token}` } }
   );
   const valuesData = await valuesResponse.json();
-  return valuesData.values?.length || 0;
+  // 1つでもセルにデータがあればtrue
+  return valuesData.values && valuesData.values.length > 0;
 }
 
 /**
  * シートが存在するか確認し、なければ作成
- * 既存シートにデータがある場合は新しいシートを作成（_2, _3...）
+ * 既存シートにデータがある場合は _2 シートを使用（上書き）
  * 戻り値: 使用するシート名
  */
 async function ensureSheetExists(token, spreadsheetId, sheetName) {
@@ -543,63 +544,53 @@ async function ensureSheetExists(token, spreadsheetId, sheetName) {
 
   // 対象シートが存在する場合、データがあるか確認
   if (targetSheet) {
-    const actualRows = await getSheetDataRowCount(token, spreadsheetId, sheetName);
+    const hasData = await hasSheetData(token, spreadsheetId, sheetName);
 
-    // データがある場合（ヘッダー含め2行以上）、新しいシートを作成
-    if (actualRows >= 2) {
-      // 連番で空いているシート名を探す（_2, _3, ...）
-      let newSheetName = sheetName;
-      let counter = 2;
-      while (existingSheetNames.includes(newSheetName)) {
-        // 既存シートにデータがあるか確認
-        const existingRows = await getSheetDataRowCount(token, spreadsheetId, newSheetName);
-        if (existingRows <= 1) {
-          // 空のシートがあればそれを使用
-          return newSheetName;
+    // データがある場合、_2 シートを使用（存在しなければ作成）
+    if (hasData) {
+      const newSheetName = `${sheetName}_2`;
+
+      if (!existingSheetNames.includes(newSheetName)) {
+        // _2 シートがなければ新規作成
+        const createResponse = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              requests: [{
+                addSheet: {
+                  properties: { title: newSheetName }
+                }
+              }]
+            })
+          }
+        );
+
+        if (!createResponse.ok) {
+          const error = await createResponse.json();
+          throw new Error(error.error?.message || 'シートの作成に失敗しました');
         }
-        newSheetName = `${sheetName}_${counter}`;
-        counter++;
       }
-
-      // 新しいシートを作成
-      const createResponse = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            requests: [{
-              addSheet: {
-                properties: { title: newSheetName }
-              }
-            }]
-          })
-        }
-      );
-
-      if (!createResponse.ok) {
-        const error = await createResponse.json();
-        throw new Error(error.error?.message || 'シートの作成に失敗しました');
-      }
-
+      // _2 シートが既に存在する場合は上書きするのでそのまま返す
       return newSheetName;
     }
 
-    // データがない場合（空またはヘッダーのみ）、そのシートを使用
+    // データがない場合、そのシートを使用
     return sheetName;
   }
 
   // 対象シートが存在しない場合
-  // 空のシートを探す（1行以下 = 空またはヘッダーのみ）
+  // 空のシートを探す
   let emptySheet = null;
   for (const sheet of sheets) {
     const sheetTitle = sheet.properties.title;
-    const actualRows = await getSheetDataRowCount(token, spreadsheetId, sheetTitle);
+    const hasData = await hasSheetData(token, spreadsheetId, sheetTitle);
 
-    if (actualRows <= 1) {
+    if (!hasData) {
       emptySheet = sheet;
       break;
     }
