@@ -920,55 +920,56 @@
 
     /* Step Card */
     .step-card {
-      background: var(--bg-card);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border: 1px solid var(--border-glass);
-      border-radius: 10px;
-      padding: 12px;
-      margin-bottom: 12px;
-      border-left: 3px solid var(--rakuten-red);
+      padding: 0 0 10px 0;
+      margin-bottom: 6px;
+      border-bottom: 1px solid var(--border-glass);
+    }
+
+    .step-card:last-of-type {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
     }
 
     .step-header {
       display: flex;
       align-items: center;
-      gap: 10px;
-      margin-bottom: 8px;
+      gap: 8px;
+      margin-bottom: 4px;
     }
 
     .step-number {
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 24px;
-      height: 24px;
-      background: linear-gradient(135deg, var(--rakuten-red) 0%, var(--rakuten-red-dark) 100%);
+      width: 20px;
+      height: 20px;
+      background: var(--rakuten-red);
       color: white;
       border-radius: 50%;
-      font-size: 12px;
-      font-weight: 700;
+      font-size: 11px;
+      font-weight: 600;
       flex-shrink: 0;
     }
 
     .step-title {
       font-weight: 600;
       color: var(--text-primary);
-      font-size: 13px;
+      font-size: 12px;
     }
 
     .step-content {
-      padding-left: 34px;
+      padding-left: 28px;
       color: var(--text-secondary);
       font-size: 12px;
     }
 
     .step-content ol {
-      margin: 8px 0 0 16px;
+      margin: 6px 0 0 16px;
     }
 
     .step-content li {
-      margin-bottom: 4px;
+      margin-bottom: 3px;
     }
 
     /* Code Box */
@@ -1018,13 +1019,11 @@
 
     /* Success Box */
     .success-box {
-      background: rgba(40, 167, 69, 0.15);
-      border: 1px solid rgba(40, 167, 69, 0.4);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      padding: 14px;
-      border-radius: 10px;
-      margin-top: 12px;
+      background: rgba(40, 167, 69, 0.1);
+      border: 1px solid rgba(40, 167, 69, 0.3);
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 10px;
     }
 
     .success-box strong {
