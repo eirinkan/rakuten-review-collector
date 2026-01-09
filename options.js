@@ -682,15 +682,15 @@ function removeDuplicates() {
 
     // URLが空の場合はクリア
     if (!url) {
-      // 有効な定期キューで、個別スプレッドシートが未設定のものをチェック
+      // 有効な定期キューをチェック（個別スプレッドシートの有無に関わらず）
       const result = await chrome.storage.local.get(['scheduledQueues']);
       const scheduledQueues = result.scheduledQueues || [];
-      const affectedQueues = scheduledQueues.filter(q => q.enabled && !q.spreadsheetUrl);
+      const enabledQueues = scheduledQueues.filter(q => q.enabled);
 
-      if (affectedQueues.length > 0) {
-        const queueNames = affectedQueues.map(q => `・${q.name}`).join('\n');
+      if (enabledQueues.length > 0) {
+        const queueNames = enabledQueues.map(q => `・${q.name}`).join('\n');
         const confirmed = confirm(
-          `以下の定期収集キューはスプレッドシートが設定されていないため、無効になります。\n\n${queueNames}\n\n続行しますか？`
+          `通常収集のスプレッドシートを削除すると、以下の定期収集キューが無効になります。\n\n${queueNames}\n\n続行しますか？`
         );
 
         if (!confirmed) {
@@ -700,9 +700,9 @@ function removeDuplicates() {
           return;
         }
 
-        // 確認OK：影響を受けるキューを無効化
+        // 確認OK：全ての有効なキューを無効化
         const updatedQueues = scheduledQueues.map(q => {
-          if (q.enabled && !q.spreadsheetUrl) {
+          if (q.enabled) {
             return { ...q, enabled: false };
           }
           return q;
