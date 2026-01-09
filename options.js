@@ -1681,8 +1681,29 @@ function removeDuplicates() {
 
     // イベントリスナー
     scheduledQueuesList.querySelectorAll('.scheduled-queue-toggle').forEach(toggle => {
-      toggle.addEventListener('change', (e) => {
-        updateScheduledQueueProperty(e.target.dataset.queueId, 'enabled', e.target.checked);
+      toggle.addEventListener('change', async (e) => {
+        const queueId = e.target.dataset.queueId;
+        const isEnabled = e.target.checked;
+
+        // オンにする場合、スプレッドシートが設定されているかチェック
+        if (isEnabled) {
+          const result = await chrome.storage.local.get(['scheduledQueues']);
+          const scheduledQueues = result.scheduledQueues || [];
+          const queue = scheduledQueues.find(q => q.id === queueId);
+          const queueSpreadsheetUrl = queue?.spreadsheetUrl || '';
+
+          const syncResult = await chrome.storage.sync.get(['spreadsheetUrl']);
+          const globalSpreadsheetUrl = syncResult.spreadsheetUrl || '';
+
+          // どちらも設定されていない場合は警告
+          if (!queueSpreadsheetUrl && !globalSpreadsheetUrl) {
+            e.target.checked = false;
+            alert('スプレッドシートが設定されていません。\n\n定期収集を有効にするには、このキューの「スプレッドシート」欄にURLを入力するか、設定画面で通常収集用のスプレッドシートを設定してください。');
+            return;
+          }
+        }
+
+        updateScheduledQueueProperty(queueId, 'enabled', isEnabled);
       });
     });
 
