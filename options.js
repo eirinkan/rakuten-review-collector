@@ -1573,9 +1573,22 @@ function removeDuplicates() {
   function renderScheduledQueues(scheduledQueues) {
     if (!scheduledQueuesList) return;
 
+    // 親カードを取得
+    const parentCard = scheduledQueuesList.closest('.card');
+
     if (scheduledQueues.length === 0) {
       scheduledQueuesList.innerHTML = '';
+      scheduledQueuesList.style.display = 'none';
+      if (parentCard) {
+        parentCard.style.paddingBottom = '12px';
+      }
       return;
+    }
+
+    // キューがある場合は表示
+    scheduledQueuesList.style.display = 'block';
+    if (parentCard) {
+      parentCard.style.paddingBottom = '';
     }
 
     // 時刻選択のHTML生成ヘルパー
