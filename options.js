@@ -397,6 +397,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         await chrome.storage.local.set({ scheduledQueues: updatedQueues });
         await renderScheduledQueues(); // UIを更新
+        updateScheduledAlarm(); // アラームをクリア
       }
 
       chrome.storage.sync.set({ spreadsheetUrl: '' }, () => {
