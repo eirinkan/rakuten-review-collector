@@ -1149,6 +1149,19 @@
     <div id="settingsCard" class="help-card">
       <h2>設定</h2>
 
+      <!-- Notification -->
+      <div class="settings-section">
+        <h3>通知</h3>
+        <label class="checkbox-label">
+          <input type="checkbox" id="enableNotification" checked>
+          <span>収集完了時にデスクトップ通知</span>
+        </label>
+        <label class="checkbox-label" style="margin-top: 8px;">
+          <input type="checkbox" id="notifyPerProduct">
+          <span>商品ごとに通知（全体完了のみの場合はOFF）</span>
+        </label>
+      </div>
+
       <!-- CSV -->
       <div class="settings-section">
         <h3>CSV</h3>
@@ -1266,19 +1279,6 @@
             <span>レビュー収集時に自動でスプレッドシートに保存されます。スプレッドシートを<strong>リロード</strong>すると「🛠️ レビュー管理」メニューが追加され、初期化・重複削除などの機能が使えます。</span>
           </div>
         </div>
-      </div>
-
-      <!-- Notification -->
-      <div class="settings-section">
-        <h3>通知</h3>
-        <label class="checkbox-label">
-          <input type="checkbox" id="enableNotification" checked>
-          <span>収集完了時にデスクトップ通知</span>
-        </label>
-        <label class="checkbox-label" style="margin-top: 8px;">
-          <input type="checkbox" id="notifyPerProduct">
-          <span>商品ごとに通知（全体完了のみの場合はOFF）</span>
-        </label>
       </div>
     </div>
 
