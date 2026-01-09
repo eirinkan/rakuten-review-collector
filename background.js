@@ -526,6 +526,83 @@ async function ensureSheetExists(token, spreadsheetId, sheetName) {
 }
 
 /**
+ * シートIDを取得
+ */
+async function getSheetId(token, spreadsheetId, sheetName) {
+  const response = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const data = await response.json();
+  const sheet = data.sheets?.find(s => s.properties.title === sheetName);
+  return sheet?.properties?.sheetId || 0;
+}
+
+/**
+ * ヘッダー行に書式を適用（赤背景・白テキスト・太字・行固定）
+ */
+async function formatHeaderRow(token, spreadsheetId, sheetId) {
+  const requests = [
+    // ヘッダー行の書式設定（赤背景・白テキスト・太字・中央揃え）
+    {
+      repeatCell: {
+        range: {
+          sheetId: sheetId,
+          startRowIndex: 0,
+          endRowIndex: 1,
+          startColumnIndex: 0,
+          endColumnIndex: 20  // A-T列
+        },
+        cell: {
+          userEnteredFormat: {
+            backgroundColor: {
+              red: 0.75,  // #BF0000に近い赤
+              green: 0,
+              blue: 0
+            },
+            textFormat: {
+              foregroundColor: {
+                red: 1,
+                green: 1,
+                blue: 1
+              },
+              bold: true
+            },
+            horizontalAlignment: 'CENTER',
+            verticalAlignment: 'MIDDLE'
+          }
+        },
+        fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)'
+      }
+    },
+    // 1行目を固定
+    {
+      updateSheetProperties: {
+        properties: {
+          sheetId: sheetId,
+          gridProperties: {
+            frozenRowCount: 1
+          }
+        },
+        fields: 'gridProperties.frozenRowCount'
+      }
+    }
+  ];
+
+  await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ requests })
+    }
+  );
+}
+
+/**
  * シートにデータを追加
  */
 async function appendToSheet(token, spreadsheetId, sheetName, reviews) {
@@ -567,6 +644,10 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews) {
         body: JSON.stringify({ values: [headers] })
       }
     );
+
+    // ヘッダー書式を適用（赤背景・白テキスト・太字・行固定）
+    const sheetId = await getSheetId(token, spreadsheetId, sheetName);
+    await formatHeaderRow(token, spreadsheetId, sheetId);
   }
 
   // データを追加
