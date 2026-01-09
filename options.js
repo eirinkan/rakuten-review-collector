@@ -1138,7 +1138,6 @@ function removeDuplicates() {
         }, (response) => {
           addToQueueBtn.disabled = false;
           if (response && response.success) {
-            showStatus(addStatus, 'success', `${response.addedCount}件追加しました`);
             loadQueue();
             addLog(`ランキングから${response.addedCount}件をキューに追加`, 'success');
             productUrl.value = '';
@@ -1202,11 +1201,6 @@ function removeDuplicates() {
       }
 
       chrome.storage.local.set({ queue }, () => {
-        let message = `${addedCount}件追加しました`;
-        if (skippedCount > 0) {
-          message += `（${skippedCount}件は重複のためスキップ）`;
-        }
-        showStatus(addStatus, 'success', message);
         loadQueue();
         addLog(`${addedCount}件の商品をキューに追加`, 'success');
         productUrl.value = '';
