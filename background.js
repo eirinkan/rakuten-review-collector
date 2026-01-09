@@ -539,7 +539,7 @@ async function getSheetId(token, spreadsheetId, sheetName) {
 }
 
 /**
- * データ行に書式を適用（垂直中央揃え）
+ * データ行に書式を適用（白背景・黒文字・垂直中央揃え）
  */
 async function formatDataRows(token, spreadsheetId, sheetId, startRow, endRow) {
   const requests = [
@@ -554,10 +554,22 @@ async function formatDataRows(token, spreadsheetId, sheetId, startRow, endRow) {
         },
         cell: {
           userEnteredFormat: {
+            backgroundColor: {
+              red: 1,
+              green: 1,
+              blue: 1
+            },
+            textFormat: {
+              foregroundColor: {
+                red: 0,
+                green: 0,
+                blue: 0
+              }
+            },
             verticalAlignment: 'MIDDLE'
           }
         },
-        fields: 'userEnteredFormat.verticalAlignment'
+        fields: 'userEnteredFormat(backgroundColor,textFormat,verticalAlignment)'
       }
     }
   ];
@@ -622,6 +634,17 @@ async function formatHeaderRow(token, spreadsheetId, sheetId) {
           }
         },
         fields: 'gridProperties.frozenRowCount'
+      }
+    },
+    // U列以降を削除（21列目以降）
+    {
+      deleteDimension: {
+        range: {
+          sheetId: sheetId,
+          dimension: 'COLUMNS',
+          startIndex: 20,  // U列（0-indexed で20）
+          endIndex: 26     // Z列まで（デフォルトの列数）
+        }
       }
     }
   ];

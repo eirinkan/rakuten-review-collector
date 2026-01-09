@@ -1574,7 +1574,7 @@ function removeDuplicates() {
     if (!scheduledQueuesList) return;
 
     if (scheduledQueues.length === 0) {
-      scheduledQueuesList.innerHTML = '<div class="scheduled-queues-empty-compact">保存キューを追加してください</div>';
+      scheduledQueuesList.innerHTML = '';
       return;
     }
 
