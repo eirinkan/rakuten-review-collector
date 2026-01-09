@@ -509,7 +509,21 @@ function groupReviewsByProduct(reviews) {
 }
 
 /**
- * シートが存在するか確認し、なければ作成（空シートがあればリネームして使用）
+ * シートのデータ行数を取得
+ */
+async function getSheetDataRowCount(token, spreadsheetId, sheetTitle) {
+  const valuesResponse = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodeURIComponent(sheetTitle)}'!A:A`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const valuesData = await valuesResponse.json();
+  return valuesData.values?.length || 0;
+}
+
+/**
+ * シートが存在するか確認し、なければ作成
+ * 既存シートにデータがある場合は新しいシートを作成（_2, _3...）
+ * 戻り値: 使用するシート名
  */
 async function ensureSheetExists(token, spreadsheetId, sheetName) {
   const response = await fetch(
@@ -524,59 +538,30 @@ async function ensureSheetExists(token, spreadsheetId, sheetName) {
 
   const data = await response.json();
   const sheets = data.sheets || [];
-  const sheetExists = sheets.some(sheet => sheet.properties.title === sheetName);
+  const existingSheetNames = sheets.map(sheet => sheet.properties.title);
+  const targetSheet = sheets.find(sheet => sheet.properties.title === sheetName);
 
-  if (!sheetExists) {
-    // 空のシートを探す（行数が2以下 = ヘッダーのみまたは空）
-    let emptySheet = null;
-    for (const sheet of sheets) {
-      const rowCount = sheet.properties.gridProperties?.rowCount || 0;
-      // デフォルトシートは1000行あるので、実際のデータ行数を確認
-      const sheetTitle = sheet.properties.title;
-      const valuesResponse = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodeURIComponent(sheetTitle)}'!A:A`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const valuesData = await valuesResponse.json();
-      const actualRows = valuesData.values?.length || 0;
+  // 対象シートが存在する場合、データがあるか確認
+  if (targetSheet) {
+    const actualRows = await getSheetDataRowCount(token, spreadsheetId, sheetName);
 
-      // 1行以下（空またはヘッダーのみ）なら空シートとみなす
-      if (actualRows <= 1) {
-        emptySheet = sheet;
-        break;
-      }
-    }
-
-    if (emptySheet) {
-      // 空シートの名前を変更
-      const renameResponse = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            requests: [{
-              updateSheetProperties: {
-                properties: {
-                  sheetId: emptySheet.properties.sheetId,
-                  title: sheetName
-                },
-                fields: 'title'
-              }
-            }]
-          })
+    // データがある場合（ヘッダー含め2行以上）、新しいシートを作成
+    if (actualRows >= 2) {
+      // 連番で空いているシート名を探す（_2, _3, ...）
+      let newSheetName = sheetName;
+      let counter = 2;
+      while (existingSheetNames.includes(newSheetName)) {
+        // 既存シートにデータがあるか確認
+        const existingRows = await getSheetDataRowCount(token, spreadsheetId, newSheetName);
+        if (existingRows <= 1) {
+          // 空のシートがあればそれを使用
+          return newSheetName;
         }
-      );
-
-      if (!renameResponse.ok) {
-        const error = await renameResponse.json();
-        throw new Error(error.error?.message || 'シート名の変更に失敗しました');
+        newSheetName = `${sheetName}_${counter}`;
+        counter++;
       }
-    } else {
-      // 空シートがなければ新規作成
+
+      // 新しいシートを作成
       const createResponse = await fetch(
         `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
         {
@@ -588,7 +573,7 @@ async function ensureSheetExists(token, spreadsheetId, sheetName) {
           body: JSON.stringify({
             requests: [{
               addSheet: {
-                properties: { title: sheetName }
+                properties: { title: newSheetName }
               }
             }]
           })
@@ -599,8 +584,82 @@ async function ensureSheetExists(token, spreadsheetId, sheetName) {
         const error = await createResponse.json();
         throw new Error(error.error?.message || 'シートの作成に失敗しました');
       }
+
+      return newSheetName;
+    }
+
+    // データがない場合（空またはヘッダーのみ）、そのシートを使用
+    return sheetName;
+  }
+
+  // 対象シートが存在しない場合
+  // 空のシートを探す（1行以下 = 空またはヘッダーのみ）
+  let emptySheet = null;
+  for (const sheet of sheets) {
+    const sheetTitle = sheet.properties.title;
+    const actualRows = await getSheetDataRowCount(token, spreadsheetId, sheetTitle);
+
+    if (actualRows <= 1) {
+      emptySheet = sheet;
+      break;
     }
   }
+
+  if (emptySheet) {
+    // 空シートの名前を変更
+    const renameResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          requests: [{
+            updateSheetProperties: {
+              properties: {
+                sheetId: emptySheet.properties.sheetId,
+                title: sheetName
+              },
+              fields: 'title'
+            }
+          }]
+        })
+      }
+    );
+
+    if (!renameResponse.ok) {
+      const error = await renameResponse.json();
+      throw new Error(error.error?.message || 'シート名の変更に失敗しました');
+    }
+  } else {
+    // 空シートがなければ新規作成
+    const createResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          requests: [{
+            addSheet: {
+              properties: { title: sheetName }
+            }
+          }]
+        })
+      }
+    );
+
+    if (!createResponse.ok) {
+      const error = await createResponse.json();
+      throw new Error(error.error?.message || 'シートの作成に失敗しました');
+    }
+  }
+
+  return sheetName;
 }
 
 /**
@@ -744,10 +803,11 @@ async function formatHeaderRow(token, spreadsheetId, sheetId) {
  * シートにデータを追加
  */
 async function appendToSheet(token, spreadsheetId, sheetName, reviews) {
-  await ensureSheetExists(token, spreadsheetId, sheetName);
+  // ensureSheetExistsは実際に使用するシート名を返す（データがある場合は _2, _3 など）
+  const actualSheetName = await ensureSheetExists(token, spreadsheetId, sheetName);
 
-  const encodedSheetName = encodeURIComponent(sheetName);
-  const sheetId = await getSheetId(token, spreadsheetId, sheetName);
+  const encodedSheetName = encodeURIComponent(actualSheetName);
+  const sheetId = await getSheetId(token, spreadsheetId, actualSheetName);
 
   // ヘッダー
   const headers = [
