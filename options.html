@@ -588,7 +588,7 @@
       justify-content: space-between;
       align-items: center;
       margin-bottom: 12px;
-      padding-bottom: 8px;
+      padding: 8px 0;
       border-bottom: 1px solid var(--border-glass);
     }
 
@@ -2044,12 +2044,17 @@
             <li><strong>概要:</strong> 保存したキューを毎日自動で収集する機能</li>
             <li><strong>設定方法:</strong>
               <br>① ヘッダーの📅アイコンで定期収集画面を開く
-              <br>② 保存済みキューから追加
-              <br>③ 収集時刻を設定してトグルをON
+              <br>② 保存済みキューから追加（デフォルトはOFF）
+              <br>③ スプレッドシートを設定してトグルをON
+              <br>④ 収集時刻を設定
             </li>
+            <li><strong>シート名:</strong> 「定期・商品管理番号」形式で保存（通常収集と区別）</li>
             <li><strong>差分のみ収集:</strong> ONにすると前回以降の新着レビューのみ収集（効率的）</li>
             <li><strong>個別スプレッドシート:</strong> キューごとに異なるスプレッドシートを指定可能</li>
-            <li><strong>注意:</strong> Chromeブラウザが起動している必要があります</li>
+            <li><strong>注意:</strong>
+              <br>・Chromeブラウザが起動している必要があります
+              <br>・定期収集データはCSVには保存されません（スプレッドシートのみ）
+            </li>
           </ul>
 
           <h3>データの保存方法</h3>
