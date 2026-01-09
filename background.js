@@ -334,8 +334,19 @@ async function handleSaveReviews(reviews, tabId = null) {
     gasUrl = globalGasUrl;
   }
 
+  // ログ用のプレフィックスを決定（定期収集の場合はキュー名、それ以外は商品管理番号）
   const productId = newReviews[0]?.productId || '';
-  const prefix = productId ? `[${productId}] ` : '';
+  let prefix = productId ? `[${productId}] ` : '';
+
+  // 定期収集の場合はキュー名を使用
+  if (tabId) {
+    const collectingResult = await chrome.storage.local.get(['collectingItems']);
+    const collectingItems = collectingResult.collectingItems || [];
+    const currentItem = collectingItems.find(item => item.tabId === tabId);
+    if (currentItem?.queueName) {
+      prefix = `[${currentItem.queueName}] `;
+    }
+  }
 
   // 優先順位: スプレッドシートURL（Sheets API直接） > GAS URL
   if (spreadsheetUrl) {
@@ -974,9 +985,11 @@ async function handleCollectionComplete(tabId) {
     // 商品の収集完了ログを出力
     if (completedItem) {
       const productId = extractProductIdFromUrl(completedItem.url);
-      log(`[${productId}] 収集が完了しました`, 'success');
+      // 定期収集の場合はキュー名、それ以外は商品管理番号を表示
+      const logPrefix = completedItem.queueName ? `[${completedItem.queueName}]` : `[${productId}]`;
+      log(`${logPrefix} 収集が完了しました`, 'success');
       // 商品ごとの通知（設定で有効な場合のみ）
-      showNotification('楽天レビュー収集', `[${productId}] 収集が完了しました`, productId);
+      showNotification('楽天レビュー収集', `${logPrefix} 収集が完了しました`, productId);
 
       // 最終収集日を保存（差分取得用）
       const lcResult = await chrome.storage.local.get(['productLastCollected']);
