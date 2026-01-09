@@ -26,3 +26,6 @@ gas/.clasp.json
 # 環境変数
 .env
 .env.local
+
+# Claude Code設定（APIトークン含む）
+.claude/
