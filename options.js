@@ -1573,14 +1573,20 @@ function removeDuplicates() {
   function renderScheduledQueues(scheduledQueues) {
     if (!scheduledQueuesList) return;
 
-    // 親カードを取得
+    // 親カードとヘッダーを取得
     const parentCard = scheduledQueuesList.closest('.card');
+    const queueHeader = parentCard?.querySelector('.queue-header');
 
     if (scheduledQueues.length === 0) {
       scheduledQueuesList.innerHTML = '';
       scheduledQueuesList.style.display = 'none';
       if (parentCard) {
         parentCard.style.paddingBottom = '12px';
+      }
+      if (queueHeader) {
+        queueHeader.style.marginBottom = '0';
+        queueHeader.style.paddingBottom = '0';
+        queueHeader.style.borderBottom = 'none';
       }
       return;
     }
@@ -1589,6 +1595,11 @@ function removeDuplicates() {
     scheduledQueuesList.style.display = 'block';
     if (parentCard) {
       parentCard.style.paddingBottom = '';
+    }
+    if (queueHeader) {
+      queueHeader.style.marginBottom = '';
+      queueHeader.style.paddingBottom = '';
+      queueHeader.style.borderBottom = '';
     }
 
     // 時刻選択のHTML生成ヘルパー
