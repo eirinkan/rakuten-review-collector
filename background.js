@@ -746,8 +746,18 @@ async function formatHeaderRow(token, spreadsheetId, sheetId) {
 async function appendToSheet(token, spreadsheetId, sheetName, reviews) {
   await ensureSheetExists(token, spreadsheetId, sheetName);
 
+  const encodedSheetName = encodeURIComponent(sheetName);
+  const sheetId = await getSheetId(token, spreadsheetId, sheetName);
+
+  // ヘッダー
+  const headers = [
+    'レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文',
+    '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先',
+    '購入回数', '参考になった数', 'ショップからの返信', 'ショップ名', 'レビュー掲載URL', '収集日時'
+  ];
+
   // データを行形式に変換
-  const values = reviews.map(review => [
+  const dataValues = reviews.map(review => [
     review.reviewDate || '', review.productId || '', review.productName || '',
     review.productUrl || '', review.rating || '', review.title || '', review.body || '',
     review.author || '', review.age || '', review.gender || '', review.orderDate || '',
@@ -756,67 +766,79 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews) {
     review.shopName || '', review.pageUrl || '', review.collectedAt || ''
   ]);
 
-  // ヘッダー確認
-  const encodedSheetName = encodeURIComponent(sheetName);
-  const headerResponse = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A1:T1`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
+  // ヘッダー + データを結合
+  const allValues = [headers, ...dataValues];
+  const totalRows = allValues.length;
 
-  const headerData = await headerResponse.json();
-  if (!headerData.values || headerData.values.length === 0) {
-    // ヘッダーがない場合は追加
-    const headers = [
-      'レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文',
-      '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先',
-      '購入回数', '参考になった数', 'ショップからの返信', 'ショップ名', 'レビュー掲載URL', '収集日時'
-    ];
-    await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A1:T1?valueInputOption=RAW`,
-      {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ values: [headers] })
-      }
-    );
-
-    // ヘッダー書式を適用（赤背景・白テキスト・太字・行固定）
-    const sheetId = await getSheetId(token, spreadsheetId, sheetName);
-    await formatHeaderRow(token, spreadsheetId, sheetId);
-  }
-
-  // データを追加
-  const response = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A:T:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+  // 1. シートの全データをクリア
+  await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A:T:clear`,
     {
       method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    }
+  );
+
+  // 2. ヘッダーとデータを書き込み
+  const writeResponse = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A1:T${totalRows}?valueInputOption=RAW`,
+    {
+      method: 'PUT',
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ values })
+      body: JSON.stringify({ values: allValues })
     }
   );
 
-  if (!response.ok) {
-    const error = await response.json();
+  if (!writeResponse.ok) {
+    const error = await writeResponse.json();
     throw new Error(error.error?.message || 'スプレッドシートへの書き込みに失敗しました');
   }
 
-  // 追加したデータ行に垂直中央揃えを適用
-  const appendResult = await response.json();
-  if (appendResult.updates && appendResult.updates.updatedRange) {
-    const sheetId = await getSheetId(token, spreadsheetId, sheetName);
-    // 追加された行の範囲を取得（例: 'シート名'!A2:T5 → 行2-5）
-    const rangeMatch = appendResult.updates.updatedRange.match(/!A(\d+):T(\d+)/);
-    if (rangeMatch) {
-      const startRow = parseInt(rangeMatch[1]) - 1;  // 0-indexed
-      const endRow = parseInt(rangeMatch[2]);        // exclusive
-      await formatDataRows(token, spreadsheetId, sheetId, startRow, endRow);
-    }
+  // 3. シートの行数をデータ行数に一致させる（余分な行を削除）
+  // まずシートのプロパティを取得して現在の行数を確認
+  const sheetPropsResponse = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets(properties)`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const sheetPropsData = await sheetPropsResponse.json();
+  const sheetProps = sheetPropsData.sheets?.find(s => s.properties.sheetId === sheetId);
+  const currentRowCount = sheetProps?.properties?.gridProperties?.rowCount || 1000;
+
+  // 余分な行がある場合は削除
+  if (currentRowCount > totalRows) {
+    await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          requests: [{
+            deleteDimension: {
+              range: {
+                sheetId: sheetId,
+                dimension: 'ROWS',
+                startIndex: totalRows,
+                endIndex: currentRowCount
+              }
+            }
+          }]
+        })
+      }
+    );
+  }
+
+  // 4. ヘッダー書式を適用（赤背景・白テキスト・太字・行固定・U列以降削除）
+  await formatHeaderRow(token, spreadsheetId, sheetId);
+
+  // 5. データ行に書式を適用（白背景・黒テキスト・垂直中央揃え）
+  if (dataValues.length > 0) {
+    await formatDataRows(token, spreadsheetId, sheetId, 1, totalRows);
   }
 }
 
