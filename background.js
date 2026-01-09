@@ -509,6 +509,22 @@ function groupReviewsByProduct(reviews) {
 }
 
 /**
+ * シートがこの拡張機能で作成されたものか確認
+ * ヘッダー行が「レビュー日, 商品管理番号, 商品名」で始まっていればtrue
+ */
+async function isOurSheet(token, spreadsheetId, sheetTitle) {
+  const valuesResponse = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodeURIComponent(sheetTitle)}'!A1:C1`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const valuesData = await valuesResponse.json();
+  const firstRow = valuesData.values?.[0] || [];
+
+  // このアプリのヘッダー形式かチェック
+  return firstRow[0] === 'レビュー日' && firstRow[1] === '商品管理番号' && firstRow[2] === '商品名';
+}
+
+/**
  * シートにデータがあるか確認（1セル以上にデータがあればtrue）
  */
 async function hasSheetData(token, spreadsheetId, sheetTitle) {
@@ -517,13 +533,13 @@ async function hasSheetData(token, spreadsheetId, sheetTitle) {
     { headers: { Authorization: `Bearer ${token}` } }
   );
   const valuesData = await valuesResponse.json();
-  // 1つでもセルにデータがあればtrue
   return valuesData.values && valuesData.values.length > 0;
 }
 
 /**
  * シートが存在するか確認し、なければ作成
- * 既存シートにデータがある場合は _2 シートを使用（上書き）
+ * - この拡張機能で作成したシート → 上書き
+ * - 他のデータがあるシート → _2 シートを作成
  * 戻り値: 使用するシート名
  */
 async function ensureSheetExists(token, spreadsheetId, sheetName) {
@@ -542,16 +558,23 @@ async function ensureSheetExists(token, spreadsheetId, sheetName) {
   const existingSheetNames = sheets.map(sheet => sheet.properties.title);
   const targetSheet = sheets.find(sheet => sheet.properties.title === sheetName);
 
-  // 対象シートが存在する場合、データがあるか確認
+  // 対象シートが存在する場合
   if (targetSheet) {
     const hasData = await hasSheetData(token, spreadsheetId, sheetName);
 
-    // データがある場合、_2 シートを使用（存在しなければ作成）
     if (hasData) {
+      // データがある場合、この拡張機能のデータかチェック
+      const isOurs = await isOurSheet(token, spreadsheetId, sheetName);
+
+      if (isOurs) {
+        // この拡張機能のデータなら上書き
+        return sheetName;
+      }
+
+      // 他のデータがある場合は _2 シートを使用
       const newSheetName = `${sheetName}_2`;
 
       if (!existingSheetNames.includes(newSheetName)) {
-        // _2 シートがなければ新規作成
         const createResponse = await fetch(
           `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
           {
@@ -575,7 +598,6 @@ async function ensureSheetExists(token, spreadsheetId, sheetName) {
           throw new Error(error.error?.message || 'シートの作成に失敗しました');
         }
       }
-      // _2 シートが既に存在する場合は上書きするのでそのまま返す
       return newSheetName;
     }
 
