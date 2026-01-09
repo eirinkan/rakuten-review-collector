@@ -1497,7 +1497,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const overlay = document.getElementById('quickStartOverlay');
     const closeBtn = document.getElementById('quickStartCloseBtn');
     const urlInput = document.getElementById('quickStartSpreadsheetUrl');
-    const saveBtn = document.getElementById('quickStartSaveBtn');
     const statusEl = document.getElementById('quickStartUrlStatus');
 
     if (!overlay || !closeBtn) return;
@@ -1507,9 +1506,9 @@ document.addEventListener('DOMContentLoaded', () => {
       overlay.style.display = 'flex';
     }
 
-    // スプレッドシートURL保存ボタン
-    if (saveBtn && urlInput && statusEl) {
-      saveBtn.addEventListener('click', () => {
+    // スプレッドシートURL自動保存
+    if (urlInput && statusEl) {
+      urlInput.addEventListener('blur', () => {
         const url = urlInput.value.trim();
 
         if (!url) {
