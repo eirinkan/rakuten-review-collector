@@ -109,11 +109,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const backToMainBtn = document.getElementById('backToMainBtn');
 
   // 定期収集関連
-  const scheduledEnabled = document.getElementById('scheduledEnabled');
-  const scheduledSettings = document.getElementById('scheduledSettings');
   const scheduledTime = document.getElementById('scheduledTime');
   const incrementalOnly = document.getElementById('incrementalOnly');
-  const runScheduledNowBtn = document.getElementById('runScheduledNowBtn');
   const nextRunInfo = document.getElementById('nextRunInfo');
   const lastRunInfo = document.getElementById('lastRunInfo');
   const scheduledQueuesList = document.getElementById('scheduledQueuesList');
@@ -468,18 +465,12 @@ function removeDuplicates() {
       backToMainBtn.addEventListener('click', showMainView);
     }
 
-    // 定期収集イベント
-    if (scheduledEnabled) {
-      scheduledEnabled.addEventListener('change', handleScheduledEnabledChange);
-    }
+    // 定期収集イベント（共通設定）
     if (scheduledTime) {
       scheduledTime.addEventListener('change', saveScheduledSettings);
     }
     if (incrementalOnly) {
       incrementalOnly.addEventListener('change', saveScheduledSettings);
-    }
-    if (runScheduledNowBtn) {
-      runScheduledNowBtn.addEventListener('click', runScheduledNow);
     }
     if (copyScheduledLogBtn) {
       copyScheduledLogBtn.addEventListener('click', copyScheduledLogs);
@@ -1436,11 +1427,6 @@ function removeDuplicates() {
       const scheduled = result.scheduledCollection || {};
       const savedQueues = result.savedQueues || [];
 
-      if (scheduledEnabled) {
-        scheduledEnabled.checked = scheduled.enabled || false;
-        scheduledSettings.style.display = scheduled.enabled ? 'block' : 'none';
-      }
-
       if (scheduledTime && scheduled.time) {
         scheduledTime.value = scheduled.time;
       }
@@ -1450,7 +1436,7 @@ function removeDuplicates() {
       }
 
       renderScheduledQueues(savedQueues);
-      updateScheduledStatusDisplay(scheduled);
+      updateScheduledStatusDisplay(scheduled, savedQueues);
     });
   }
 
@@ -1458,122 +1444,208 @@ function removeDuplicates() {
   function renderScheduledQueues(savedQueues) {
     if (!scheduledQueuesList) return;
 
-    chrome.storage.local.get(['scheduledCollection'], (result) => {
-      const scheduled = result.scheduledCollection || {};
-      const targetQueueId = scheduled.targetQueueId || '';
+    if (savedQueues.length === 0) {
+      scheduledQueuesList.innerHTML = `
+        <div class="scheduled-queues-empty">
+          保存済みキューがありません。<br>
+          メイン画面でキューを保存してください。
+        </div>
+      `;
+      return;
+    }
 
-      if (savedQueues.length === 0) {
-        scheduledQueuesList.innerHTML = `
-          <div class="scheduled-queues-empty">
-            保存済みキューがありません。<br>
-            メイン画面でキューを保存してください。
+    scheduledQueuesList.innerHTML = savedQueues.map(queue => {
+      const isEnabled = queue.scheduledEnabled || false;
+      const gasUrl = queue.gasUrl || '';
+
+      return `
+        <div class="scheduled-queue-card ${isEnabled ? 'enabled' : ''}" data-id="${queue.id}">
+          <div class="scheduled-queue-header">
+            <div class="scheduled-queue-title">
+              <span class="scheduled-queue-name">${escapeHtml(queue.name)}</span>
+              <span class="scheduled-queue-count">${queue.items.length}件</span>
+            </div>
+            <div class="scheduled-queue-actions">
+              <button class="scheduled-queue-run-btn" data-queue-id="${queue.id}">▶ 実行</button>
+              <label class="toggle-switch">
+                <input type="checkbox" class="scheduled-queue-toggle" data-queue-id="${queue.id}" ${isEnabled ? 'checked' : ''}>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
           </div>
-        `;
+          <div class="scheduled-queue-settings">
+            <div class="scheduled-queue-url-row">
+              <span class="scheduled-queue-url-label">スプレッドシートURL:</span>
+              <input type="text" class="scheduled-queue-url-input" data-queue-id="${queue.id}"
+                     value="${escapeHtml(gasUrl)}" placeholder="（通常設定を使用）">
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // イベントリスナー
+    scheduledQueuesList.querySelectorAll('.scheduled-queue-toggle').forEach(toggle => {
+      toggle.addEventListener('change', (e) => {
+        toggleQueueScheduled(e.target.dataset.queueId, e.target.checked);
+      });
+    });
+
+    scheduledQueuesList.querySelectorAll('.scheduled-queue-run-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        runQueueNow(e.target.dataset.queueId);
+      });
+    });
+
+    scheduledQueuesList.querySelectorAll('.scheduled-queue-url-input').forEach(input => {
+      let saveTimeout = null;
+      input.addEventListener('input', (e) => {
+        // デバウンス: 500ms後に自動保存
+        if (saveTimeout) clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+          saveQueueGasUrl(e.target.dataset.queueId, e.target.value, e.target);
+        }, 500);
+      });
+    });
+  }
+
+  // キューの定期収集ON/OFF切り替え
+  function toggleQueueScheduled(queueId, enabled) {
+    chrome.storage.local.get(['savedQueues'], (result) => {
+      const savedQueues = result.savedQueues || [];
+      const queue = savedQueues.find(q => q.id === queueId);
+      if (queue) {
+        queue.scheduledEnabled = enabled;
+        chrome.storage.local.set({ savedQueues }, () => {
+          // カードの表示を更新
+          const card = scheduledQueuesList.querySelector(`.scheduled-queue-card[data-id="${queueId}"]`);
+          if (card) {
+            card.classList.toggle('enabled', enabled);
+          }
+          // アラームを更新
+          saveScheduledSettings();
+        });
+      }
+    });
+  }
+
+  // キューの即時実行
+  function runQueueNow(queueId) {
+    chrome.storage.local.get(['savedQueues', 'scheduledCollection'], (result) => {
+      const savedQueues = result.savedQueues || [];
+      const scheduled = result.scheduledCollection || {};
+      const targetQueue = savedQueues.find(q => q.id === queueId);
+
+      if (!targetQueue || targetQueue.items.length === 0) {
+        addScheduledLog('キューが見つからないか、空です', 'error');
         return;
       }
 
-      scheduledQueuesList.innerHTML = savedQueues.map(queue => {
-        const isSelected = queue.id === targetQueueId;
-        const gasUrl = queue.gasUrl || '';
+      // キューを読み込んで収集開始
+      chrome.storage.local.get(['queue'], (queueResult) => {
+        const currentQueue = queueResult.queue || [];
 
-        return `
-          <div class="scheduled-queue-card ${isSelected ? 'active' : ''}" data-id="${queue.id}">
-            <div class="scheduled-queue-header">
-              <div class="scheduled-queue-title">
-                <span class="scheduled-queue-name">${escapeHtml(queue.name)}</span>
-                <span class="scheduled-queue-count">${queue.items.length}件</span>
-              </div>
-              <div class="scheduled-queue-toggle">
-                <label>
-                  <input type="radio" name="scheduledTargetQueue" value="${queue.id}" ${isSelected ? 'checked' : ''}>
-                  対象
-                </label>
-              </div>
-            </div>
-            <div class="scheduled-queue-settings">
-              <div class="scheduled-queue-url-row">
-                <span class="scheduled-queue-url-label">スプレッドシートURL:</span>
-                <input type="text" class="scheduled-queue-url-input" data-queue-id="${queue.id}"
-                       value="${escapeHtml(gasUrl)}" placeholder="（通常設定を使用）">
-              </div>
-            </div>
-          </div>
-        `;
-      }).join('');
-
-      // イベントリスナー
-      scheduledQueuesList.querySelectorAll('input[name="scheduledTargetQueue"]').forEach(radio => {
-        radio.addEventListener('change', (e) => {
-          selectScheduledQueue(e.target.value);
+        // 保存済みキューのアイテムを追加
+        let addedCount = 0;
+        targetQueue.items.forEach(item => {
+          const exists = currentQueue.some(q => q.url === item.url);
+          if (!exists) {
+            currentQueue.push({
+              url: item.url,
+              title: item.title,
+              addedAt: new Date().toISOString(),
+              scheduledRun: true,
+              incrementalOnly: scheduled.incrementalOnly !== false,
+              gasUrl: targetQueue.gasUrl || null
+            });
+            addedCount++;
+          }
         });
-      });
 
-      scheduledQueuesList.querySelectorAll('.scheduled-queue-url-input').forEach(input => {
-        input.addEventListener('blur', (e) => {
-          saveQueueGasUrl(e.target.dataset.queueId, e.target.value);
+        if (addedCount === 0) {
+          addScheduledLog(`「${targetQueue.name}」は全て収集済みまたはキューに追加済みです`, 'error');
+          return;
+        }
+
+        chrome.storage.local.set({ queue: currentQueue }, () => {
+          loadQueue();
+          addScheduledLog(`「${targetQueue.name}」の収集を開始（${addedCount}件）`, 'success');
+
+          // 収集開始
+          chrome.runtime.sendMessage({ action: 'startQueueCollection' });
         });
       });
     });
   }
 
-  function selectScheduledQueue(queueId) {
-    // カードのアクティブ状態を更新
-    scheduledQueuesList.querySelectorAll('.scheduled-queue-card').forEach(card => {
-      card.classList.toggle('active', card.dataset.id === queueId);
-    });
-
-    // 設定を保存
-    saveScheduledSettings();
-  }
-
-  function saveQueueGasUrl(queueId, gasUrl) {
+  function saveQueueGasUrl(queueId, gasUrl, inputElement = null) {
     chrome.storage.local.get(['savedQueues'], (result) => {
       const savedQueues = result.savedQueues || [];
       const queue = savedQueues.find(q => q.id === queueId);
       if (queue) {
         queue.gasUrl = gasUrl.trim();
-        chrome.storage.local.set({ savedQueues });
+        chrome.storage.local.set({ savedQueues }, () => {
+          // 保存完了のフィードバックを表示
+          if (inputElement) {
+            showAutoSaveIndicator(inputElement);
+          }
+        });
       }
     });
   }
 
-  function handleScheduledEnabledChange() {
-    const enabled = scheduledEnabled.checked;
-    scheduledSettings.style.display = enabled ? 'block' : 'none';
-    saveScheduledSettings();
+  // 自動保存インジケーターを表示
+  function showAutoSaveIndicator(inputElement) {
+    // 既存のインジケーターを削除
+    const existingIndicator = inputElement.parentNode.querySelector('.auto-save-indicator');
+    if (existingIndicator) {
+      existingIndicator.remove();
+    }
+
+    // 新しいインジケーターを作成
+    const indicator = document.createElement('span');
+    indicator.className = 'auto-save-indicator';
+    indicator.innerHTML = '✓ 保存';
+    inputElement.parentNode.appendChild(indicator);
+
+    // 2秒後に削除
+    setTimeout(() => {
+      indicator.remove();
+    }, 2000);
   }
 
   function saveScheduledSettings() {
-    // 選択されているキューを取得
-    const selectedRadio = scheduledQueuesList?.querySelector('input[name="scheduledTargetQueue"]:checked');
-    const targetQueueId = selectedRadio ? selectedRadio.value : '';
-
     const settings = {
-      enabled: scheduledEnabled ? scheduledEnabled.checked : false,
       time: scheduledTime ? scheduledTime.value : '07:00',
-      targetQueueId: targetQueueId,
       incrementalOnly: incrementalOnly ? incrementalOnly.checked : true
     };
 
-    chrome.storage.local.get(['scheduledCollection'], (result) => {
+    chrome.storage.local.get(['scheduledCollection', 'savedQueues'], (result) => {
       const current = result.scheduledCollection || {};
+      const savedQueues = result.savedQueues || [];
       const updated = { ...current, ...settings };
+
+      // 有効なキューがあるかチェック
+      const hasEnabledQueues = savedQueues.some(q => q.scheduledEnabled);
 
       chrome.storage.local.set({ scheduledCollection: updated }, () => {
         // background.js にアラーム設定を依頼
         chrome.runtime.sendMessage({
           action: 'updateScheduledAlarm',
-          settings: updated
+          settings: { ...updated, hasEnabledQueues }
         });
-        updateScheduledStatusDisplay(updated);
+        updateScheduledStatusDisplay(updated, savedQueues);
       });
     });
   }
 
-  function updateScheduledStatusDisplay(scheduled) {
+  function updateScheduledStatusDisplay(scheduled, savedQueues = []) {
     if (!nextRunInfo || !lastRunInfo) return;
 
-    if (scheduled.enabled && scheduled.targetQueueId) {
+    // 有効なキューを取得
+    const enabledQueues = savedQueues.filter(q => q.scheduledEnabled);
+
+    if (enabledQueues.length > 0) {
       const [hours, minutes] = (scheduled.time || '07:00').split(':').map(Number);
       const now = new Date();
       const nextRun = new Date(now);
@@ -1581,9 +1653,10 @@ function removeDuplicates() {
       if (nextRun <= now) {
         nextRun.setDate(nextRun.getDate() + 1);
       }
-      nextRunInfo.textContent = `次回実行予定: ${nextRun.toLocaleDateString('ja-JP')} ${scheduled.time}`;
+      const queueNames = enabledQueues.map(q => q.name).join('、');
+      nextRunInfo.textContent = `次回実行: ${nextRun.toLocaleDateString('ja-JP')} ${scheduled.time}（${enabledQueues.length}件のキュー）`;
     } else {
-      nextRunInfo.textContent = scheduled.enabled ? '対象キューを選択してください' : '定期収集は無効です';
+      nextRunInfo.textContent = '定期収集が有効なキューはありません';
     }
 
     if (scheduled.lastRun) {
@@ -1593,52 +1666,6 @@ function removeDuplicates() {
     } else {
       lastRunInfo.textContent = '最終実行: なし';
     }
-  }
-
-  function runScheduledNow() {
-    chrome.storage.local.get(['scheduledCollection', 'savedQueues'], (result) => {
-      const scheduled = result.scheduledCollection || {};
-      const savedQueues = result.savedQueues || [];
-
-      if (!scheduled.targetQueueId) {
-        addScheduledLog('対象キューが選択されていません', 'error');
-        return;
-      }
-
-      const targetQueue = savedQueues.find(q => q.id === scheduled.targetQueueId);
-      if (!targetQueue || targetQueue.items.length === 0) {
-        addScheduledLog('対象キューが見つからないか、空です', 'error');
-        return;
-      }
-
-      // キューを読み込んで収集開始
-      chrome.storage.local.get(['queue'], (queueResult) => {
-        const currentQueue = queueResult.queue || [];
-
-        // 保存済みキューのアイテムを追加
-        targetQueue.items.forEach(item => {
-          const exists = currentQueue.some(q => q.url === item.url);
-          if (!exists) {
-            currentQueue.push({
-              url: item.url,
-              title: item.title,
-              addedAt: new Date().toISOString(),
-              scheduledRun: true,
-              incrementalOnly: scheduled.incrementalOnly,
-              gasUrl: targetQueue.gasUrl // キュー固有のGAS URLを使用
-            });
-          }
-        });
-
-        chrome.storage.local.set({ queue: currentQueue }, () => {
-          loadQueue();
-          addScheduledLog(`定期収集を開始: 「${targetQueue.name}」（${targetQueue.items.length}件）`, 'success');
-
-          // 収集開始
-          chrome.runtime.sendMessage({ action: 'startQueueCollection' });
-        });
-      });
-    });
   }
 
   // ========================================

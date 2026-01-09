@@ -1158,8 +1158,8 @@ async function updateScheduledAlarm(settings) {
   // 既存のアラームをクリア
   await chrome.alarms.clear(SCHEDULED_ALARM_NAME);
 
-  if (!settings.enabled || !settings.targetQueueId) {
-    console.log('定期収集アラームを無効化');
+  if (!settings.hasEnabledQueues) {
+    console.log('定期収集アラームを無効化（有効なキューなし）');
     return;
   }
 
@@ -1186,23 +1186,20 @@ async function updateScheduledAlarm(settings) {
 }
 
 /**
- * 定期収集を実行
+ * 定期収集を実行（複数キュー対応）
  */
 async function runScheduledCollection() {
   console.log('定期収集を開始');
 
   const result = await chrome.storage.local.get(['scheduledCollection', 'savedQueues']);
   const settings = result.scheduledCollection || {};
-  const savedQueues = result.savedQueues || [];
+  let savedQueues = result.savedQueues || [];
 
-  if (!settings.enabled || !settings.targetQueueId) {
-    console.log('定期収集が無効または対象キューが未設定');
-    return;
-  }
+  // 有効なキューを取得
+  const enabledQueues = savedQueues.filter(q => q.scheduledEnabled);
 
-  const targetQueue = savedQueues.find(q => q.id === settings.targetQueueId);
-  if (!targetQueue || targetQueue.items.length === 0) {
-    console.log('対象キューが見つからないか空');
+  if (enabledQueues.length === 0) {
+    console.log('定期収集が有効なキューがありません');
     return;
   }
 
@@ -1210,36 +1207,57 @@ async function runScheduledCollection() {
   const queueResult = await chrome.storage.local.get(['queue']);
   const currentQueue = queueResult.queue || [];
 
-  let addedCount = 0;
-  targetQueue.items.forEach(item => {
-    const exists = currentQueue.some(q => q.url === item.url);
-    if (!exists) {
-      currentQueue.push({
-        url: item.url,
-        title: item.title,
-        addedAt: new Date().toISOString(),
-        scheduledRun: true,
-        incrementalOnly: settings.incrementalOnly,
-        gasUrl: targetQueue.gasUrl || null  // キュー固有のGAS URL
-      });
-      addedCount++;
+  let totalAdded = 0;
+  const processedQueues = [];
+
+  enabledQueues.forEach(targetQueue => {
+    if (!targetQueue.items || targetQueue.items.length === 0) return;
+
+    let addedCount = 0;
+    targetQueue.items.forEach(item => {
+      const exists = currentQueue.some(q => q.url === item.url);
+      if (!exists) {
+        currentQueue.push({
+          url: item.url,
+          title: item.title,
+          addedAt: new Date().toISOString(),
+          scheduledRun: true,
+          incrementalOnly: settings.incrementalOnly !== false,
+          gasUrl: targetQueue.gasUrl || null,
+          queueName: targetQueue.name  // ログ用にキュー名を保持
+        });
+        addedCount++;
+      }
+    });
+
+    if (addedCount > 0) {
+      totalAdded += addedCount;
+      processedQueues.push({ name: targetQueue.name, count: addedCount });
+
+      // キューごとの最終実行時刻を更新
+      const queueIndex = savedQueues.findIndex(q => q.id === targetQueue.id);
+      if (queueIndex >= 0) {
+        savedQueues[queueIndex].lastScheduledRun = new Date().toISOString();
+      }
     }
   });
 
-  if (addedCount === 0) {
+  if (totalAdded === 0) {
     console.log('追加するアイテムがありません（全て重複）');
     return;
   }
 
-  await chrome.storage.local.set({ queue: currentQueue });
+  // キューと最終実行時刻を保存
+  await chrome.storage.local.set({ queue: currentQueue, savedQueues });
 
   // 収集開始
-  log(`定期収集開始: 「${targetQueue.name}」（${addedCount}件）`, 'success');
+  const queueSummary = processedQueues.map(q => `「${q.name}」${q.count}件`).join('、');
+  log(`定期収集開始: ${queueSummary}`, 'success');
   forwardToAll({ action: 'queueUpdated' });
 
   await startQueueCollection();
 
-  // 実行記録を更新
+  // グローバルな実行記録を更新
   settings.lastRun = new Date().toISOString();
   await chrome.storage.local.set({ scheduledCollection: settings });
 }
