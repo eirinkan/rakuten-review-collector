@@ -105,15 +105,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const scheduledViewBtn = document.getElementById('scheduledViewBtn');
   const backToMainBtn = document.getElementById('backToMainBtn');
 
-  // ナビゲーションボタン
-  const scheduledToSettingsBtn = document.getElementById('scheduledToSettingsBtn');
-  const scheduledToHelpBtn = document.getElementById('scheduledToHelpBtn');
-  const settingsToScheduledBtn = document.getElementById('settingsToScheduledBtn');
-  const settingsToHelpBtn = document.getElementById('settingsToHelpBtn');
+  // 戻るボタン
   const settingsBackBtn = document.getElementById('settingsBackBtn');
-  const helpToSettingsBtn = document.getElementById('helpToSettingsBtn');
-  const helpToScheduledBtn = document.getElementById('helpToScheduledBtn');
   const helpBackBtn = document.getElementById('helpBackBtn');
+
+  // 現在のビュー状態
+  let currentView = 'main';
 
   // 定期収集関連
   const scheduledHour = document.getElementById('scheduledHour');
@@ -463,9 +460,15 @@ function removeDuplicates() {
       }
     });
 
-    // ビュー切り替えイベント
+    // ビュー切り替えイベント（トグル動作）
     if (scheduledViewBtn) {
-      scheduledViewBtn.addEventListener('click', showScheduledView);
+      scheduledViewBtn.addEventListener('click', () => {
+        if (currentView === 'scheduled') {
+          showMainView();
+        } else {
+          showScheduledView();
+        }
+      });
     }
     if (backToMainBtn) {
       backToMainBtn.addEventListener('click', showMainView);
@@ -488,31 +491,25 @@ function removeDuplicates() {
       clearScheduledLogBtn.addEventListener('click', clearScheduledLogs);
     }
 
-    // ヘッダーボタンのイベント
-    settingsToggleBtn.addEventListener('click', showSettingsView);
-    helpToggleBtn.addEventListener('click', showHelpView);
+    // ヘッダーボタンのイベント（トグル動作）
+    settingsToggleBtn.addEventListener('click', () => {
+      if (currentView === 'settings') {
+        showMainView();
+      } else {
+        showSettingsView();
+      }
+    });
+    helpToggleBtn.addEventListener('click', () => {
+      if (currentView === 'help') {
+        showMainView();
+      } else {
+        showHelpView();
+      }
+    });
 
-    // ナビゲーションボタンのイベント
-    if (scheduledToSettingsBtn) {
-      scheduledToSettingsBtn.addEventListener('click', showSettingsView);
-    }
-    if (scheduledToHelpBtn) {
-      scheduledToHelpBtn.addEventListener('click', showHelpView);
-    }
-    if (settingsToScheduledBtn) {
-      settingsToScheduledBtn.addEventListener('click', showScheduledView);
-    }
-    if (settingsToHelpBtn) {
-      settingsToHelpBtn.addEventListener('click', showHelpView);
-    }
+    // 戻るボタンのイベント
     if (settingsBackBtn) {
       settingsBackBtn.addEventListener('click', showMainView);
-    }
-    if (helpToSettingsBtn) {
-      helpToSettingsBtn.addEventListener('click', showSettingsView);
-    }
-    if (helpToScheduledBtn) {
-      helpToScheduledBtn.addEventListener('click', showScheduledView);
     }
     if (helpBackBtn) {
       helpBackBtn.addEventListener('click', showMainView);
@@ -1442,11 +1439,13 @@ function removeDuplicates() {
   function showMainView() {
     hideAllViews();
     if (mainView) mainView.classList.add('active');
+    currentView = 'main';
   }
 
   function showScheduledView() {
     hideAllViews();
     if (scheduledView) scheduledView.classList.add('active');
+    currentView = 'scheduled';
     loadScheduledSettings();
     updateScheduledButtonsState();
   }
@@ -1454,11 +1453,13 @@ function removeDuplicates() {
   function showSettingsView() {
     hideAllViews();
     if (settingsView) settingsView.classList.add('active');
+    currentView = 'settings';
   }
 
   function showHelpView() {
     hideAllViews();
     if (helpView) helpView.classList.add('active');
+    currentView = 'help';
   }
 
   // 定期収集ボタンのグレーアウト状態を更新
