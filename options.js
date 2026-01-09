@@ -111,8 +111,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // 定期収集関連
   const scheduledTime = document.getElementById('scheduledTime');
   const incrementalOnly = document.getElementById('incrementalOnly');
-  const nextRunInfo = document.getElementById('nextRunInfo');
-  const lastRunInfo = document.getElementById('lastRunInfo');
   const scheduledQueuesList = document.getElementById('scheduledQueuesList');
 
   // 定期収集ログ関連
@@ -1436,7 +1434,6 @@ function removeDuplicates() {
       }
 
       renderScheduledQueues(savedQueues);
-      updateScheduledStatusDisplay(scheduled, savedQueues);
     });
   }
 
@@ -1457,6 +1454,10 @@ function removeDuplicates() {
     scheduledQueuesList.innerHTML = savedQueues.map(queue => {
       const isEnabled = queue.scheduledEnabled || false;
       const gasUrl = queue.gasUrl || '';
+      const lastRun = queue.lastRun ? new Date(queue.lastRun) : null;
+      const lastRunText = lastRun
+        ? `${lastRun.toLocaleDateString('ja-JP')} ${lastRun.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}`
+        : 'なし';
 
       return `
         <div class="scheduled-queue-card ${isEnabled ? 'enabled' : ''}" data-id="${queue.id}">
@@ -1466,7 +1467,7 @@ function removeDuplicates() {
               <span class="scheduled-queue-count">${queue.items.length}件</span>
             </div>
             <div class="scheduled-queue-actions">
-              <button class="scheduled-queue-run-btn" data-queue-id="${queue.id}">▶ 実行</button>
+              <button class="scheduled-queue-run-btn" data-queue-id="${queue.id}">今すぐ実行</button>
               <label class="toggle-switch">
                 <input type="checkbox" class="scheduled-queue-toggle" data-queue-id="${queue.id}" ${isEnabled ? 'checked' : ''}>
                 <span class="toggle-slider"></span>
@@ -1478,6 +1479,9 @@ function removeDuplicates() {
               <span class="scheduled-queue-url-label">スプレッドシートURL:</span>
               <input type="text" class="scheduled-queue-url-input" data-queue-id="${queue.id}"
                      value="${escapeHtml(gasUrl)}" placeholder="（通常設定を使用）">
+            </div>
+            <div class="scheduled-queue-last-run">
+              最終実行: ${lastRunText}
             </div>
           </div>
         </div>
@@ -1634,38 +1638,8 @@ function removeDuplicates() {
           action: 'updateScheduledAlarm',
           settings: { ...updated, hasEnabledQueues }
         });
-        updateScheduledStatusDisplay(updated, savedQueues);
       });
     });
-  }
-
-  function updateScheduledStatusDisplay(scheduled, savedQueues = []) {
-    if (!nextRunInfo || !lastRunInfo) return;
-
-    // 有効なキューを取得
-    const enabledQueues = savedQueues.filter(q => q.scheduledEnabled);
-
-    if (enabledQueues.length > 0) {
-      const [hours, minutes] = (scheduled.time || '07:00').split(':').map(Number);
-      const now = new Date();
-      const nextRun = new Date(now);
-      nextRun.setHours(hours, minutes, 0, 0);
-      if (nextRun <= now) {
-        nextRun.setDate(nextRun.getDate() + 1);
-      }
-      const queueNames = enabledQueues.map(q => q.name).join('、');
-      nextRunInfo.textContent = `次回実行: ${nextRun.toLocaleDateString('ja-JP')} ${scheduled.time}（${enabledQueues.length}件のキュー）`;
-    } else {
-      nextRunInfo.textContent = '定期収集が有効なキューはありません';
-    }
-
-    if (scheduled.lastRun) {
-      const lastDate = new Date(scheduled.lastRun);
-      const result = scheduled.lastResult || {};
-      lastRunInfo.textContent = `最終実行: ${lastDate.toLocaleDateString('ja-JP')} ${lastDate.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}（${result.reviewCount || 0}件取得）`;
-    } else {
-      lastRunInfo.textContent = '最終実行: なし';
-    }
   }
 
   // ========================================

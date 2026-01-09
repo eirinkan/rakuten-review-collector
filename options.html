@@ -1373,6 +1373,12 @@
       color: var(--text-muted);
     }
 
+    .scheduled-queue-last-run {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
     .scheduled-queue-run-btn {
       padding: 6px 12px;
       font-size: 12px;
@@ -1907,10 +1913,6 @@
               <input type="checkbox" id="incrementalOnly" checked>
               <span>前回以降の新着レビューのみ取得（差分取得）</span>
             </label>
-          </div>
-          <div id="scheduledStatus" class="scheduled-status">
-            <div id="nextRunInfo" class="status-info"></div>
-            <div id="lastRunInfo" class="status-info"></div>
           </div>
         </div>
 
