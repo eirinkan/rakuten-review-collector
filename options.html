@@ -1426,13 +1426,11 @@
     .time-picker {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
+      gap: 2px;
       background: var(--bg-glass);
       border: 1px solid var(--border-glass);
-      border-radius: 12px;
-      padding: 4px 8px;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
+      border-radius: 8px;
+      padding: 2px 6px;
     }
 
     .time-select {
@@ -1441,13 +1439,13 @@
       background: transparent;
       border: none;
       color: var(--text-primary);
-      font-size: 18px;
-      font-weight: 600;
-      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 4px 6px;
       cursor: pointer;
       text-align: center;
-      min-width: 50px;
-      border-radius: 8px;
+      min-width: 36px;
+      border-radius: 4px;
       transition: all var(--transition);
     }
 
@@ -1458,14 +1456,12 @@
     .time-select:focus {
       outline: none;
       background: var(--bg-glass-hover);
-      box-shadow: 0 0 0 2px rgba(191, 0, 0, 0.2);
     }
 
     .time-separator {
-      font-size: 20px;
-      font-weight: 600;
-      color: var(--text-primary);
-      padding: 0 2px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
     }
 
     /* セレクトボックスのドロップダウン矢印を非表示 */
