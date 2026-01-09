@@ -1630,7 +1630,7 @@ function removeDuplicates() {
               <span class="scheduled-queue-last-run">前回: ${lastRunText}</span>
             </div>
             <div class="scheduled-queue-row">
-              <span class="scheduled-queue-label">保存先:</span>
+              <span class="scheduled-queue-label">保存先スプレッドシート:</span>
               <input type="text" class="scheduled-queue-url-input" data-queue-id="${queue.id}"
                      value="${escapeHtml(queue.spreadsheetUrl || '')}" placeholder="未入力で通常収集と同じスプレッドシートを使用">
             </div>
