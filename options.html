@@ -739,9 +739,30 @@
     }
 
     .btn-add {
-      align-self: stretch;
       min-width: 60px;
-      padding: 10px 16px;
+      height: 38px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 通常の追加ボタン：デフォルトは白背景黒文字 */
+    .btn-add.btn-secondary {
+      background: #fff;
+      color: var(--text-primary);
+      border: 1px solid var(--border-glass);
+    }
+
+    .btn-add.btn-secondary:hover {
+      background: #f5f5f5;
+    }
+
+    /* 入力があるとき：緑背景白文字 */
+    .btn-add.btn-primary {
+      background: var(--success);
+      color: #fff;
+      border: 1px solid var(--success);
     }
 
     .url-input-footer {
@@ -1259,6 +1280,13 @@
       border-radius: var(--border-radius);
     }
 
+    .scheduled-queues-empty-compact {
+      color: var(--text-muted);
+      font-size: 11px;
+      text-align: center;
+      padding: 6px 0;
+    }
+
     .scheduled-queue-card {
       background: rgba(255, 255, 255, 0.9);
       border: 1px solid rgba(0, 0, 0, 0.12);
@@ -1275,11 +1303,12 @@
 
     .scheduled-queue-card.enabled {
       border-left: 3px solid var(--success);
+      border-color: var(--success);
+      background: rgba(40, 167, 69, 0.06);
     }
 
-    .scheduled-queue-card.enabled {
-      border-color: var(--success);
-      background: rgba(40, 167, 69, 0.08);
+    .scheduled-queue-card:not(.enabled) {
+      opacity: 0.7;
     }
 
     .scheduled-queue-header {
@@ -1360,23 +1389,28 @@
     .scheduled-queue-settings {
       display: flex;
       flex-direction: column;
-      gap: 4px;
-      padding-top: 6px;
-      margin-top: 6px;
+      gap: 6px;
+      padding-top: 8px;
+      margin-top: 8px;
       border-top: 1px solid var(--border-glass);
     }
 
     .scheduled-queue-row {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       flex-wrap: wrap;
+    }
+
+    .scheduled-queue-row:first-child {
+      gap: 12px;
     }
 
     .scheduled-queue-label {
       font-size: 11px;
-      color: var(--text-muted);
+      color: var(--text-secondary);
       white-space: nowrap;
+      min-width: 50px;
     }
 
     .scheduled-queue-url-input {
@@ -1698,13 +1732,15 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background-color: #999;
+      background-color: #bbb;
       transition: var(--transition);
       border-radius: 18px;
+      border: 1px solid #aaa;
     }
 
     [data-theme="dark"] .toggle-slider-small {
-      background-color: #666;
+      background-color: #555;
+      border-color: #666;
     }
 
     .toggle-slider-small:before {
@@ -1717,11 +1753,12 @@
       background-color: white;
       transition: var(--transition);
       border-radius: 50%;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
     }
 
     .toggle-switch-small input:checked + .toggle-slider-small {
       background-color: var(--success);
+      border-color: var(--success);
     }
 
     .toggle-switch-small input:checked + .toggle-slider-small:before {

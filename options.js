@@ -1142,6 +1142,9 @@ function removeDuplicates() {
             addLog(`ランキングから${response.addedCount}件をキューに追加`, 'success');
             productUrl.value = '';
             rankingCountWrapper.style.display = 'none';
+            // ボタンをデフォルトに戻す
+            addToQueueBtn.classList.remove('btn-primary');
+            addToQueueBtn.classList.add('btn-secondary');
             if (urlCountLabel) {
               urlCountLabel.textContent = '';
               urlCountLabel.className = 'url-count-label';
@@ -1204,6 +1207,9 @@ function removeDuplicates() {
         loadQueue();
         addLog(`${addedCount}件の商品をキューに追加`, 'success');
         productUrl.value = '';
+        // ボタンをデフォルトに戻す
+        addToQueueBtn.classList.remove('btn-primary');
+        addToQueueBtn.classList.add('btn-secondary');
         if (urlCountLabel) {
           urlCountLabel.textContent = '';
           urlCountLabel.className = 'url-count-label';
@@ -1568,7 +1574,7 @@ function removeDuplicates() {
     if (!scheduledQueuesList) return;
 
     if (scheduledQueues.length === 0) {
-      scheduledQueuesList.innerHTML = '';
+      scheduledQueuesList.innerHTML = '<div class="scheduled-queues-empty-compact">保存キューを追加してください</div>';
       return;
     }
 
