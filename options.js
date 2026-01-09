@@ -1632,7 +1632,7 @@ function removeDuplicates() {
               </div>
               <label class="checkbox-label" style="margin-left: 12px;">
                 <input type="checkbox" class="scheduled-queue-incremental" data-queue-id="${queue.id}" ${queue.incrementalOnly ? 'checked' : ''}>
-                <span>差分のみ</span>
+                <span>差分のみ収集</span>
               </label>
               <span class="scheduled-queue-last-run">前回: ${lastRunText}</span>
             </div>
