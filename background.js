@@ -1301,18 +1301,23 @@ async function processNextInQueue() {
       pageCount: 0,
       totalPages: 0,
       reviews: [],
-      tabId: tab.id
+      tabId: tab.id,
+      queueName: nextItem.queueName || null,
+      incrementalOnly: nextItem.incrementalOnly || false
     }
   });
 
   // 共通のcollectionStateもリセット（レビュー蓄積を防ぐ）
+  // queueNameも含めて自動再開時に正しく復元できるようにする
   await chrome.storage.local.set({
     collectionState: {
       isRunning: true,
       reviewCount: 0,
       pageCount: 0,
       totalPages: 0,
-      reviews: []
+      reviews: [],
+      queueName: nextItem.queueName || null,
+      incrementalOnly: nextItem.incrementalOnly || false
     }
   });
 
