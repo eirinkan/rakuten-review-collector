@@ -324,11 +324,17 @@ async function handleSaveReviews(reviews, tabId = null) {
     }
   }
 
-  // スプレッドシートに保存
+  // スプレッドシートに保存（累積した全レビューを送信）
   if (spreadsheetUrl) {
     try {
-      await sendToSheets(spreadsheetUrl, newReviews, separateSheets !== false);
-      log(prefix + 'スプレッドシートに保存しました');
+      // ローカルストレージから全レビューを取得
+      const stateResult = await chrome.storage.local.get(['collectionState']);
+      const allReviews = stateResult.collectionState?.reviews || [];
+
+      if (allReviews.length > 0) {
+        await sendToSheets(spreadsheetUrl, allReviews, separateSheets !== false);
+        log(prefix + 'スプレッドシートに保存しました');
+      }
     } catch (error) {
       log(`スプレッドシートへの保存に失敗: ${error.message}`, 'error');
     }
@@ -444,20 +450,10 @@ function groupReviewsByProduct(reviews) {
 /**
  * シートにデータがあるか確認（1セル以上にデータがあればtrue）
  */
-async function hasSheetData(token, spreadsheetId, sheetTitle) {
-  const valuesResponse = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodeURIComponent(sheetTitle)}'!A1:Z1000`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
-  const valuesData = await valuesResponse.json();
-  return valuesData.values && valuesData.values.length > 0;
-}
-
 /**
  * シートが存在するか確認し、なければ作成
- * - 同じシート名がある → 上書き
- * - 同じシート名がない & 空シートがある → リネームして使用
- * - 同じシート名がない & 空シートもない → 新規作成
+ * - 同じシート名がある → そのまま使用
+ * - 同じシート名がない → 新規作成
  */
 async function ensureSheetExists(token, spreadsheetId, sheetName) {
   const response = await fetch(
@@ -474,75 +470,33 @@ async function ensureSheetExists(token, spreadsheetId, sheetName) {
   const sheets = data.sheets || [];
   const targetSheet = sheets.find(sheet => sheet.properties.title === sheetName);
 
-  // 同じシート名がある → そのまま使用（上書き）
+  // 同じシート名がある → そのまま使用
   if (targetSheet) {
     return sheetName;
   }
 
-  // 同じシート名がない → 空シートを探す
-  let emptySheet = null;
-  for (const sheet of sheets) {
-    const sheetTitle = sheet.properties.title;
-    const hasData = await hasSheetData(token, spreadsheetId, sheetTitle);
-
-    if (!hasData) {
-      emptySheet = sheet;
-      break;
+  // 同じシート名がない → 新規作成
+  const createResponse = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        requests: [{
+          addSheet: {
+            properties: { title: sheetName }
+          }
+        }]
+      })
     }
-  }
+  );
 
-  if (emptySheet) {
-    // 空シートの名前を変更
-    const renameResponse = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          requests: [{
-            updateSheetProperties: {
-              properties: {
-                sheetId: emptySheet.properties.sheetId,
-                title: sheetName
-              },
-              fields: 'title'
-            }
-          }]
-        })
-      }
-    );
-
-    if (!renameResponse.ok) {
-      const error = await renameResponse.json();
-      throw new Error(error.error?.message || 'シート名の変更に失敗しました');
-    }
-  } else {
-    // 空シートがなければ新規作成
-    const createResponse = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          requests: [{
-            addSheet: {
-              properties: { title: sheetName }
-            }
-          }]
-        })
-      }
-    );
-
-    if (!createResponse.ok) {
-      const error = await createResponse.json();
-      throw new Error(error.error?.message || 'シートの作成に失敗しました');
-    }
+  if (!createResponse.ok) {
+    const error = await createResponse.json();
+    throw new Error(error.error?.message || 'シートの作成に失敗しました');
   }
 
   return sheetName;
@@ -686,10 +640,10 @@ async function formatHeaderRow(token, spreadsheetId, sheetId) {
 }
 
 /**
- * シートにデータを追加
+ * シートにデータを書き込み（既存データは上書き）
  */
 async function appendToSheet(token, spreadsheetId, sheetName, reviews) {
-  // ensureSheetExistsは実際に使用するシート名を返す（データがある場合は _2, _3 など）
+  // シートが存在しなければ作成
   const actualSheetName = await ensureSheetExists(token, spreadsheetId, sheetName);
 
   const encodedSheetName = encodeURIComponent(actualSheetName);
