@@ -1508,7 +1508,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // スプレッドシートURL自動保存
     if (urlInput && statusEl) {
-      urlInput.addEventListener('blur', () => {
+      urlInput.addEventListener('input', () => {
         const url = urlInput.value.trim();
 
         if (!url) {
