@@ -327,19 +327,24 @@ async function handleSaveReviews(reviews, tabId = null) {
 
   const { separateSheets, spreadsheetUrl: globalSpreadsheetUrl, gasUrl: globalGasUrl } = await chrome.storage.sync.get(['separateSheets', 'spreadsheetUrl', 'gasUrl']);
 
-  // タブ固有のスプレッドシートURLを取得（定期収集用）
+  // タブ固有のスプレッドシートURL/GAS URLを取得（定期収集用）
+  // collectingItemsから取得（Service Workerのメモリがクリアされても対応）
   let spreadsheetUrl = null;
-  if (tabId && tabSpreadsheetUrls.has(tabId)) {
-    spreadsheetUrl = tabSpreadsheetUrls.get(tabId);
-  }
-  if (!spreadsheetUrl) {
-    spreadsheetUrl = globalSpreadsheetUrl;
+  let gasUrl = null;
+
+  if (tabId) {
+    const collectingResult = await chrome.storage.local.get(['collectingItems']);
+    const collectingItems = collectingResult.collectingItems || [];
+    const currentItem = collectingItems.find(item => item.tabId === tabId);
+    if (currentItem) {
+      spreadsheetUrl = currentItem.spreadsheetUrl || null;
+      gasUrl = currentItem.gasUrl || null;
+    }
   }
 
-  // タブ固有のGAS URLを取得
-  let gasUrl = null;
-  if (tabId && tabGasUrls.has(tabId)) {
-    gasUrl = tabGasUrls.get(tabId);
+  // 定期収集用がなければグローバル設定を使用
+  if (!spreadsheetUrl) {
+    spreadsheetUrl = globalSpreadsheetUrl;
   }
   if (!gasUrl) {
     gasUrl = globalGasUrl;
