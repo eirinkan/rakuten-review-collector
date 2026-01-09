@@ -1612,6 +1612,49 @@
     .nav-icon-btn.highlight:hover {
       background: rgba(245, 124, 0, 0.25);
     }
+
+    /* 定期収集追加セクション */
+    .scheduled-add-section {
+      margin-bottom: 16px;
+    }
+
+    .scheduled-add-section .btn {
+      display: inline-flex;
+      align-items: center;
+    }
+
+    /* 定期収集キューカード改善 */
+    .scheduled-queue-card .scheduled-queue-time-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .scheduled-queue-card .scheduled-queue-time-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      min-width: 60px;
+    }
+
+    .scheduled-queue-card .scheduled-queue-checkbox-row {
+      margin-bottom: 8px;
+    }
+
+    .scheduled-queue-delete-btn {
+      background: none;
+      border: none;
+      color: var(--error);
+      cursor: pointer;
+      padding: 4px 8px;
+      font-size: 14px;
+      border-radius: 4px;
+      transition: all var(--transition);
+    }
+
+    .scheduled-queue-delete-btn:hover {
+      background: rgba(220, 53, 69, 0.15);
+    }
   </style>
 </head>
 <body>
@@ -1726,61 +1769,27 @@
 
         <p class="scheduled-description">保存済みキューを毎日指定時刻に自動収集します。Chromeが起動している必要があります。</p>
 
-        <!-- 共通設定 -->
-        <div class="scheduled-global-settings">
-          <h3 class="settings-heading">共通設定</h3>
-          <div class="setting-row">
-            <span class="setting-label-inline">実行時刻:</span>
-            <div class="time-picker">
-              <select id="scheduledHour" class="time-select">
-                <option value="00">0</option>
-                <option value="01">1</option>
-                <option value="02">2</option>
-                <option value="03">3</option>
-                <option value="04">4</option>
-                <option value="05">5</option>
-                <option value="06">6</option>
-                <option value="07" selected>7</option>
-                <option value="08">8</option>
-                <option value="09">9</option>
-                <option value="10">10</option>
-                <option value="11">11</option>
-                <option value="12">12</option>
-                <option value="13">13</option>
-                <option value="14">14</option>
-                <option value="15">15</option>
-                <option value="16">16</option>
-                <option value="17">17</option>
-                <option value="18">18</option>
-                <option value="19">19</option>
-                <option value="20">20</option>
-                <option value="21">21</option>
-                <option value="22">22</option>
-                <option value="23">23</option>
-              </select>
-              <span class="time-separator">:</span>
-              <select id="scheduledMinute" class="time-select">
-                <option value="00" selected>00</option>
-                <option value="15">15</option>
-                <option value="30">30</option>
-                <option value="45">45</option>
-              </select>
+        <!-- 定期収集キュー追加 -->
+        <div class="scheduled-add-section">
+          <div class="saved-queues-dropdown-container">
+            <button id="addScheduledQueueBtn" class="btn btn-primary">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+              保存キューから追加
+            </button>
+            <div id="addScheduledQueueDropdown" class="saved-queues-dropdown" style="display: none;">
+              <div class="saved-queues-dropdown-header">追加する保存キューを選択</div>
+              <div id="addScheduledQueueList" class="saved-queues-dropdown-list">
+                <div class="saved-queues-empty">保存済みキューがありません</div>
+              </div>
             </div>
-          </div>
-          <div class="setting-row" style="margin-top: 12px;">
-            <label class="checkbox-label">
-              <input type="checkbox" id="incrementalOnly" checked>
-              <span>前回以降の新着レビューのみ取得（差分取得）</span>
-            </label>
           </div>
         </div>
 
-        <!-- 保存済みキュー一覧 -->
-        <h3 class="settings-heading" style="margin-top: 20px;">対象キュー</h3>
+        <!-- 定期収集キュー一覧 -->
         <div id="scheduledQueuesList" class="scheduled-queues-list">
           <div class="scheduled-queues-empty">
-            保存済みキューがありません。<br>
-            メイン画面でキューを保存してください。
+            定期収集キューがありません。<br>
+            「保存キューから追加」で追加してください。
           </div>
         </div>
       </div>
@@ -1922,14 +1931,11 @@
             <div class="step-card">
               <div class="step-header">
                 <span class="step-number">6</span>
-                <span class="step-title">ウェブアプリのURLを貼り付けて保存</span>
+                <span class="step-title">ウェブアプリのURLを貼り付け</span>
               </div>
               <div class="step-content">
                 <div style="margin-top: 4px;">
-                  <div class="input-with-btn">
-                    <input type="text" id="gasUrl" placeholder="https://script.google.com/macros/s/xxx/exec" style="flex: 1; padding: 10px 12px; background: var(--bg-input); border: 1px solid var(--border-input); border-radius: 8px; font-size: 12px; color: var(--text-primary);">
-                    <button id="saveSettingsBtn" class="btn btn-primary">保存</button>
-                  </div>
+                  <input type="text" id="gasUrl" placeholder="https://script.google.com/macros/s/xxx/exec" style="width: 100%; padding: 10px 12px; background: var(--bg-input); border: 1px solid var(--border-input); border-radius: 8px; font-size: 12px; color: var(--text-primary);">
                   <div id="settingsStatus" class="status-message" style="margin-top: 8px;"></div>
                 </div>
               </div>
