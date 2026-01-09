@@ -1356,6 +1356,37 @@
       border-top: 1px solid var(--border-glass);
     }
 
+    .scheduled-queue-url-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .scheduled-queue-url-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    .scheduled-queue-url-input {
+      flex: 1;
+      padding: 6px 10px;
+      border: 1px solid var(--border-glass);
+      border-radius: 6px;
+      background: var(--bg-input);
+      color: var(--text-primary);
+      font-size: 12px;
+    }
+
+    .scheduled-queue-url-input:focus {
+      outline: none;
+      border-color: var(--success);
+    }
+
+    .scheduled-queue-url-input::placeholder {
+      color: var(--text-muted);
+    }
+
     .scheduled-queue-last-run {
       font-size: 11px;
       color: var(--text-muted);
@@ -1787,7 +1818,13 @@
         <div class="settings-section">
           <h3>スプレッドシート</h3>
 
-          <label class="checkbox-label" style="margin-bottom: 16px;">
+          <div class="form-group">
+            <label>スプレッドシートURL</label>
+            <input type="text" id="spreadsheetUrl" placeholder="https://docs.google.com/spreadsheets/d/...">
+            <div id="spreadsheetUrlStatus" class="status-message"></div>
+          </div>
+
+          <label class="checkbox-label">
             <input type="checkbox" id="separateSheets" checked>
             <span>商品ごとにシートを分ける</span>
           </label>

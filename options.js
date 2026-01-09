@@ -1637,6 +1637,11 @@ function removeDuplicates() {
                 <span>差分取得（新着のみ）</span>
               </label>
             </div>
+            <div class="scheduled-queue-url-row">
+              <span class="scheduled-queue-url-label">保存先:</span>
+              <input type="text" class="scheduled-queue-url-input" data-queue-id="${queue.id}"
+                     value="${escapeHtml(queue.spreadsheetUrl || '')}" placeholder="（設定のURLを使用）">
+            </div>
             <div class="scheduled-queue-last-run">
               最終実行: ${lastRunText}
             </div>
@@ -1679,6 +1684,16 @@ function removeDuplicates() {
     scheduledQueuesList.querySelectorAll('.scheduled-queue-incremental').forEach(checkbox => {
       checkbox.addEventListener('change', (e) => {
         updateScheduledQueueProperty(e.target.dataset.queueId, 'incrementalOnly', e.target.checked);
+      });
+    });
+
+    scheduledQueuesList.querySelectorAll('.scheduled-queue-url-input').forEach(input => {
+      let saveTimeout = null;
+      input.addEventListener('input', (e) => {
+        if (saveTimeout) clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+          updateScheduledQueueProperty(e.target.dataset.queueId, 'spreadsheetUrl', e.target.value.trim(), e.target);
+        }, 500);
       });
     });
 
