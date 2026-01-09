@@ -1229,20 +1229,21 @@
               <ol style="margin: 0 0 0 16px; padding: 0;">
                 <li><code>function myFunction() { }</code> と書かれている部分をクリック</li>
                 <li><strong>Ctrl+A</strong>（Macは⌘+A）で全選択 → <strong>Delete</strong>で削除</li>
-                <li>下のボタンをクリック</li>
+                <li style="margin-bottom: 8px;">下のボタンをクリック
+                  <div style="margin-top: 6px;">
+                    <button id="copyGasCodeBtn" class="copy-btn">📋 コードをコピー</button>
+                    <textarea id="gasCodeArea" readonly style="display: none;"></textarea>
+                  </div>
+                </li>
                 <li><strong>Ctrl+V</strong>（Macは⌘+V）で貼り付け</li>
               </ol>
-              <div style="margin-top: 10px;">
-                <button id="copyGasCodeBtn" class="copy-btn">📋 コードをコピー</button>
-                <textarea id="gasCodeArea" readonly style="display: none;"></textarea>
-              </div>
             </div>
           </div>
 
           <div class="step-card">
             <div class="step-header">
               <span class="step-number">5</span>
-              <span class="step-title">保存 → デプロイ → Web App URLを入手</span>
+              <span class="step-title">保存 → デプロイ → ウェブアプリのURLを入手</span>
             </div>
             <div class="step-content">
               <ol>
@@ -1260,7 +1261,7 @@
           <div class="step-card">
             <div class="step-header">
               <span class="step-number">6</span>
-              <span class="step-title">Web App URLを貼り付けて保存</span>
+              <span class="step-title">ウェブアプリのURLを貼り付けて保存</span>
             </div>
             <div class="step-content">
               デプロイ完了後に表示される「ウェブアプリのURL」をコピーし、下の欄に貼り付けて「保存」をクリック。
