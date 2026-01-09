@@ -349,13 +349,13 @@ async function handleSaveReviews(reviews, tabId = null) {
   const productId = newReviews[0]?.productId || '';
   let prefix = productId ? `[${productId}] ` : '';
 
-  // 定期収集の場合は[キュー名][商品ID]形式
+  // 定期収集の場合は[キュー名・商品ID]形式
   if (tabId) {
     const collectingResult = await chrome.storage.local.get(['collectingItems']);
     const collectingItems = collectingResult.collectingItems || [];
     const currentItem = collectingItems.find(item => item.tabId === tabId);
     if (currentItem?.queueName) {
-      prefix = `[${currentItem.queueName}][${productId}] `;
+      prefix = `[${currentItem.queueName}・${productId}] `;
     }
   }
 
@@ -997,8 +997,8 @@ async function handleCollectionComplete(tabId) {
     // 商品の収集完了ログを出力
     if (completedItem) {
       const productId = extractProductIdFromUrl(completedItem.url);
-      // 定期収集の場合は[キュー名][商品ID]形式
-      const logPrefix = completedItem.queueName ? `[${completedItem.queueName}][${productId}]` : `[${productId}]`;
+      // 定期収集の場合は[キュー名・商品ID]形式
+      const logPrefix = completedItem.queueName ? `[${completedItem.queueName}・${productId}]` : `[${productId}]`;
       log(`${logPrefix} 収集が完了しました`, 'success');
       // 商品ごとの通知（設定で有効な場合のみ）
       showNotification('楽天レビュー収集', `${logPrefix} 収集が完了しました`, productId);
@@ -1246,9 +1246,9 @@ async function processNextInQueue() {
 
   forwardToAll({ action: 'queueUpdated' });
 
-  // 定期収集の場合は[キュー名]を表示
+  // 定期収集の場合は[キュー名・商品ID]形式
   const productId = extractProductIdFromUrl(nextItem.url);
-  const queuePrefix = nextItem.queueName ? `[${nextItem.queueName}][${productId}]` : '';
+  const queuePrefix = nextItem.queueName ? `[${nextItem.queueName}・${productId}]` : '';
   log(`${queuePrefix ? queuePrefix + ' ' : ''}収集中: ${nextItem.title || nextItem.url}`);
 
   // 収集用ウィンドウにタブを作成（最小化ウィンドウ内）

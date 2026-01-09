@@ -50,10 +50,10 @@
             // 商品IDを取得してログに表示
             const itemUrlMatch = window.location.href.match(/item\.rakuten\.co\.jp\/[^\/]+\/([^\/\?]+)/);
             const itemProductId = itemUrlMatch ? itemUrlMatch[1] : '';
-            // 定期収集の場合は[キュー名][商品ID]形式
+            // 定期収集の場合は[キュー名・商品ID]形式
             let prefix = '';
             if (currentQueueName && itemProductId) {
-              prefix = `[${currentQueueName}][${itemProductId}] `;
+              prefix = `[${currentQueueName}・${itemProductId}] `;
             } else if (itemProductId) {
               prefix = `[${itemProductId}] `;
             }
@@ -1197,10 +1197,10 @@
    * ログをポップアップに送信（商品管理番号・ページ番号を自動プレフィックス）
    */
   function log(text, type = '') {
-    // 定期収集の場合は[キュー名][商品ID]形式
+    // 定期収集の場合は[キュー名・商品ID]形式
     let productPrefix = '';
     if (currentQueueName && currentProductId) {
-      productPrefix = `[${currentQueueName}][${currentProductId}] `;
+      productPrefix = `[${currentQueueName}・${currentProductId}] `;
     } else if (currentProductId) {
       productPrefix = `[${currentProductId}] `;
     }
