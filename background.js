@@ -269,14 +269,6 @@ async function handleSaveReviews(reviews, tabId = null) {
     return;
   }
 
-  // 重複を除外してローカルストレージに保存
-  const newReviews = await saveToLocalStorage(reviews);
-
-  // 新規レビューがない場合はスプレッドシートへの送信をスキップ
-  if (newReviews.length === 0) {
-    return;
-  }
-
   const { separateSheets, spreadsheetUrl: globalSpreadsheetUrl } = await chrome.storage.sync.get(['separateSheets', 'spreadsheetUrl']);
 
   // タブ固有のスプレッドシートURLを取得（定期収集用）
@@ -301,28 +293,44 @@ async function handleSaveReviews(reviews, tabId = null) {
   // 定期収集かどうかを判定（queueNameがあれば定期収集）
   const isScheduled = !!(currentItem?.queueName);
 
-  // ログ用のプレフィックスを決定（定期収集の場合はキュー名、それ以外は商品管理番号）
-  const productId = newReviews[0]?.productId || '';
+  // ログ用のプレフィックス
+  const productId = reviews[0]?.productId || '';
   let prefix = productId ? `[${productId}] ` : '';
-
-  // 定期収集の場合は[キュー名・商品ID]形式
   if (isScheduled) {
     prefix = `[${currentItem.queueName}・${productId}] `;
   }
 
-  // スプレッドシートに保存（累積した全レビューを送信）
-  if (spreadsheetUrl) {
-    try {
-      // ローカルストレージから全レビューを取得
-      const stateResult = await chrome.storage.local.get(['collectionState']);
-      const allReviews = stateResult.collectionState?.reviews || [];
-
-      if (allReviews.length > 0) {
-        await sendToSheets(spreadsheetUrl, allReviews, separateSheets !== false, isScheduled);
+  if (isScheduled) {
+    // 定期収集: スプレッドシートのみに保存（CSVには保存しない）
+    if (spreadsheetUrl) {
+      try {
+        await sendToSheets(spreadsheetUrl, reviews, separateSheets !== false, true);
         log(prefix + 'スプレッドシートに保存しました');
+      } catch (error) {
+        log(`スプレッドシートへの保存に失敗: ${error.message}`, 'error');
       }
-    } catch (error) {
-      log(`スプレッドシートへの保存に失敗: ${error.message}`, 'error');
+    }
+  } else {
+    // 通常収集: ローカルストレージ（CSV用）とスプレッドシートに保存
+    const newReviews = await saveToLocalStorage(reviews);
+
+    if (newReviews.length === 0) {
+      return;
+    }
+
+    if (spreadsheetUrl) {
+      try {
+        // ローカルストレージから全レビューを取得
+        const stateResult = await chrome.storage.local.get(['collectionState']);
+        const allReviews = stateResult.collectionState?.reviews || [];
+
+        if (allReviews.length > 0) {
+          await sendToSheets(spreadsheetUrl, allReviews, separateSheets !== false, false);
+          log(prefix + 'スプレッドシートに保存しました');
+        }
+      } catch (error) {
+        log(`スプレッドシートへの保存に失敗: ${error.message}`, 'error');
+      }
     }
   }
 }
