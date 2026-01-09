@@ -1242,7 +1242,11 @@
     }
 
     .scheduled-queues-list {
-      margin-bottom: 24px;
+      margin-bottom: 0;
+    }
+
+    .scheduled-queues-list:empty {
+      display: none;
     }
 
     .scheduled-queues-empty {
@@ -1372,7 +1376,8 @@
     .scheduled-queue-label {
       font-size: 11px;
       color: var(--text-muted);
-      min-width: 28px;
+      min-width: 52px;
+      white-space: nowrap;
     }
 
     .scheduled-queue-url-input {
@@ -1796,7 +1801,7 @@
           <input type="number" id="rankingCount" value="10" min="1" max="100">
           <span>件</span>
         </div>
-        <button id="addToQueueBtn" class="btn btn-primary btn-add">追加</button>
+        <button id="addToQueueBtn" class="btn btn-secondary btn-add">追加</button>
       </div>
       <div class="url-input-footer">
         <span id="urlCountLabel" class="url-count-label"></span>

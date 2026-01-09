@@ -524,6 +524,17 @@ function removeDuplicates() {
           urlCountLabel.className = 'url-count-label';
         }
       }
+
+      // 追加ボタンの色を変更
+      if (addToQueueBtn) {
+        if (validUrls.length > 0) {
+          addToQueueBtn.classList.remove('btn-secondary');
+          addToQueueBtn.classList.add('btn-primary');
+        } else {
+          addToQueueBtn.classList.remove('btn-primary');
+          addToQueueBtn.classList.add('btn-secondary');
+        }
+      }
     });
 
     // 通知設定のチェックボックス変更時に自動保存
@@ -1614,13 +1625,13 @@ function removeDuplicates() {
               <span class="scheduled-queue-count">${queue.items.length}件</span>
             </div>
             <div class="scheduled-queue-actions">
-              <button class="scheduled-queue-run-btn" data-queue-id="${queue.id}">実行</button>
+              <button class="scheduled-queue-run-btn" data-queue-id="${queue.id}">すぐ実行</button>
               <button class="scheduled-queue-delete-btn" data-queue-id="${queue.id}" title="削除">×</button>
             </div>
           </div>
           <div class="scheduled-queue-settings">
             <div class="scheduled-queue-row">
-              <span class="scheduled-queue-label">時刻:</span>
+              <span class="scheduled-queue-label">収集時刻:</span>
               <div class="time-picker">
                 <select class="time-select scheduled-queue-hour" data-queue-id="${queue.id}">
                   ${generateHourOptions(hours)}
@@ -1632,12 +1643,12 @@ function removeDuplicates() {
               </div>
               <label class="checkbox-label-compact">
                 <input type="checkbox" class="scheduled-queue-incremental" data-queue-id="${queue.id}" ${queue.incrementalOnly ? 'checked' : ''}>
-                <span>差分のみ</span>
+                <span>差分のみ収集</span>
               </label>
               <span class="scheduled-queue-last-run">前回: ${lastRunText}</span>
             </div>
             <div class="scheduled-queue-row">
-              <span class="scheduled-queue-label">保存:</span>
+              <span class="scheduled-queue-label">保存先:</span>
               <input type="text" class="scheduled-queue-url-input" data-queue-id="${queue.id}"
                      value="${escapeHtml(queue.spreadsheetUrl || '')}" placeholder="未入力で通常収集と同じスプレッドシートを使用">
             </div>
