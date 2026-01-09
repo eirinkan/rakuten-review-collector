@@ -1282,11 +1282,12 @@ document.addEventListener('DOMContentLoaded', () => {
     scheduledQueuesList.querySelectorAll('.scheduled-queue-toggle').forEach(toggle => {
       toggle.addEventListener('click', async (e) => {
         const queueId = e.target.dataset.queueId;
-        const willBeEnabled = !e.target.checked; // クリック後の状態
+        const willBeEnabled = e.target.checked; // クリック後の状態（clickイベント時点で既に変更済み）
 
         // オンにする場合、スプレッドシートが設定されているかチェック
         if (willBeEnabled) {
-          e.preventDefault(); // デフォルトの動作を止める
+          // 先にチェックを外しておく（バリデーション中は無効状態）
+          e.target.checked = false;
 
           const result = await chrome.storage.local.get(['scheduledQueues']);
           const scheduledQueues = result.scheduledQueues || [];
