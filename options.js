@@ -109,7 +109,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const backToMainBtn = document.getElementById('backToMainBtn');
 
   // 定期収集関連
-  const scheduledTime = document.getElementById('scheduledTime');
+  const scheduledHour = document.getElementById('scheduledHour');
+  const scheduledMinute = document.getElementById('scheduledMinute');
   const incrementalOnly = document.getElementById('incrementalOnly');
   const scheduledQueuesList = document.getElementById('scheduledQueuesList');
 
@@ -464,8 +465,11 @@ function removeDuplicates() {
     }
 
     // 定期収集イベント（共通設定）
-    if (scheduledTime) {
-      scheduledTime.addEventListener('change', saveScheduledSettings);
+    if (scheduledHour) {
+      scheduledHour.addEventListener('change', saveScheduledSettings);
+    }
+    if (scheduledMinute) {
+      scheduledMinute.addEventListener('change', saveScheduledSettings);
     }
     if (incrementalOnly) {
       incrementalOnly.addEventListener('change', saveScheduledSettings);
@@ -1425,8 +1429,14 @@ function removeDuplicates() {
       const scheduled = result.scheduledCollection || {};
       const savedQueues = result.savedQueues || [];
 
-      if (scheduledTime && scheduled.time) {
-        scheduledTime.value = scheduled.time;
+      // 時刻を分解して設定
+      const time = scheduled.time || '07:00';
+      const [hours, minutes] = time.split(':');
+      if (scheduledHour) {
+        scheduledHour.value = hours || '07';
+      }
+      if (scheduledMinute) {
+        scheduledMinute.value = minutes || '00';
       }
 
       if (incrementalOnly) {
@@ -1619,8 +1629,10 @@ function removeDuplicates() {
   }
 
   function saveScheduledSettings() {
+    const hour = scheduledHour ? scheduledHour.value : '07';
+    const minute = scheduledMinute ? scheduledMinute.value : '00';
     const settings = {
-      time: scheduledTime ? scheduledTime.value : '07:00',
+      time: `${hour}:${minute}`,
       incrementalOnly: incrementalOnly ? incrementalOnly.checked : true
     };
 

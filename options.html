@@ -1422,18 +1422,55 @@
       color: var(--text-secondary);
     }
 
-    .time-input {
-      padding: 6px 10px;
-      border: 1px solid var(--border-glass);
-      border-radius: 6px;
+    /* モダンな時刻ピッカー */
+    .time-picker {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
       background: var(--bg-glass);
-      color: var(--text-primary);
-      font-size: 14px;
+      border: 1px solid var(--border-glass);
+      border-radius: 12px;
+      padding: 4px 8px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
     }
 
-    .time-input:focus {
+    .time-select {
+      appearance: none;
+      -webkit-appearance: none;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-size: 18px;
+      font-weight: 600;
+      padding: 8px 12px;
+      cursor: pointer;
+      text-align: center;
+      min-width: 50px;
+      border-radius: 8px;
+      transition: all var(--transition);
+    }
+
+    .time-select:hover {
+      background: var(--bg-glass-hover);
+    }
+
+    .time-select:focus {
       outline: none;
-      border-color: var(--accent-color);
+      background: var(--bg-glass-hover);
+      box-shadow: 0 0 0 2px rgba(191, 0, 0, 0.2);
+    }
+
+    .time-separator {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-primary);
+      padding: 0 2px;
+    }
+
+    /* セレクトボックスのドロップダウン矢印を非表示 */
+    .time-select::-ms-expand {
+      display: none;
     }
 
     .queue-select {
@@ -1905,10 +1942,44 @@
         <div class="scheduled-global-settings">
           <h3 class="settings-heading">共通設定</h3>
           <div class="setting-row">
-            <label class="setting-label-inline">実行時刻:</label>
-            <input type="time" id="scheduledTime" value="07:00" class="time-input">
+            <span class="setting-label-inline">実行時刻:</span>
+            <div class="time-picker">
+              <select id="scheduledHour" class="time-select">
+                <option value="00">0</option>
+                <option value="01">1</option>
+                <option value="02">2</option>
+                <option value="03">3</option>
+                <option value="04">4</option>
+                <option value="05">5</option>
+                <option value="06">6</option>
+                <option value="07" selected>7</option>
+                <option value="08">8</option>
+                <option value="09">9</option>
+                <option value="10">10</option>
+                <option value="11">11</option>
+                <option value="12">12</option>
+                <option value="13">13</option>
+                <option value="14">14</option>
+                <option value="15">15</option>
+                <option value="16">16</option>
+                <option value="17">17</option>
+                <option value="18">18</option>
+                <option value="19">19</option>
+                <option value="20">20</option>
+                <option value="21">21</option>
+                <option value="22">22</option>
+                <option value="23">23</option>
+              </select>
+              <span class="time-separator">:</span>
+              <select id="scheduledMinute" class="time-select">
+                <option value="00" selected>00</option>
+                <option value="15">15</option>
+                <option value="30">30</option>
+                <option value="45">45</option>
+              </select>
+            </div>
           </div>
-          <div class="setting-row" style="margin-top: 8px;">
+          <div class="setting-row" style="margin-top: 12px;">
             <label class="checkbox-label">
               <input type="checkbox" id="incrementalOnly" checked>
               <span>前回以降の新着レビューのみ取得（差分取得）</span>
