@@ -396,7 +396,7 @@ document.addEventListener('DOMContentLoaded', () => {
           return q;
         });
         await chrome.storage.local.set({ scheduledQueues: updatedQueues });
-        renderScheduledQueues(); // UIを更新
+        await renderScheduledQueues(); // UIを更新
       }
 
       chrome.storage.sync.set({ spreadsheetUrl: '' }, () => {
@@ -891,7 +891,7 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.local.get(['savedQueues'], (result) => {
       const savedQueues = result.savedQueues || [];
       renderSavedQueuesDropdown(savedQueues);
-      renderScheduledQueues(savedQueues);
+      renderScheduledQueues(); // 引数なしでストレージから取得
     });
   }
 
@@ -1172,8 +1172,14 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // 定期収集画面のキュー一覧をレンダリング
-  function renderScheduledQueues(scheduledQueues) {
+  async function renderScheduledQueues(scheduledQueues) {
     if (!scheduledQueuesList) return;
+
+    // 引数がない場合はストレージから取得
+    if (!scheduledQueues) {
+      const result = await chrome.storage.local.get(['scheduledQueues']);
+      scheduledQueues = result.scheduledQueues || [];
+    }
 
     // 親カードとヘッダーを取得
     const parentCard = scheduledQueuesList.closest('.card');
@@ -1372,7 +1378,7 @@ document.addEventListener('DOMContentLoaded', () => {
           queue.spreadsheetUrl = '';
           queue.enabled = false;
           await chrome.storage.local.set({ scheduledQueues });
-          renderScheduledQueues(); // UIを更新
+          await renderScheduledQueues(); // UIを更新
           updateScheduledAlarm();
           return;
         } else {
