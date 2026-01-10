@@ -174,8 +174,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const spreadsheetLinkRakuten = document.getElementById('spreadsheetLinkRakuten');
     const spreadsheetLinkAmazon = document.getElementById('spreadsheetLinkAmazon');
 
+    // スプレッドシートボタンの有効/無効を更新
+    function updateSpreadsheetBtnState() {
+      if (!spreadsheetLinkBtn) return;
+      const rakutenHasUrl = spreadsheetLinkRakutenEl && spreadsheetLinkRakutenEl.href && !spreadsheetLinkRakutenEl.classList.contains('disabled');
+      const amazonHasUrl = spreadsheetLinkAmazonEl && spreadsheetLinkAmazonEl.href && !spreadsheetLinkAmazonEl.classList.contains('disabled');
+      if (rakutenHasUrl || amazonHasUrl) {
+        spreadsheetLinkBtn.classList.remove('disabled');
+      } else {
+        spreadsheetLinkBtn.classList.add('disabled');
+      }
+    }
+
     if (spreadsheetLinkBtn && spreadsheetLinkDropdown) {
       spreadsheetLinkBtn.addEventListener('click', (e) => {
+        if (spreadsheetLinkBtn.classList.contains('disabled')) return;
         e.stopPropagation();
         spreadsheetLinkDropdown.classList.toggle('show');
       });
@@ -319,6 +332,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       // CSV機能は常に表示（スプレッドシートと併用可能）
       dataButtons.style.display = 'flex';
+      // スプレッドシートボタンの状態を更新
+      updateSpreadsheetBtnState();
       if (separateSheetsCheckbox) {
         separateSheetsCheckbox.checked = result.separateSheets !== false;
       }
@@ -485,6 +500,7 @@ document.addEventListener('DOMContentLoaded', () => {
           spreadsheetTitleEl.classList.remove('show', 'loading', 'error');
           spreadsheetTitleEl.innerHTML = '';
         }
+        updateSpreadsheetBtnState();
       });
       return;
     }
@@ -510,6 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       // タイトル取得
       fetchAndShowSpreadsheetTitle(url, spreadsheetTitleEl, spreadsheetUrlInput);
+      updateSpreadsheetBtnState();
     });
   }
 
@@ -529,6 +546,7 @@ document.addEventListener('DOMContentLoaded', () => {
           amazonSpreadsheetTitleEl.classList.remove('show', 'loading', 'error');
           amazonSpreadsheetTitleEl.innerHTML = '';
         }
+        updateSpreadsheetBtnState();
       });
       return;
     }
@@ -554,6 +572,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       // タイトル取得
       fetchAndShowSpreadsheetTitle(url, amazonSpreadsheetTitleEl, amazonSpreadsheetUrlInput);
+      updateSpreadsheetBtnState();
     });
   }
 
