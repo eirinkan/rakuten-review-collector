@@ -251,11 +251,9 @@ document.addEventListener('DOMContentLoaded', () => {
         showRankingMessage('任意のランキングを選んでください', 'info');
       }
     } else if (isAmazonRankingPage) {
-      // Amazonランキングページの場合（将来対応予定）
-      pageWarning.style.display = 'block';
-      pageWarning.innerHTML = '<p>Amazonランキングからの収集は<br>今後対応予定です。</p><p>商品ページから個別に収集できます。</p>';
-      startBtn.disabled = true;
-      queueBtn.disabled = true;
+      // Amazonランキングページの場合
+      normalMode.style.display = 'none';
+      rankingMode.style.display = 'block';
     } else if (!isSupportedPage) {
       // 楽天・Amazon以外のページ
       pageWarning.style.display = 'block';
