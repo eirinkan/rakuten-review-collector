@@ -722,7 +722,7 @@
       padding: 10px 12px;
       font-size: 14px;
       color: var(--text-primary);
-      background: var(--bg-primary);
+      background: #ffffff;
       border: 1px solid var(--border-color);
       border-radius: var(--border-radius);
       display: none;
@@ -730,6 +730,7 @@
       gap: 8px;
       cursor: pointer;
       transition: all var(--transition-fast);
+      z-index: 1;
     }
 
     .spreadsheet-title-overlay.show {
@@ -738,7 +739,7 @@
 
     .spreadsheet-title-overlay:hover {
       border-color: var(--primary);
-      background: var(--bg-secondary);
+      background: #f8f9fa;
     }
 
     .spreadsheet-title-overlay .sheets-icon {
