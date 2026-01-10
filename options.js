@@ -177,8 +177,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // スプレッドシートボタンの有効/無効を更新
     function updateSpreadsheetBtnState() {
       if (!spreadsheetLinkBtn) return;
-      const rakutenHasUrl = spreadsheetLinkRakutenEl && spreadsheetLinkRakutenEl.href && !spreadsheetLinkRakutenEl.classList.contains('disabled');
-      const amazonHasUrl = spreadsheetLinkAmazonEl && spreadsheetLinkAmazonEl.href && !spreadsheetLinkAmazonEl.classList.contains('disabled');
+      const rakutenHasUrl = spreadsheetLinkRakutenEl && !spreadsheetLinkRakutenEl.classList.contains('disabled');
+      const amazonHasUrl = spreadsheetLinkAmazonEl && !spreadsheetLinkAmazonEl.classList.contains('disabled');
       if (rakutenHasUrl || amazonHasUrl) {
         spreadsheetLinkBtn.classList.remove('disabled');
       } else {
