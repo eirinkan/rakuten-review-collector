@@ -216,26 +216,48 @@ document.addEventListener('DOMContentLoaded', () => {
     // 現在のタブを確認
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
+    // 楽天ページの判定
     const isRakutenPage = tab.url && (
       tab.url.includes('review.rakuten.co.jp') ||
       tab.url.includes('item.rakuten.co.jp')
     );
-    const isRankingPage = tab.url && tab.url.includes('ranking.rakuten.co.jp');
-    const isRankingSitemap = tab.url && tab.url.includes('ranking.rakuten.co.jp/sitemap');
+    const isRakutenRankingPage = tab.url && tab.url.includes('ranking.rakuten.co.jp');
+    const isRakutenRankingSitemap = tab.url && tab.url.includes('ranking.rakuten.co.jp/sitemap');
 
-    if (isRankingPage) {
-      // ランキングページの場合
+    // Amazonページの判定
+    const isAmazonPage = tab.url && tab.url.includes('amazon.co.jp') && (
+      tab.url.includes('/dp/') ||
+      tab.url.includes('/gp/product/') ||
+      tab.url.includes('/product-reviews/')
+    );
+    const isAmazonRankingPage = tab.url && tab.url.includes('amazon.co.jp') && (
+      tab.url.includes('/bestsellers/') ||
+      tab.url.includes('/ranking/')
+    );
+
+    // 対応ページの判定
+    const isSupportedPage = isRakutenPage || isAmazonPage;
+    const isRankingPage = isRakutenRankingPage || isAmazonRankingPage;
+
+    if (isRakutenRankingPage) {
+      // 楽天ランキングページの場合
       normalMode.style.display = 'none';
       rankingMode.style.display = 'block';
 
       // サイトマップページの場合は特別処理
-      if (isRankingSitemap) {
+      if (isRakutenRankingSitemap) {
         startRankingBtn.disabled = true;
         addRankingBtn.disabled = true;
         showRankingMessage('任意のランキングを選んでください', 'info');
       }
-    } else if (!isRakutenPage) {
-      // 楽天以外のページ
+    } else if (isAmazonRankingPage) {
+      // Amazonランキングページの場合（将来対応予定）
+      pageWarning.style.display = 'block';
+      pageWarning.innerHTML = '<p>Amazonランキングからの収集は<br>今後対応予定です。</p><p>商品ページから個別に収集できます。</p>';
+      startBtn.disabled = true;
+      queueBtn.disabled = true;
+    } else if (!isSupportedPage) {
+      // 楽天・Amazon以外のページ
       pageWarning.style.display = 'block';
       startBtn.disabled = true;
       queueBtn.disabled = true;
@@ -333,8 +355,17 @@ document.addEventListener('DOMContentLoaded', () => {
   async function addToQueue() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-    if (!tab.url.includes('item.rakuten.co.jp') && !tab.url.includes('review.rakuten.co.jp')) {
-      showMessage('楽天の商品ページを開いてください', 'error');
+    // 楽天ページの判定
+    const isRakutenPage = tab.url.includes('item.rakuten.co.jp') || tab.url.includes('review.rakuten.co.jp');
+    // Amazonページの判定
+    const isAmazonPage = tab.url.includes('amazon.co.jp') && (
+      tab.url.includes('/dp/') ||
+      tab.url.includes('/gp/product/') ||
+      tab.url.includes('/product-reviews/')
+    );
+
+    if (!isRakutenPage && !isAmazonPage) {
+      showMessage('楽天またはAmazonの商品ページを開いてください', 'error');
       return;
     }
 
@@ -345,7 +376,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const productInfo = {
           url: tab.url,
           title: tab.title || 'Unknown',
-          addedAt: new Date().toISOString()
+          addedAt: new Date().toISOString(),
+          source: isAmazonPage ? 'amazon' : 'rakuten'
         };
         addProductToQueue(productInfo);
         return;

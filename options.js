@@ -64,6 +64,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const spreadsheetUrlInput = document.getElementById('spreadsheetUrl');
   const spreadsheetUrlStatus = document.getElementById('spreadsheetUrlStatus');
+  const amazonSpreadsheetUrlInput = document.getElementById('amazonSpreadsheetUrl');
+  const amazonSpreadsheetUrlStatus = document.getElementById('amazonSpreadsheetUrlStatus');
   const separateSheetsCheckbox = document.getElementById('separateSheets');
   const separateCsvFilesCheckbox = document.getElementById('separateCsvFiles');
   const enableNotificationCheckbox = document.getElementById('enableNotification');
@@ -191,7 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const text = productUrl.value.trim();
       const urls = text.split('\n').map(u => u.trim()).filter(u => u.length > 0);
 
-      // ランキングURLチェック
+      // ランキングURLチェック（楽天のみ）
       const hasRankingUrl = urls.some(u => u.includes('ranking.rakuten.co.jp'));
       if (hasRankingUrl && urls.length === 1) {
         rankingCountWrapper.style.display = 'flex';
@@ -199,11 +201,12 @@ document.addEventListener('DOMContentLoaded', () => {
         rankingCountWrapper.style.display = 'none';
       }
 
-      // URLカウント表示
+      // URLカウント表示（楽天 + Amazon）
       const validUrls = urls.filter(u =>
         u.includes('item.rakuten.co.jp') ||
         u.includes('review.rakuten.co.jp') ||
-        u.includes('ranking.rakuten.co.jp')
+        u.includes('ranking.rakuten.co.jp') ||
+        (u.includes('amazon.co.jp') && (u.includes('/dp/') || u.includes('/gp/product/') || u.includes('/product-reviews/')))
       );
 
 
@@ -238,6 +241,17 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
+    // Amazon用スプレッドシートURL入力（自動保存）
+    if (amazonSpreadsheetUrlInput) {
+      let amazonSpreadsheetUrlSaveTimeout = null;
+      amazonSpreadsheetUrlInput.addEventListener('input', () => {
+        if (amazonSpreadsheetUrlSaveTimeout) clearTimeout(amazonSpreadsheetUrlSaveTimeout);
+        amazonSpreadsheetUrlSaveTimeout = setTimeout(() => {
+          saveAmazonSpreadsheetUrlAuto();
+        }, 500);
+      });
+    }
+
     // バックグラウンドからのメッセージ
     chrome.runtime.onMessage.addListener(handleMessage);
 
@@ -249,12 +263,16 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function loadSettings() {
-    chrome.storage.sync.get(['separateSheets', 'separateCsvFiles', 'spreadsheetUrl', 'enableNotification', 'notifyPerProduct'], (result) => {
-      // スプレッドシートURL（Sheets API直接連携）
+    chrome.storage.sync.get(['separateSheets', 'separateCsvFiles', 'spreadsheetUrl', 'amazonSpreadsheetUrl', 'enableNotification', 'notifyPerProduct'], (result) => {
+      // 楽天用スプレッドシートURL（Sheets API直接連携）
       if (result.spreadsheetUrl && spreadsheetUrlInput) {
         spreadsheetUrlInput.value = result.spreadsheetUrl;
         spreadsheetLink.href = result.spreadsheetUrl;
         spreadsheetLink.classList.remove('disabled');
+      }
+      // Amazon用スプレッドシートURL
+      if (result.amazonSpreadsheetUrl && amazonSpreadsheetUrlInput) {
+        amazonSpreadsheetUrlInput.value = result.amazonSpreadsheetUrl;
       }
       // CSV機能は常に表示（スプレッドシートと併用可能）
       dataButtons.style.display = 'flex';
@@ -288,6 +306,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // URLから販路を判定
+  function detectSourceFromUrl(url) {
+    if (!url) return 'unknown';
+    if (url.includes('rakuten.co.jp')) return 'rakuten';
+    if (url.includes('amazon.co.jp')) return 'amazon';
+    return 'unknown';
+  }
+
+  // 販路バッジのHTMLを生成
+  function getSourceBadgeHtml(source) {
+    if (source === 'amazon') {
+      return '<span class="source-badge source-amazon">Amazon</span>';
+    } else if (source === 'rakuten') {
+      return '<span class="source-badge source-rakuten">楽天</span>';
+    }
+    return '';
+  }
+
   function loadQueue() {
     chrome.storage.local.get(['queue', 'collectingItems'], (result) => {
       const queue = result.queue || [];
@@ -302,28 +338,33 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // 収集中アイテムを先頭に表示
-      const collectingHtml = collectingItems.map(item => `
+      const collectingHtml = collectingItems.map(item => {
+        const source = item.source || detectSourceFromUrl(item.url);
+        return `
         <div class="queue-item collecting">
           <div class="queue-item-info">
             <div class="queue-item-title">
               <span class="collecting-badge">収集中</span>
+              ${getSourceBadgeHtml(source)}
               ${escapeHtml(item.title || '商品')}
             </div>
             <div class="queue-item-url">${escapeHtml(item.url)}</div>
           </div>
         </div>
-      `).join('');
+      `}).join('');
 
       // 待機中アイテム
-      const waitingHtml = queue.map((item, index) => `
+      const waitingHtml = queue.map((item, index) => {
+        const source = item.source || detectSourceFromUrl(item.url);
+        return `
         <div class="queue-item">
           <div class="queue-item-info">
-            <div class="queue-item-title">${escapeHtml(item.title || '商品')}</div>
+            <div class="queue-item-title">${getSourceBadgeHtml(source)}${escapeHtml(item.title || '商品')}</div>
             <div class="queue-item-url">${escapeHtml(item.url)}</div>
           </div>
           <button class="queue-item-remove" data-index="${index}">×</button>
         </div>
-      `).join('');
+      `}).join('');
 
       queueList.innerHTML = collectingHtml + waitingHtml;
 
@@ -415,6 +456,36 @@ document.addEventListener('DOMContentLoaded', () => {
       showStatus(spreadsheetUrlStatus, 'success', '✓ 保存しました');
       spreadsheetLink.href = url;
       spreadsheetLink.classList.remove('disabled');
+    });
+  }
+
+  // Amazon用スプレッドシートURLの自動保存
+  async function saveAmazonSpreadsheetUrlAuto() {
+    const url = amazonSpreadsheetUrlInput.value.trim();
+
+    // URLが空の場合はクリア
+    if (!url) {
+      chrome.storage.sync.set({ amazonSpreadsheetUrl: '' }, () => {
+        showStatus(amazonSpreadsheetUrlStatus, 'info', '設定をクリアしました');
+      });
+      return;
+    }
+
+    // URL形式チェック
+    const spreadsheetIdMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    if (!spreadsheetIdMatch) {
+      showStatus(amazonSpreadsheetUrlStatus, 'error', 'スプレッドシートURLの形式が正しくありません');
+      return;
+    }
+
+    // 保存
+    chrome.storage.sync.set({ amazonSpreadsheetUrl: url }, () => {
+      if (chrome.runtime.lastError) {
+        showStatus(amazonSpreadsheetUrlStatus, 'error', '保存に失敗しました');
+        return;
+      }
+
+      showStatus(amazonSpreadsheetUrlStatus, 'success', '✓ 保存しました');
     });
   }
 
@@ -560,7 +631,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const headers = [
       'レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文',
       '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先',
-      '購入回数', '参考になった数', 'ショップからの返信', 'ショップ名', 'レビュー掲載URL', '収集日時'
+      '購入回数', '参考になった数', 'ショップからの返信', 'ショップ名', 'レビュー掲載URL', '収集日時',
+      '販路', '国'
     ];
 
     const rows = reviews.map(review => [
@@ -569,7 +641,9 @@ document.addEventListener('DOMContentLoaded', () => {
       review.author || '', review.age || '', review.gender || '', review.orderDate || '',
       review.variation || '', review.usage || '', review.recipient || '',
       review.purchaseCount || '', review.helpfulCount || 0, review.shopReply || '',
-      review.shopName || '', review.pageUrl || '', review.collectedAt || ''
+      review.shopName || '', review.pageUrl || '', review.collectedAt || '',
+      review.source === 'amazon' ? 'Amazon' : (review.source === 'rakuten' ? '楽天' : review.source || ''),
+      review.country || ''
     ]);
 
     const escapeCSV = (value) => {
@@ -750,13 +824,18 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // 商品URLの場合（複数対応）
-    const productUrls = urls.filter(u =>
+    // 商品URLの場合（複数対応）- 楽天 + Amazon
+    const rakutenUrls = urls.filter(u =>
       u.includes('item.rakuten.co.jp') || u.includes('review.rakuten.co.jp')
     );
+    const amazonUrls = urls.filter(u =>
+      u.includes('amazon.co.jp') && (u.includes('/dp/') || u.includes('/gp/product/') || u.includes('/product-reviews/'))
+    );
+
+    const productUrls = [...rakutenUrls, ...amazonUrls];
 
     if (productUrls.length === 0) {
-      showStatus(addStatus, 'error', '楽天の商品ページまたはランキングURLを入力してください');
+      showStatus(addStatus, 'error', '楽天またはAmazonの商品ページURLを入力してください');
       return;
     }
 
@@ -773,16 +852,28 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
 
-        // URLからタイトルを生成
+        // URLからタイトルと販路を生成
         let productTitle = '商品';
-        const pathMatch = url.match(/item\.rakuten\.co\.jp\/([^\/]+)\/([^\/\?]+)/);
-        if (pathMatch) {
-          productTitle = `${pathMatch[1]} - ${pathMatch[2]}`;
+        let source = 'unknown';
+
+        // 楽天の場合
+        const rakutenPathMatch = url.match(/item\.rakuten\.co\.jp\/([^\/]+)\/([^\/\?]+)/);
+        if (rakutenPathMatch) {
+          productTitle = `${rakutenPathMatch[1]} - ${rakutenPathMatch[2]}`;
+          source = 'rakuten';
+        }
+
+        // Amazonの場合
+        const amazonAsinMatch = url.match(/(?:\/dp\/|\/gp\/product\/|\/product-reviews\/)([A-Z0-9]{10})/i);
+        if (amazonAsinMatch) {
+          productTitle = amazonAsinMatch[1];
+          source = 'amazon';
         }
 
         queue.push({
           url: url,
           title: productTitle.substring(0, 100),
+          source: source,
           addedAt: new Date().toISOString()
         });
         addedCount++;

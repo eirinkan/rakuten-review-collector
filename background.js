@@ -1,6 +1,7 @@
 /**
  * バックグラウンドサービスワーカー
  * レビューデータの保存、CSVダウンロード、キュー管理を処理
+ * 楽天市場・Amazon両対応
  */
 
 // アクティブな収集タブを追跡
@@ -9,6 +10,37 @@ let activeCollectionTabs = new Set();
 let collectionWindowId = null;
 // タブごとのスプレッドシートURL（定期収集用）
 const tabSpreadsheetUrls = new Map();
+
+/**
+ * URLが楽天かAmazonかを判定
+ * @param {string} url - URL
+ * @returns {string} 'rakuten' | 'amazon' | 'unknown'
+ */
+function detectSource(url) {
+  if (!url) return 'unknown';
+  if (url.includes('rakuten.co.jp')) return 'rakuten';
+  if (url.includes('amazon.co.jp')) return 'amazon';
+  return 'unknown';
+}
+
+/**
+ * URLからASINを抽出（Amazon用）
+ * @param {string} url - Amazon URL
+ * @returns {string} ASIN または空文字
+ */
+function extractASIN(url) {
+  if (!url) return '';
+  // /dp/ASIN パターン
+  const dpMatch = url.match(/\/dp\/([A-Z0-9]{10})/i);
+  if (dpMatch) return dpMatch[1].toUpperCase();
+  // /product-reviews/ASIN パターン
+  const reviewMatch = url.match(/\/product-reviews\/([A-Z0-9]{10})/i);
+  if (reviewMatch) return reviewMatch[1].toUpperCase();
+  // /gp/product/ASIN パターン
+  const gpMatch = url.match(/\/gp\/product\/([A-Z0-9]{10})/i);
+  if (gpMatch) return gpMatch[1].toUpperCase();
+  return '';
+}
 
 /**
  * ===== 認証機能 =====
@@ -196,7 +228,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     // ===== 既存の機能 =====
     case 'saveReviews':
-      handleSaveReviews(message.reviews, sender.tab?.id)
+      handleSaveReviews(message.reviews, sender.tab?.id, message.source || 'rakuten')
         .then(() => sendResponse({ success: true }))
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
@@ -263,16 +295,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
  * レビューを保存
  * @param {Array} reviews - レビューデータ
  * @param {number} tabId - 送信元タブID（定期収集用）
+ * @param {string} source - 販路 ('rakuten' | 'amazon')
  */
-async function handleSaveReviews(reviews, tabId = null) {
+async function handleSaveReviews(reviews, tabId = null, source = 'rakuten') {
   if (!reviews || reviews.length === 0) {
     return;
   }
 
-  const { separateSheets, spreadsheetUrl: globalSpreadsheetUrl } = await chrome.storage.sync.get(['separateSheets', 'spreadsheetUrl']);
+  // 販路をレビューから判定（source パラメータより優先）
+  const detectedSource = reviews[0]?.source || source;
+
+  // 販路別のスプレッドシートURLを取得
+  const syncSettings = await chrome.storage.sync.get([
+    'separateSheets',
+    'spreadsheetUrl',           // 楽天用
+    'amazonSpreadsheetUrl'      // Amazon用
+  ]);
 
   // タブ固有のスプレッドシートURLを取得（定期収集用）
-  // collectingItemsから取得（Service Workerのメモリがクリアされても対応）
   let spreadsheetUrl = null;
   let currentItem = null;
 
@@ -285,9 +325,13 @@ async function handleSaveReviews(reviews, tabId = null) {
     }
   }
 
-  // 定期収集用がなければグローバル設定を使用
+  // 定期収集用がなければグローバル設定を使用（販路別）
   if (!spreadsheetUrl) {
-    spreadsheetUrl = globalSpreadsheetUrl;
+    if (detectedSource === 'amazon') {
+      spreadsheetUrl = syncSettings.amazonSpreadsheetUrl;
+    } else {
+      spreadsheetUrl = syncSettings.spreadsheetUrl;
+    }
   }
 
   // 定期収集かどうかを判定（queueNameがあれば定期収集）
@@ -304,7 +348,7 @@ async function handleSaveReviews(reviews, tabId = null) {
     // 定期収集: スプレッドシートのみに保存（CSVには保存しない）
     if (spreadsheetUrl) {
       try {
-        await sendToSheets(spreadsheetUrl, reviews, separateSheets !== false, true);
+        await sendToSheets(spreadsheetUrl, reviews, syncSettings.separateSheets !== false, true, detectedSource);
         log(prefix + 'スプレッドシートに保存しました');
       } catch (error) {
         log(`スプレッドシートへの保存に失敗: ${error.message}`, 'error');
@@ -312,7 +356,7 @@ async function handleSaveReviews(reviews, tabId = null) {
     }
   } else {
     // 通常収集: ローカルストレージ（CSV用）とスプレッドシートに保存
-    const newReviews = await saveToLocalStorage(reviews);
+    const newReviews = await saveToLocalStorage(reviews, detectedSource);
 
     if (newReviews.length === 0) {
       return;
@@ -325,7 +369,7 @@ async function handleSaveReviews(reviews, tabId = null) {
         const allReviews = stateResult.collectionState?.reviews || [];
 
         if (allReviews.length > 0) {
-          await sendToSheets(spreadsheetUrl, allReviews, separateSheets !== false, false);
+          await sendToSheets(spreadsheetUrl, allReviews, syncSettings.separateSheets !== false, false, detectedSource);
           log(prefix + 'スプレッドシートに保存しました');
         }
       } catch (error) {
@@ -346,9 +390,11 @@ function getReviewKey(review) {
 
 /**
  * ローカルストレージに保存（重複削除付き）
+ * @param {Array} reviews - レビュー配列
+ * @param {string} source - 販路 ('rakuten' | 'amazon')
  * @returns {Promise<Array>} 新規追加されたレビューの配列
  */
-async function saveToLocalStorage(reviews) {
+async function saveToLocalStorage(reviews, source = 'rakuten') {
   return new Promise((resolve, reject) => {
     chrome.storage.local.get(['collectionState'], (result) => {
       const state = result.collectionState || {
@@ -357,8 +403,12 @@ async function saveToLocalStorage(reviews) {
         pageCount: 0,
         totalPages: 0,
         reviews: [],
-        logs: []
+        logs: [],
+        source: source
       };
+
+      // 販路を記録
+      state.source = source;
 
       const existingReviews = state.reviews || [];
 
@@ -407,7 +457,8 @@ async function saveToLocalStorage(reviews) {
               isRunning: state.isRunning,
               reviewCount: state.reviewCount,
               pageCount: state.pageCount,
-              totalPages: state.totalPages
+              totalPages: state.totalPages,
+              source: state.source
             }
           });
           resolve(newReviews); // 新規追加されたレビューを返す
@@ -521,7 +572,7 @@ async function formatDataRows(token, spreadsheetId, sheetId, startRow, endRow) {
           startRowIndex: startRow,
           endRowIndex: endRow,
           startColumnIndex: 0,
-          endColumnIndex: 20  // A-T列
+          endColumnIndex: 22  // A-V列（22項目に拡張）
         },
         cell: {
           userEnteredFormat: {
@@ -559,11 +610,26 @@ async function formatDataRows(token, spreadsheetId, sheetId, startRow, endRow) {
 }
 
 /**
- * ヘッダー行に書式を適用（赤背景・白テキスト・太字・行固定）
+ * ヘッダー行に書式を適用
+ * 楽天: 赤背景・白テキスト
+ * Amazon: 黒背景・オレンジテキスト (#ff9900)
+ * @param {string} source - 販路 ('rakuten' | 'amazon')
  */
-async function formatHeaderRow(token, spreadsheetId, sheetId) {
+async function formatHeaderRow(token, spreadsheetId, sheetId, source = 'rakuten') {
+  // 販路別の色設定
+  let backgroundColor, textColor;
+  if (source === 'amazon') {
+    // Amazon: 黒背景・オレンジテキスト (#ff9900)
+    backgroundColor = { red: 0, green: 0, blue: 0 };
+    textColor = { red: 255/255, green: 153/255, blue: 0 }; // #ff9900
+  } else {
+    // 楽天: 赤背景・白テキスト (#BF0000)
+    backgroundColor = { red: 191/255, green: 0, blue: 0 };
+    textColor = { red: 1, green: 1, blue: 1 };
+  }
+
   const requests = [
-    // ヘッダー行の書式設定（赤背景・白テキスト・太字・中央揃え）
+    // ヘッダー行の書式設定
     {
       repeatCell: {
         range: {
@@ -571,21 +637,13 @@ async function formatHeaderRow(token, spreadsheetId, sheetId) {
           startRowIndex: 0,
           endRowIndex: 1,
           startColumnIndex: 0,
-          endColumnIndex: 20  // A-T列
+          endColumnIndex: 22  // A-V列（22項目に拡張）
         },
         cell: {
           userEnteredFormat: {
-            backgroundColor: {
-              red: 191/255,  // #BF0000
-              green: 0,
-              blue: 0
-            },
+            backgroundColor: backgroundColor,
             textFormat: {
-              foregroundColor: {
-                red: 1,
-                green: 1,
-                blue: 1
-              },
+              foregroundColor: textColor,
               bold: true
             },
             horizontalAlignment: 'CENTER',
@@ -607,13 +665,13 @@ async function formatHeaderRow(token, spreadsheetId, sheetId) {
         fields: 'gridProperties.frozenRowCount'
       }
     },
-    // U列以降を削除（21列目以降）
+    // W列以降を削除（23列目以降）
     {
       deleteDimension: {
         range: {
           sheetId: sheetId,
           dimension: 'COLUMNS',
-          startIndex: 20,  // U列（0-indexed で20）
+          startIndex: 22,  // W列（0-indexed で22）
           endIndex: 26     // Z列まで（デフォルトの列数）
         }
       }
@@ -635,47 +693,51 @@ async function formatHeaderRow(token, spreadsheetId, sheetId) {
 
 /**
  * シートにデータを書き込み（既存データは上書き）
+ * @param {string} source - 販路 ('rakuten' | 'amazon')
  */
-async function appendToSheet(token, spreadsheetId, sheetName, reviews) {
+async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 'rakuten') {
   // シートが存在しなければ作成
   const actualSheetName = await ensureSheetExists(token, spreadsheetId, sheetName);
 
   const encodedSheetName = encodeURIComponent(actualSheetName);
   const sheetId = await getSheetId(token, spreadsheetId, actualSheetName);
 
-  // ヘッダー
+  // ヘッダー（22項目: 販路と国を追加）
   const headers = [
     'レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文',
     '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先',
-    '購入回数', '参考になった数', 'ショップからの返信', 'ショップ名', 'レビュー掲載URL', '収集日時'
+    '購入回数', '参考になった数', 'ショップからの返信', 'ショップ名', 'レビュー掲載URL', '収集日時',
+    '販路', '国'
   ];
 
-  // データを行形式に変換
+  // データを行形式に変換（22項目）
   const dataValues = reviews.map(review => [
     review.reviewDate || '', review.productId || '', review.productName || '',
     review.productUrl || '', review.rating || '', review.title || '', review.body || '',
     review.author || '', review.age || '', review.gender || '', review.orderDate || '',
     review.variation || '', review.usage || '', review.recipient || '',
     review.purchaseCount || '', review.helpfulCount || 0, review.shopReply || '',
-    review.shopName || '', review.pageUrl || '', review.collectedAt || ''
+    review.shopName || '', review.pageUrl || '', review.collectedAt || '',
+    review.source === 'amazon' ? 'Amazon' : '楽天',  // 販路
+    review.country || (review.source === 'amazon' ? '' : '日本')  // 国
   ]);
 
   // ヘッダー + データを結合
   const allValues = [headers, ...dataValues];
   const totalRows = allValues.length;
 
-  // 1. シートの全データをクリア
+  // 1. シートの全データをクリア（A-V列に拡張）
   await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A:T:clear`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A:V:clear`,
     {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` }
     }
   );
 
-  // 2. ヘッダーとデータを書き込み
+  // 2. ヘッダーとデータを書き込み（A1:V${totalRows}に拡張）
   const writeResponse = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A1:T${totalRows}?valueInputOption=RAW`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A1:V${totalRows}?valueInputOption=RAW`,
     {
       method: 'PUT',
       headers: {
@@ -692,7 +754,6 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews) {
   }
 
   // 3. シートの行数をデータ行数に一致させる（余分な行を削除）
-  // まずシートのプロパティを取得して現在の行数を確認
   const sheetPropsResponse = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets(properties)`,
     { headers: { Authorization: `Bearer ${token}` } }
@@ -727,8 +788,8 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews) {
     );
   }
 
-  // 4. ヘッダー書式を適用（赤背景・白テキスト・太字・行固定・U列以降削除）
-  await formatHeaderRow(token, spreadsheetId, sheetId);
+  // 4. ヘッダー書式を適用（販路別の色）
+  await formatHeaderRow(token, spreadsheetId, sheetId, source);
 
   // 5. データ行に書式を適用（白背景・黒テキスト・垂直中央揃え）
   if (dataValues.length > 0) {
@@ -738,8 +799,9 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews) {
 
 /**
  * Sheets APIを使ってスプレッドシートに直接書き込み
+ * @param {string} source - 販路 ('rakuten' | 'amazon')
  */
-async function sendToSheets(spreadsheetUrl, reviews, separateSheets = true, isScheduled = false) {
+async function sendToSheets(spreadsheetUrl, reviews, separateSheets = true, isScheduled = false, source = 'rakuten') {
   const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
   if (!spreadsheetId) {
     throw new Error('無効なスプレッドシートURLです');
@@ -775,19 +837,19 @@ async function sendToSheets(spreadsheetUrl, reviews, separateSheets = true, isSc
     // 商品ごとにシートを分ける
     const reviewsByProduct = groupReviewsByProduct(reviews);
     for (const [productId, productReviews] of Object.entries(reviewsByProduct)) {
-      // 定期収集の場合は「定期・商品管理番号」形式
+      // 定期収集の場合は「定期・商品管理番号」形式（Amazonの場合はASIN）
       const sheetName = isScheduled ? `定期・${productId}` : productId;
-      await appendToSheet(token, spreadsheetId, sheetName, productReviews);
+      await appendToSheet(token, spreadsheetId, sheetName, productReviews, source);
     }
   } else {
     // 全て同じシートに保存
     const sheetName = isScheduled ? '定期・レビュー' : 'レビュー';
-    await appendToSheet(token, spreadsheetId, sheetName, reviews);
+    await appendToSheet(token, spreadsheetId, sheetName, reviews, source);
   }
 }
 
 /**
- * CSVダウンロード
+ * CSVダウンロード（販路別ファイル名）
  */
 async function handleDownloadCSV() {
   return new Promise((resolve, reject) => {
@@ -804,7 +866,10 @@ async function handleDownloadCSV() {
         const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
         const url = URL.createObjectURL(blob);
 
-        const filename = `rakuten_reviews_${formatDate(new Date())}.csv`;
+        // 販路別のファイル名
+        const source = state.source || 'rakuten';
+        const prefix = source === 'amazon' ? 'amazon' : 'rakuten';
+        const filename = `${prefix}_reviews_${formatDate(new Date())}.csv`;
 
         await chrome.downloads.download({
           url: url,
@@ -821,13 +886,14 @@ async function handleDownloadCSV() {
 }
 
 /**
- * レビューデータをCSV形式に変換
+ * レビューデータをCSV形式に変換（22項目: 販路と国を追加）
  */
 function convertToCSV(reviews) {
   const headers = [
     'レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文',
     '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先',
-    '購入回数', '参考になった数', 'ショップからの返信', 'ショップ名', 'レビュー掲載URL', '収集日時'
+    '購入回数', '参考になった数', 'ショップからの返信', 'ショップ名', 'レビュー掲載URL', '収集日時',
+    '販路', '国'
   ];
 
   const rows = reviews.map(review => [
@@ -836,7 +902,9 @@ function convertToCSV(reviews) {
     review.author || '', review.age || '', review.gender || '', review.orderDate || '',
     review.variation || '', review.usage || '', review.recipient || '',
     review.purchaseCount || '', review.helpfulCount || 0, review.shopReply || '',
-    review.shopName || '', review.pageUrl || '', review.collectedAt || ''
+    review.shopName || '', review.pageUrl || '', review.collectedAt || '',
+    review.source === 'amazon' ? 'Amazon' : '楽天',  // 販路
+    review.country || (review.source === 'amazon' ? '' : '日本')  // 国
   ]);
 
   const escapeCSV = (value) => {
@@ -1039,12 +1107,20 @@ async function handleCollectionStopped(tabId) {
 }
 
 /**
- * URLから商品管理番号を抽出
+ * URLから商品ID（楽天: 商品管理番号、Amazon: ASIN）を抽出
  */
 function extractProductIdFromUrl(url) {
   if (!url) return 'unknown';
-  const match = url.match(/item\.rakuten\.co\.jp\/[^\/]+\/([^\/\?]+)/);
-  return match ? match[1] : 'unknown';
+
+  // 楽天の場合
+  const rakutenMatch = url.match(/item\.rakuten\.co\.jp\/[^\/]+\/([^\/\?]+)/);
+  if (rakutenMatch) return rakutenMatch[1];
+
+  // Amazonの場合
+  const asin = extractASIN(url);
+  if (asin) return asin;
+
+  return 'unknown';
 }
 
 /**
@@ -1417,7 +1493,7 @@ function forwardToAll(message) {
  * ストレージへの保存はoptions.jsのaddLog()が行うため、ここでは転送のみ
  */
 function log(text, type = '') {
-  console.log(`[楽天レビュー収集] ${text}`);
+  console.log(`[レビュー収集] ${text}`);
 
   forwardToAll({
     action: 'log',
@@ -1428,7 +1504,7 @@ function log(text, type = '') {
 
 // 拡張機能インストール時の初期化
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('楽天レビュー収集拡張機能がインストールされました');
+  console.log('レビュー収集拡張機能がインストールされました（楽天・Amazon対応）');
 
   chrome.storage.local.set({
     collectionState: {
