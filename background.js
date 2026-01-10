@@ -1511,9 +1511,33 @@ async function processNextInQueue() {
   });
 
   // ページ読み込み完了後に収集開始を指示
-  chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
+  // Amazonの場合は実際のURLにリダイレクトされた後に開始
+  const targetUrl = nextItem.url;
+  let startCollectionSent = false; // 重複送信防止フラグ
+
+  chrome.tabs.onUpdated.addListener(function listener(tabId, info, tabInfo) {
     if (tabId === tab.id && info.status === 'complete') {
+      // Amazonの場合、トップページではなく実際のURLにリダイレクトされたか確認
+      if (isAmazonUrl) {
+        const currentUrl = tabInfo.url || '';
+        // トップページやホームページの場合は待機
+        if (currentUrl === 'https://www.amazon.co.jp/' ||
+            currentUrl === 'https://www.amazon.co.jp' ||
+            currentUrl.includes('amazon.co.jp/ref=') ||
+            !currentUrl.includes('/dp/') && !currentUrl.includes('/product-reviews/')) {
+          console.log('[Amazon] トップページ読み込み完了、実際のURLへのリダイレクトを待機');
+          return; // リダイレクト待ち
+        }
+      }
+
+      // 重複送信防止
+      if (startCollectionSent) {
+        console.log('[キュー処理] startCollection既に送信済みのためスキップ');
+        return;
+      }
+      startCollectionSent = true;
       chrome.tabs.onUpdated.removeListener(listener);
+
       setTimeout(async () => {
         // 差分取得の設定を取得
         let lastCollectedDate = null;
@@ -1524,6 +1548,7 @@ async function processNextInQueue() {
           lastCollectedDate = productLastCollected[productId] || null;
         }
 
+        console.log('[キュー処理] startCollectionメッセージ送信');
         chrome.tabs.sendMessage(tab.id, {
           action: 'startCollection',
           incrementalOnly: nextItem.incrementalOnly || false,

@@ -14,6 +14,8 @@
   let incrementalOnly = false; // 差分取得モード
   let lastCollectedDate = null; // 前回収集日
   let currentQueueName = null; // 定期収集のキュー名
+  let autoResumeExecuted = false; // 自動再開が実行済みかどうか
+  let collectedReviewKeys = new Set(); // このセッションで収集済みのレビューキー
 
   // Amazonセレクター（前回のテストで確認済み）
   const AMAZON_SELECTORS = {
@@ -207,8 +209,17 @@
 
     isCollecting = true;
     shouldStop = false;
+    autoResumeExecuted = true; // 収集開始したらフラグをセット
 
     currentProductId = getASIN();
+
+    // 収集済みレビューキーをストレージから復元
+    const storedState = await new Promise(resolve => {
+      chrome.storage.local.get(['collectionState'], result => resolve(result.collectionState || {}));
+    });
+    if (storedState.collectedReviewKeys && Array.isArray(storedState.collectedReviewKeys)) {
+      collectedReviewKeys = new Set(storedState.collectedReviewKeys);
+    }
 
     // レビュー総数を取得
     const expectedTotal = getTotalReviewCount();
@@ -257,25 +268,55 @@
   }
 
   /**
+   * レビューの一意キーを生成
+   */
+  function generateReviewKey(review) {
+    // 本文の先頭100文字 + 著者 + 日付でユニークキーを生成
+    return `${(review.body || '').substring(0, 100)}|${review.author || ''}|${review.reviewDate || ''}`;
+  }
+
+  /**
    * 現在のページからレビューを収集
    */
   async function collectCurrentPage() {
     let reviews = extractReviews();
+    const currentPage = getCurrentPageNumber();
 
     if (reviews.length === 0) {
       log('このページにレビューが見つかりませんでした', 'error');
       return false;
     }
 
+    // 収集済みレビューをフィルタリング（セッション内重複チェック）
+    const originalCount = reviews.length;
+    reviews = reviews.filter(review => {
+      const key = generateReviewKey(review);
+      if (collectedReviewKeys.has(key)) {
+        return false; // 既に収集済み
+      }
+      return true;
+    });
+
+    const skippedBySession = originalCount - reviews.length;
+    if (skippedBySession > 0) {
+      log(`${skippedBySession}件は既にこのセッションで収集済みのためスキップ`);
+    }
+
+    // すべて収集済みの場合（同じページを2回処理した可能性）
+    if (reviews.length === 0) {
+      log('このページのレビューは全て収集済みです');
+      return false;
+    }
+
     // 差分取得モードの場合、日付でフィルタリング
     let reachedOldReviews = false;
     if (incrementalOnly && lastCollectedDate) {
-      const originalCount = reviews.length;
+      const beforeDateFilter = reviews.length;
       reviews = filterReviewsByDate(reviews, lastCollectedDate);
-      const filteredCount = originalCount - reviews.length;
+      const filteredCount = beforeDateFilter - reviews.length;
 
       if (filteredCount > 0) {
-        log(`${originalCount}件中${filteredCount}件は前回収集済み（${lastCollectedDate}より前）`);
+        log(`${beforeDateFilter}件中${filteredCount}件は前回収集済み（${lastCollectedDate}より前）`);
       }
 
       if (reviews.length === 0) {
@@ -284,12 +325,18 @@
         return reachedOldReviews;
       }
 
-      if (filteredCount > 0 && reviews.length < originalCount) {
+      if (filteredCount > 0 && reviews.length < beforeDateFilter) {
         reachedOldReviews = true;
       }
     }
 
     log(`${reviews.length}件のレビューを検出`);
+
+    // 収集したレビューのキーを追跡に追加
+    reviews.forEach(review => {
+      const key = generateReviewKey(review);
+      collectedReviewKeys.add(key);
+    });
 
     // バックグラウンドにデータを送信
     await new Promise((resolve) => {
@@ -328,17 +375,23 @@
         return false;
       }
 
-      // 差分取得設定を保存してからページ遷移
+      // 差分取得設定と収集済みキーを保存してからページ遷移
       await new Promise((resolve) => {
         chrome.storage.local.get(['collectionState'], (result) => {
           const state = result.collectionState || {};
           state.incrementalOnly = incrementalOnly;
           state.lastCollectedDate = lastCollectedDate;
           state.source = 'amazon';
+          state.queueName = currentQueueName;
+          // 収集済みレビューキーを保存（次のページでも重複チェックできるように）
+          state.collectedReviewKeys = Array.from(collectedReviewKeys);
+          state.lastProcessedUrl = window.location.href;
+          state.lastProcessedPage = getCurrentPageNumber();
           chrome.storage.local.set({ collectionState: state }, resolve);
         });
       });
 
+      log('次のページに移動します');
       window.location.href = nextPageLink;
       return true; // ページ遷移中
     }
@@ -661,6 +714,11 @@
         state.totalPages = totalPages || Math.ceil(getTotalReviewCount() / 10);
         state.isRunning = isCollecting;
         state.source = 'amazon';
+        // 収集済みレビューキーを保存（ページ遷移後も維持するため）
+        state.collectedReviewKeys = Array.from(collectedReviewKeys);
+        // 現在のページURLとページ番号を保存
+        state.lastProcessedUrl = window.location.href;
+        state.lastProcessedPage = getCurrentPageNumber();
 
         chrome.storage.local.set({ collectionState: state }, () => {
           resolve();
@@ -708,15 +766,31 @@
   if (isReviewPage) {
     chrome.storage.local.get(['collectionState'], (result) => {
       const state = result.collectionState;
-      if (state && state.isRunning && state.source === 'amazon' && !isCollecting) {
-        incrementalOnly = state.incrementalOnly || false;
-        lastCollectedDate = state.lastCollectedDate || null;
-        currentQueueName = state.queueName || null;
-        // DOMが完全に更新されるまで待機（Amazonは動的にレビューをロードするため）
-        setTimeout(() => {
-          log('収集を再開します');
-          startCollection();
-        }, 2000);
+      if (state && state.isRunning && state.source === 'amazon' && !isCollecting && !autoResumeExecuted) {
+        // 同じURLで再度実行されないようにチェック（ページ遷移が実際に発生したか確認）
+        const currentUrl = window.location.href.split('?')[0]; // クエリパラメータを除く
+        const lastUrl = (state.lastProcessedUrl || '').split('?')[0];
+        const currentPage = getCurrentPageNumber();
+        const lastPage = state.lastProcessedPage || 0;
+
+        // ページ番号が進んでいるか、URLが異なる場合のみ再開
+        if (currentPage > lastPage || currentUrl !== lastUrl) {
+          incrementalOnly = state.incrementalOnly || false;
+          lastCollectedDate = state.lastCollectedDate || null;
+          currentQueueName = state.queueName || null;
+          autoResumeExecuted = true; // 重複実行防止フラグ
+
+          // DOMが完全に更新されるまで待機（Amazonは動的にレビューをロードするため）
+          setTimeout(() => {
+            // 再度チェック（タイムアウト中に他の処理で開始された可能性）
+            if (!isCollecting) {
+              log('収集を再開します');
+              startCollection();
+            }
+          }, 2500);
+        } else {
+          console.log('[Amazonレビュー収集] 同じページのため自動再開をスキップ');
+        }
       }
     });
   }
