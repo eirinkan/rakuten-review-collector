@@ -1314,7 +1314,7 @@ async function startQueueCollection() {
   // 収集中フラグを立てる
   await chrome.storage.local.set({ isQueueCollecting: true, collectingItems: [] });
 
-  // 収集用ウィンドウを新規作成（大きいサイズ + 最小化）
+  // 収集用ウィンドウを新規作成（大きいサイズ、最小化なし）
   try {
     const window = await chrome.windows.create({
       url: 'about:blank',
@@ -1323,9 +1323,6 @@ async function startQueueCollection() {
       focused: false
     });
     collectionWindowId = window.id;
-
-    // 作成後に最小化
-    await chrome.windows.update(collectionWindowId, { state: 'minimized' });
 
     // about:blankタブは後で閉じる
     if (window.tabs && window.tabs[0]) {
