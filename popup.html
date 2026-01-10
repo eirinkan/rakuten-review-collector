@@ -299,19 +299,62 @@
       border: 1px solid rgba(245, 124, 0, 0.2);
     }
 
-    .page-warning a {
-      color: var(--primary);
-      text-decoration: underline;
-      font-weight: 500;
+    .page-warning .warning-title {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin: 0 0 10px 0;
     }
 
-    .page-warning a:hover {
-      opacity: 0.8;
+    .page-warning .warning-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+    }
+
+    .page-warning .warning-link {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+
+    .page-warning .warning-link.rakuten {
+      background: rgba(191, 0, 0, 0.1);
+      color: var(--rakuten-red);
+      border: 1px solid rgba(191, 0, 0, 0.2);
+    }
+
+    .page-warning .warning-link.rakuten:hover {
+      background: var(--rakuten-red);
+      color: white;
+    }
+
+    .page-warning .warning-link.amazon {
+      background: rgba(255, 153, 0, 0.1);
+      color: #cc7a00;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .page-warning .warning-link.amazon:hover {
+      background: #ff9900;
+      color: #000;
     }
 
     [data-theme="dark"] .page-warning {
       background: rgba(245, 124, 0, 0.15);
       border-color: rgba(245, 124, 0, 0.3);
+    }
+
+    [data-theme="dark"] .page-warning .warning-link.rakuten {
+      background: rgba(191, 0, 0, 0.2);
+    }
+
+    [data-theme="dark"] .page-warning .warning-link.amazon {
+      background: rgba(255, 153, 0, 0.2);
     }
 
     /* === Messages === */
@@ -547,13 +590,13 @@
       </div>
 
       <div id="pageWarning" class="page-warning" style="display: none;">
-        <p>以下で動作します。</p>
-        <p>
-          <a href="https://www.rakuten.co.jp/" target="_blank">楽天商品ページ</a><br>
-          <a href="https://ranking.rakuten.co.jp/sitemap/" target="_blank">楽天ランキング</a><br>
-          <a href="https://www.amazon.co.jp/" target="_blank">Amazon商品ページ</a><br>
-          <a href="https://www.amazon.co.jp/gp/bestsellers/" target="_blank">Amazonランキング</a>
-        </p>
+        <p class="warning-title">以下で動作します</p>
+        <div class="warning-links">
+          <a href="https://www.rakuten.co.jp/" target="_blank" class="warning-link rakuten">楽天商品ページ</a>
+          <a href="https://ranking.rakuten.co.jp/sitemap/" target="_blank" class="warning-link rakuten">楽天ランキング</a>
+          <a href="https://www.amazon.co.jp/" target="_blank" class="warning-link amazon">Amazon商品ページ</a>
+          <a href="https://www.amazon.co.jp/gp/bestsellers/" target="_blank" class="warning-link amazon">Amazonランキング</a>
+        </div>
       </div>
     </div>
 
