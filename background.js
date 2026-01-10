@@ -173,6 +173,21 @@ async function revokeToken() {
 }
 
 /**
+ * OAuthトークンを取得
+ */
+async function getAuthToken() {
+  return new Promise((resolve) => {
+    chrome.identity.getAuthToken({ interactive: false }, (token) => {
+      if (chrome.runtime.lastError || !token) {
+        resolve(null);
+      } else {
+        resolve(token);
+      }
+    });
+  });
+}
+
+/**
  * スプレッドシートのタイトルを取得
  */
 async function getSpreadsheetTitle(spreadsheetId) {
