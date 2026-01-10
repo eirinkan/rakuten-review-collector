@@ -1554,6 +1554,9 @@ async function processNextInQueue() {
 
   const nextItem = queue.shift();
 
+  // デバッグログ
+  console.log('[processNextInQueue] nextItem:', JSON.stringify(nextItem, null, 2));
+
   // 収集中リストに追加
   nextItem.tabId = null; // 後で設定
   collectingItems.push(nextItem);
@@ -1566,6 +1569,7 @@ async function processNextInQueue() {
   const productId = extractProductIdFromUrl(nextItem.url);
   const queuePrefix = nextItem.queueName ? `[${nextItem.queueName}・${productId}]` : '';
   log(`${queuePrefix ? queuePrefix + ' ' : ''}収集中: ${nextItem.title || nextItem.url}`);
+  console.log('[processNextInQueue] 処理URL:', nextItem.url, 'isAmazon:', nextItem.url.includes('amazon.co.jp'));
 
   // 収集用ウィンドウにタブを作成
   let tab;

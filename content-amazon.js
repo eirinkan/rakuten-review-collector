@@ -300,9 +300,27 @@
 
     currentProductId = getASIN();
 
-    // 現在のページ情報をログ出力
-    console.log('[Amazonレビュー収集] 収集開始 - URL:', window.location.href);
-    console.log('[Amazonレビュー収集] isReviewPage:', window.location.pathname.includes('/product-reviews/'));
+    // 詳細なデバッグ情報を出力
+    console.log('[Amazonレビュー収集] ===== 収集開始 =====');
+    console.log('[Amazonレビュー収集] URL:', window.location.href);
+    console.log('[Amazonレビュー収集] pathname:', window.location.pathname);
+    console.log('[Amazonレビュー収集] isReviewPage:', isReviewPage);
+    console.log('[Amazonレビュー収集] isProductPage:', isProductPage);
+    console.log('[Amazonレビュー収集] document.title:', document.title);
+    console.log('[Amazonレビュー収集] document.readyState:', document.readyState);
+    console.log('[Amazonレビュー収集] body長さ:', document.body?.innerHTML?.length || 0);
+
+    // 現在のレビュー要素数を確認
+    const initialReviews = document.querySelectorAll(AMAZON_SELECTORS.reviewContainer);
+    console.log('[Amazonレビュー収集] 初期レビュー要素数:', initialReviews.length);
+    console.log('[Amazonレビュー収集] セレクター:', AMAZON_SELECTORS.reviewContainer);
+
+    // ボット検出ページかどうかチェック
+    const robotCheck = document.querySelector('form[action="/errors/validateCaptcha"]');
+    if (robotCheck) {
+      console.log('[Amazonレビュー収集] ★★★ ボット検出ページを検出！ ★★★');
+      log('Amazonがボット検出を行いました。手動で認証が必要です。', 'error');
+    }
 
     // レビュー要素が読み込まれるまで待機（最大10秒）
     const reviewsFound = await waitForReviews(10000, 500);
@@ -315,6 +333,11 @@
       const reviewsAfterWait = document.querySelectorAll(AMAZON_SELECTORS.reviewContainer);
       console.log('[Amazonレビュー収集] 待機後のレビュー要素数:', reviewsAfterWait.length);
       console.log('[Amazonレビュー収集] ページタイトル:', document.title);
+
+      // ページの主要な要素を確認
+      console.log('[Amazonレビュー収集] #cm_cr-review_list存在:', !!document.querySelector('#cm_cr-review_list'));
+      console.log('[Amazonレビュー収集] .review存在:', document.querySelectorAll('.review').length);
+      console.log('[Amazonレビュー収集] [data-hook]要素数:', document.querySelectorAll('[data-hook]').length);
     }
 
     // 収集済みレビューキーをストレージから復元
