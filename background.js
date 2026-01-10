@@ -173,6 +173,36 @@ async function revokeToken() {
 }
 
 /**
+ * スプレッドシートのタイトルを取得
+ */
+async function getSpreadsheetTitle(spreadsheetId) {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error('認証が必要です');
+  }
+
+  const response = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=properties.title`,
+    {
+      headers: { 'Authorization': `Bearer ${token}` }
+    }
+  );
+
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error('スプレッドシートが見つかりません');
+    }
+    if (response.status === 403) {
+      throw new Error('アクセス権限がありません');
+    }
+    throw new Error('タイトルの取得に失敗しました');
+  }
+
+  const data = await response.json();
+  return data.properties?.title || '';
+}
+
+/**
  * ===== 認証機能ここまで =====
  */
 
@@ -224,6 +254,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       logout()
         .then(result => sendResponse(result))
         .catch(error => sendResponse({ success: false, message: error.message }));
+      return true;
+
+    case 'getSpreadsheetTitle':
+      getSpreadsheetTitle(message.spreadsheetId)
+        .then(title => sendResponse({ success: true, title }))
+        .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
 
     // ===== 既存の機能 =====

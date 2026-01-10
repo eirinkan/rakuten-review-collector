@@ -707,6 +707,36 @@
       transform: translateY(-1px);
     }
 
+    /* === Spreadsheet Title === */
+    .spreadsheet-title {
+      padding: 8px 12px;
+      margin-top: 8px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      background: var(--bg-secondary);
+      border-radius: 6px;
+      display: none;
+    }
+
+    .spreadsheet-title.show {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .spreadsheet-title .title-icon {
+      color: var(--success);
+    }
+
+    .spreadsheet-title.loading {
+      color: var(--text-muted);
+    }
+
+    .spreadsheet-title.error {
+      color: var(--danger);
+      background: rgba(220, 53, 69, 0.1);
+    }
+
     /* === Status Messages === */
     .status-message {
       padding: 10px 12px;
@@ -2191,12 +2221,14 @@
           <div class="form-group">
             <label>楽天用</label>
             <input type="text" id="spreadsheetUrl" placeholder="https://docs.google.com/spreadsheets/d/...">
+            <div id="spreadsheetTitle" class="spreadsheet-title"></div>
             <div id="spreadsheetUrlStatus" class="status-message"></div>
           </div>
 
           <div class="form-group" style="margin-top: 12px;">
             <label>Amazon用</label>
             <input type="text" id="amazonSpreadsheetUrl" placeholder="https://docs.google.com/spreadsheets/d/...">
+            <div id="amazonSpreadsheetTitle" class="spreadsheet-title"></div>
             <div id="amazonSpreadsheetUrlStatus" class="status-message"></div>
           </div>
 
