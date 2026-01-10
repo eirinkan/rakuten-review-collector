@@ -1499,7 +1499,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const queueId = e.target.dataset.queueId;
         const willBeEnabled = e.target.checked; // クリック後の状態（clickイベント時点で既に変更済み）
 
-        // オンにする場合、スプレッドシートが設定されているかチェック
+        // オンにする場合、キュー個別のスプレッドシートが設定されているかチェック
         if (willBeEnabled) {
           // 先にチェックを外しておく（バリデーション中は無効状態）
           e.target.checked = false;
@@ -1509,12 +1509,9 @@ document.addEventListener('DOMContentLoaded', () => {
           const queue = scheduledQueues.find(q => q.id === queueId);
           const queueSpreadsheetUrl = queue?.spreadsheetUrl || '';
 
-          const syncResult = await chrome.storage.sync.get(['spreadsheetUrl']);
-          const globalSpreadsheetUrl = syncResult.spreadsheetUrl || '';
-
-          // どちらも設定されていない場合は警告
-          if (!queueSpreadsheetUrl && !globalSpreadsheetUrl) {
-            alert('スプレッドシートが設定されていません。\n\n定期収集を有効にするには、このキューの「スプレッドシート」欄にURLを入力するか、設定画面で通常収集用のスプレッドシートを設定してください。');
+          // 定期収集は個別スプレッドシート必須（通常収集用は使用不可）
+          if (!queueSpreadsheetUrl) {
+            alert('スプレッドシートが設定されていません。\n\n定期収集を有効にするには、このキューの「保存先スプレッドシート」欄にURLを入力してください。\n\n※定期収集では通常収集用のスプレッドシートは使用できません。');
             return;
           }
 

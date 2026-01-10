@@ -318,13 +318,23 @@
       margin-top: 10px;
     }
 
-    .quick-start-input {
+    .quick-start-input-group .spreadsheet-input-wrapper {
       flex: 1;
+      width: 100%;
+    }
+
+    .quick-start-input {
+      width: 100%;
       padding: 14px 16px;
       border: 1px solid var(--border-input);
       border-radius: 8px;
       background: var(--bg-input);
       color: var(--text-primary);
+      font-size: 1.05em;
+    }
+
+    .quick-start-input-group .spreadsheet-title-overlay {
+      padding: 14px 16px;
       font-size: 1.05em;
     }
 
@@ -2352,7 +2362,7 @@
             </li>
             <li><strong>シート名:</strong> 「楽・商品管理番号」または「Ama・ASIN」形式で保存（販路混在OK）</li>
             <li><strong>差分のみ収集:</strong> ONにすると前回以降の新着レビューのみ収集（効率的）</li>
-            <li><strong>個別スプレッドシート:</strong> キューごとに異なるスプレッドシートを指定可能</li>
+            <li><strong>スプレッドシート:</strong> 各キューに個別のスプレッドシートURLが必須（通常収集用は使用不可）</li>
             <li><strong>注意:</strong>
               <br>・Chromeブラウザが起動している必要があります
               <br>・定期収集データはCSVには保存されません（スプレッドシートのみ）
@@ -2456,7 +2466,7 @@
           <ul>
             <li><strong>単一収集時:</strong> 収集中のタブを閉じると中断されます</li>
             <li><strong>キュー収集時:</strong> 収集用ウィンドウを閉じると全て中断されます</li>
-            <li><strong>定期収集:</strong> トグルをONにするにはスプレッドシートの設定が必要です</li>
+            <li><strong>定期収集:</strong> トグルをONにするには各キューに個別のスプレッドシート設定が必要です</li>
             <li>楽天市場のページ構造変更により、収集できない場合があります</li>
             <li>大量のレビュー収集には時間がかかります（1ページ約15件、3-6秒/ページ）</li>
           </ul>

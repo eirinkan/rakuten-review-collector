@@ -376,17 +376,17 @@ async function handleSaveReviews(reviews, tabId = null, source = 'rakuten') {
     }
   }
 
-  // 定期収集用がなければグローバル設定を使用（販路別）
-  if (!spreadsheetUrl) {
+  // 定期収集かどうかを判定（queueNameがあれば定期収集）
+  const isScheduled = !!(currentItem?.queueName);
+
+  // 定期収集は個別スプレッドシート必須、通常収集はグローバル設定を使用
+  if (!spreadsheetUrl && !isScheduled) {
     if (detectedSource === 'amazon') {
       spreadsheetUrl = syncSettings.amazonSpreadsheetUrl;
     } else {
       spreadsheetUrl = syncSettings.spreadsheetUrl;
     }
   }
-
-  // 定期収集かどうかを判定（queueNameがあれば定期収集）
-  const isScheduled = !!(currentItem?.queueName);
 
   // ログ用のプレフィックス
   const productId = reviews[0]?.productId || '';
@@ -404,6 +404,8 @@ async function handleSaveReviews(reviews, tabId = null, source = 'rakuten') {
       } catch (error) {
         log(`スプレッドシートへの保存に失敗: ${error.message}`, 'error');
       }
+    } else {
+      log(prefix + '定期収集用のスプレッドシートが設定されていません', 'error');
     }
   } else {
     // 通常収集: ローカルストレージ（CSV用）とスプレッドシートに保存
