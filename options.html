@@ -731,10 +731,12 @@
       cursor: pointer;
       transition: all var(--transition-fast);
       z-index: 1;
+      pointer-events: none;
     }
 
     .spreadsheet-title-overlay.show {
       display: flex;
+      pointer-events: auto;
     }
 
     .spreadsheet-title-overlay:hover {
@@ -1725,6 +1727,11 @@
     .scheduled-queue-url-wrapper {
       flex: 1;
       min-width: 100px;
+    }
+
+    .scheduled-queue-url-wrapper .scheduled-queue-url-input {
+      width: 100%;
+      flex: none;
     }
 
     .scheduled-queue-url-wrapper .spreadsheet-title-overlay {
