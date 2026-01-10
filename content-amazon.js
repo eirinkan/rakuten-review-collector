@@ -318,8 +318,8 @@
         return false;
       }
 
-      // ランダムウェイト（3-6秒）- Amazonはボット対策が厳しいため
-      const waitTime = getRandomWait(3000, 6000);
+      // ランダムウェイト（6-12秒）- Amazonはボット対策が厳しいため長めに設定
+      const waitTime = getRandomWait(6000, 12000);
       log(`${(waitTime / 1000).toFixed(1)}秒待機中...`);
       await sleep(waitTime);
 
