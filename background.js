@@ -1576,21 +1576,22 @@ async function processNextInQueue() {
   const isAmazonUrl = nextItem.url.includes('amazon.co.jp');
 
   // 直接URLにアクセス（トップページリダイレクトはchrome.tabs.updateもブロックされるため廃止）
+  // active: trueにしないとページが正しく読み込まれない場合がある
   if (collectionWindowId) {
     try {
       tab = await chrome.tabs.create({
         url: nextItem.url,
         windowId: collectionWindowId,
-        active: false
+        active: true
       });
     } catch (e) {
       // ウィンドウが閉じられている場合は通常のタブで開く
       console.error('収集用ウィンドウにタブ作成失敗:', e);
-      tab = await chrome.tabs.create({ url: nextItem.url, active: false });
+      tab = await chrome.tabs.create({ url: nextItem.url, active: true });
     }
   } else {
-    // フォールバック: 通常のバックグラウンドタブ
-    tab = await chrome.tabs.create({ url: nextItem.url, active: false });
+    // フォールバック: 通常のタブ
+    tab = await chrome.tabs.create({ url: nextItem.url, active: true });
   }
 
   // tabIdを収集中アイテムに設定
