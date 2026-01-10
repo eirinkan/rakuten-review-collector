@@ -596,7 +596,10 @@
     // 「次へ」リンクを探す
     const nextLink = document.querySelector(AMAZON_SELECTORS.nextPage);
     if (nextLink && nextLink.href) {
-      return nextLink.href;
+      // キャッシュ回避のためタイムスタンプを追加
+      const url = new URL(nextLink.href);
+      url.searchParams.set('_t', Date.now());
+      return url.toString();
     }
 
     // 最後のページかどうか確認
@@ -609,6 +612,8 @@
     const url = new URL(window.location.href);
     const currentPage = parseInt(url.searchParams.get('pageNumber') || '1', 10);
     url.searchParams.set('pageNumber', currentPage + 1);
+    // キャッシュ回避のためタイムスタンプを追加
+    url.searchParams.set('_t', Date.now());
 
     return url.toString();
   }
