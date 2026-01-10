@@ -1737,28 +1737,34 @@
 
     .scheduled-queue-url-input {
       flex: 1;
-      padding: 6px 10px;
-      border: 1px solid #bbb;
-      border-radius: 4px;
-      background: #fff;
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--bg-input);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid var(--border-input);
+      border-radius: 8px;
+      font-size: 13px;
       color: var(--text-primary);
-      font-size: 12px;
+      transition: all var(--transition);
       min-width: 100px;
     }
 
     .scheduled-queue-url-input:focus {
       outline: none;
-      border-color: var(--success);
+      border-color: var(--rakuten-red);
+      box-shadow: 0 0 0 3px rgba(191, 0, 0, 0.15);
     }
 
     .scheduled-queue-url-input::placeholder {
-      color: #999;
-      font-size: 11px;
+      color: var(--text-muted);
+      font-size: 12px;
     }
 
     .scheduled-queue-url-wrapper {
       flex: 1;
       min-width: 100px;
+      position: relative;
     }
 
     .scheduled-queue-url-wrapper .scheduled-queue-url-input {
@@ -1767,17 +1773,17 @@
     }
 
     .scheduled-queue-url-wrapper .spreadsheet-title-overlay {
-      padding: 6px 10px;
-      font-size: 12px;
+      padding: 10px 12px;
+      font-size: 13px;
     }
 
     .scheduled-queue-url-wrapper .spreadsheet-title-overlay .sheets-icon {
-      width: 14px;
-      height: 14px;
+      width: 18px;
+      height: 18px;
     }
 
     .scheduled-queue-url-wrapper .spreadsheet-title-overlay .edit-hint {
-      font-size: 10px;
+      font-size: 11px;
     }
 
     .scheduled-queue-last-run {
