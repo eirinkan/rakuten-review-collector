@@ -1477,7 +1477,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <span class="scheduled-queue-label">保存先スプレッドシート:</span>
               <div class="spreadsheet-input-wrapper scheduled-queue-url-wrapper">
                 <input type="text" class="scheduled-queue-url-input" data-queue-id="${queue.id}"
-                       value="${escapeHtml(queue.spreadsheetUrl || '')}" placeholder="未入力で通常収集と同じスプレッドシートを使用">
+                       value="${escapeHtml(queue.spreadsheetUrl || '')}" placeholder="スプレッドシートのURLを入力（必須）">
                 <div class="spreadsheet-title-overlay scheduled-queue-title" data-queue-id="${queue.id}"></div>
               </div>
             </div>
@@ -1561,11 +1561,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     scheduledQueuesList.querySelectorAll('.scheduled-queue-url-input').forEach(input => {
       let saveTimeout = null;
+
+      // 入力中はタイトル非表示、保存のみ（debounce）
       input.addEventListener('input', (e) => {
         const queueId = e.target.dataset.queueId;
         const url = e.target.value.trim();
 
-        // タイトル表示をクリア
+        // タイトル表示をクリア（入力中は非表示）
         const titleEl = scheduledQueuesList.querySelector(`.scheduled-queue-title[data-queue-id="${queueId}"]`);
         if (titleEl) {
           titleEl.classList.remove('show', 'loading', 'error');
@@ -1575,11 +1577,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (saveTimeout) clearTimeout(saveTimeout);
         saveTimeout = setTimeout(() => {
           updateScheduledQueueProperty(queueId, 'spreadsheetUrl', url, e.target);
-          // URL保存後にタイトル取得
-          if (url && titleEl) {
+        }, 500);
+      });
+
+      // フォーカスを外した時にタイトル取得
+      input.addEventListener('blur', (e) => {
+        const queueId = e.target.dataset.queueId;
+        const url = e.target.value.trim();
+        const titleEl = scheduledQueuesList.querySelector(`.scheduled-queue-title[data-queue-id="${queueId}"]`);
+
+        if (url && titleEl) {
+          // URL形式チェック
+          const spreadsheetIdMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+          if (spreadsheetIdMatch) {
             fetchAndShowSpreadsheetTitle(url, titleEl, e.target);
           }
-        }, 500);
+        }
       });
     });
 
