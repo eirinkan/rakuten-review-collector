@@ -1479,10 +1479,10 @@ document.addEventListener('DOMContentLoaded', () => {
               </label>
               <span class="scheduled-queue-last-run">前回: ${lastRunText}</span>
             </div>
-            <div class="scheduled-queue-row">
-              <span class="scheduled-queue-label">保存先スプレッドシート:</span>
-              <div class="spreadsheet-input-wrapper scheduled-queue-url-wrapper">
-                <input type="text" class="scheduled-queue-url-input" data-queue-id="${queue.id}"
+            <div class="form-group" style="margin-bottom: 0;">
+              <label>保存先スプレッドシート</label>
+              <div class="spreadsheet-input-wrapper">
+                <input type="text" data-queue-id="${queue.id}"
                        value="${escapeHtml(queue.spreadsheetUrl || '')}" placeholder="スプレッドシートのURLを入力（必須）">
                 <div class="spreadsheet-title-overlay scheduled-queue-title" data-queue-id="${queue.id}"></div>
               </div>
@@ -1496,7 +1496,7 @@ document.addEventListener('DOMContentLoaded', () => {
     scheduledQueues.forEach(queue => {
       if (queue.spreadsheetUrl) {
         const titleEl = scheduledQueuesList.querySelector(`.scheduled-queue-title[data-queue-id="${queue.id}"]`);
-        const inputEl = scheduledQueuesList.querySelector(`.scheduled-queue-url-input[data-queue-id="${queue.id}"]`);
+        const inputEl = scheduledQueuesList.querySelector(`.form-group input[data-queue-id="${queue.id}"]`);
         if (titleEl && inputEl) {
           fetchAndShowSpreadsheetTitle(queue.spreadsheetUrl, titleEl, inputEl);
         }
@@ -1565,7 +1565,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
-    scheduledQueuesList.querySelectorAll('.scheduled-queue-url-input').forEach(input => {
+    scheduledQueuesList.querySelectorAll('.form-group input[data-queue-id]').forEach(input => {
       let saveTimeout = null;
 
       // 入力時: debounceで保存 → 保存後にタイトル取得（設定欄と同じ仕様）
