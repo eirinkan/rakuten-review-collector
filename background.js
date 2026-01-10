@@ -548,12 +548,62 @@ function groupReviewsByProduct(reviews) {
 }
 
 /**
- * シートにデータがあるか確認（1セル以上にデータがあればtrue）
+ * シートが空かどうか確認（データがなければtrue）
  */
+async function isSheetEmpty(token, spreadsheetId, sheetTitle) {
+  try {
+    const encodedTitle = encodeURIComponent(sheetTitle);
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedTitle}'!A1:Z10`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    if (!response.ok) {
+      return false; // エラーの場合は空ではないと判断
+    }
+
+    const data = await response.json();
+    // valuesがないか、空配列なら空シート
+    return !data.values || data.values.length === 0;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * シートをリネーム
+ */
+async function renameSheet(token, spreadsheetId, sheetId, newTitle) {
+  const response = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        requests: [{
+          updateSheetProperties: {
+            properties: {
+              sheetId: sheetId,
+              title: newTitle
+            },
+            fields: 'title'
+          }
+        }]
+      })
+    }
+  );
+
+  return response.ok;
+}
+
 /**
  * シートが存在するか確認し、なければ作成
  * - 同じシート名がある → そのまま使用
- * - 同じシート名がない → 新規作成
+ * - 同じシート名がない & 空シートがある → 空シートをリネームして使用
+ * - 同じシート名がない & 空シートもない → 新規作成
  */
 async function ensureSheetExists(token, spreadsheetId, sheetName) {
   const response = await fetch(
@@ -575,7 +625,40 @@ async function ensureSheetExists(token, spreadsheetId, sheetName) {
     return sheetName;
   }
 
-  // 同じシート名がない → 新規作成
+  // 空のシートを探す（「シート1」「Sheet1」などのデフォルト名を優先）
+  const defaultSheetNames = ['シート1', 'Sheet1', 'シート2', 'Sheet2', 'シート3', 'Sheet3'];
+  let emptySheet = null;
+
+  // まずデフォルト名のシートから空シートを探す
+  for (const defaultName of defaultSheetNames) {
+    const sheet = sheets.find(s => s.properties.title === defaultName);
+    if (sheet && await isSheetEmpty(token, spreadsheetId, defaultName)) {
+      emptySheet = sheet;
+      break;
+    }
+  }
+
+  // デフォルト名で見つからなければ、全シートから空シートを探す
+  if (!emptySheet) {
+    for (const sheet of sheets) {
+      const title = sheet.properties.title;
+      if (await isSheetEmpty(token, spreadsheetId, title)) {
+        emptySheet = sheet;
+        break;
+      }
+    }
+  }
+
+  // 空シートがあればリネームして使用
+  if (emptySheet) {
+    const renamed = await renameSheet(token, spreadsheetId, emptySheet.properties.sheetId, sheetName);
+    if (renamed) {
+      return sheetName;
+    }
+    // リネーム失敗時は新規作成にフォールバック
+  }
+
+  // 空シートがない → 新規作成
   const createResponse = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
     {
