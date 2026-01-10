@@ -57,7 +57,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // DOM要素
   const queueRemaining = document.getElementById('queueRemaining');
-  const spreadsheetLink = document.getElementById('spreadsheetLink');
+  const spreadsheetLinkRakutenEl = document.getElementById('spreadsheetLinkRakuten');
+  const spreadsheetLinkAmazonEl = document.getElementById('spreadsheetLinkAmazon');
   const downloadBtn = document.getElementById('downloadBtn');
   const clearDataBtn = document.getElementById('clearDataBtn');
   const dataButtons = document.getElementById('dataButtons');
@@ -165,44 +166,22 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    // スプレッドシートソース選択
-    const spreadsheetSourceSelector = document.getElementById('spreadsheetSourceSelector');
-    const spreadsheetDropdown = document.getElementById('spreadsheetDropdown');
-    const spreadsheetRakuten = document.getElementById('spreadsheetRakuten');
-    const spreadsheetAmazon = document.getElementById('spreadsheetAmazon');
+    // ヘッダーのスプレッドシートリンクドロップダウン
+    const spreadsheetLinkBtn = document.getElementById('spreadsheetLinkBtn');
+    const spreadsheetLinkDropdown = document.getElementById('spreadsheetLinkDropdown');
+    const spreadsheetLinkRakuten = document.getElementById('spreadsheetLinkRakuten');
+    const spreadsheetLinkAmazon = document.getElementById('spreadsheetLinkAmazon');
 
-    if (spreadsheetSourceSelector && spreadsheetDropdown) {
-      spreadsheetSourceSelector.addEventListener('click', (e) => {
+    if (spreadsheetLinkBtn && spreadsheetLinkDropdown) {
+      spreadsheetLinkBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        spreadsheetDropdown.classList.toggle('show');
-      });
-
-      spreadsheetDropdown.querySelectorAll('.spreadsheet-dropdown-item').forEach(item => {
-        item.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const source = item.dataset.source;
-
-          // セレクターの表示を更新
-          spreadsheetSourceSelector.textContent = source === 'amazon' ? 'Amazon' : '楽天';
-          spreadsheetSourceSelector.className = `spreadsheet-selector ${source}`;
-
-          // コンテンツの切り替え
-          if (source === 'amazon') {
-            spreadsheetRakuten.classList.remove('active');
-            spreadsheetAmazon.classList.add('active');
-          } else {
-            spreadsheetAmazon.classList.remove('active');
-            spreadsheetRakuten.classList.add('active');
-          }
-
-          spreadsheetDropdown.classList.remove('show');
-        });
+        spreadsheetLinkDropdown.classList.toggle('show');
       });
 
       // ドロップダウン外クリックで閉じる
       document.addEventListener('click', (e) => {
-        if (!spreadsheetDropdown.contains(e.target) && !spreadsheetSourceSelector.contains(e.target)) {
-          spreadsheetDropdown.classList.remove('show');
+        if (!spreadsheetLinkDropdown.contains(e.target) && !spreadsheetLinkBtn.contains(e.target)) {
+          spreadsheetLinkDropdown.classList.remove('show');
         }
       });
     }
@@ -309,12 +288,18 @@ document.addEventListener('DOMContentLoaded', () => {
       // 楽天用スプレッドシートURL（Sheets API直接連携）
       if (result.spreadsheetUrl && spreadsheetUrlInput) {
         spreadsheetUrlInput.value = result.spreadsheetUrl;
-        spreadsheetLink.href = result.spreadsheetUrl;
-        spreadsheetLink.classList.remove('disabled');
+        if (spreadsheetLinkRakutenEl) {
+          spreadsheetLinkRakutenEl.href = result.spreadsheetUrl;
+          spreadsheetLinkRakutenEl.classList.remove('disabled');
+        }
       }
       // Amazon用スプレッドシートURL
       if (result.amazonSpreadsheetUrl && amazonSpreadsheetUrlInput) {
         amazonSpreadsheetUrlInput.value = result.amazonSpreadsheetUrl;
+        if (spreadsheetLinkAmazonEl) {
+          spreadsheetLinkAmazonEl.href = result.amazonSpreadsheetUrl;
+          spreadsheetLinkAmazonEl.classList.remove('disabled');
+        }
       }
       // CSV機能は常に表示（スプレッドシートと併用可能）
       dataButtons.style.display = 'flex';
@@ -476,7 +461,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
       chrome.storage.sync.set({ spreadsheetUrl: '' }, () => {
         showStatus(spreadsheetUrlStatus, 'info', '設定をクリアしました');
-        spreadsheetLink.classList.add('disabled');
+        if (spreadsheetLinkRakutenEl) {
+          spreadsheetLinkRakutenEl.classList.add('disabled');
+        }
       });
       return;
     }
@@ -496,8 +483,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       showStatus(spreadsheetUrlStatus, 'success', '✓ 保存しました');
-      spreadsheetLink.href = url;
-      spreadsheetLink.classList.remove('disabled');
+      if (spreadsheetLinkRakutenEl) {
+        spreadsheetLinkRakutenEl.href = url;
+        spreadsheetLinkRakutenEl.classList.remove('disabled');
+      }
     });
   }
 
@@ -509,6 +498,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!url) {
       chrome.storage.sync.set({ amazonSpreadsheetUrl: '' }, () => {
         showStatus(amazonSpreadsheetUrlStatus, 'info', '設定をクリアしました');
+        if (spreadsheetLinkAmazonEl) {
+          spreadsheetLinkAmazonEl.classList.add('disabled');
+        }
       });
       return;
     }
@@ -528,6 +520,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       showStatus(amazonSpreadsheetUrlStatus, 'success', '✓ 保存しました');
+      if (spreadsheetLinkAmazonEl) {
+        spreadsheetLinkAmazonEl.href = url;
+        spreadsheetLinkAmazonEl.classList.remove('disabled');
+      }
     });
   }
 
@@ -1674,7 +1670,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (mainInput) mainInput.value = url;
 
           // ヘッダーのスプレッドシートリンクも更新
-          const link = document.getElementById('spreadsheetLink');
+          const link = document.getElementById('spreadsheetLinkRakuten');
           if (link) {
             link.href = url;
             link.classList.remove('disabled');

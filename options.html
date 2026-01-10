@@ -199,6 +199,64 @@
       cursor: default;
     }
 
+    /* Header Dropdown */
+    .spreadsheet-link-wrapper {
+      position: relative;
+    }
+
+    .header-dropdown {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 4px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 100;
+      display: none;
+      overflow: hidden;
+      min-width: 120px;
+    }
+
+    .header-dropdown.show {
+      display: block;
+    }
+
+    .header-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      color: var(--text-primary);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      transition: background var(--transition);
+    }
+
+    .header-dropdown-item:hover {
+      background: var(--bg-secondary);
+    }
+
+    .header-dropdown-item.disabled {
+      opacity: 0.4;
+      pointer-events: none;
+    }
+
+    .source-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+    }
+
+    .source-dot.rakuten {
+      background: var(--rakuten-red);
+    }
+
+    .source-dot.amazon {
+      background: #ff9900;
+    }
+
     /* Quick Start Guide */
     .quick-start-overlay {
       position: fixed;
@@ -1215,109 +1273,6 @@
       box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
     }
 
-    /* Spreadsheet Selector */
-    .spreadsheet-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-      position: relative;
-    }
-
-    .spreadsheet-header h3 {
-      margin: 0;
-    }
-
-    .spreadsheet-selector {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all var(--transition);
-    }
-
-    .spreadsheet-selector.rakuten {
-      background: var(--rakuten-red);
-      color: white;
-    }
-
-    .spreadsheet-selector.amazon {
-      background: #ff9900;
-      color: #000;
-    }
-
-    .spreadsheet-selector:hover {
-      opacity: 0.9;
-      transform: scale(1.02);
-    }
-
-    .spreadsheet-selector::after {
-      content: '▼';
-      font-size: 8px;
-      margin-left: 2px;
-    }
-
-    .spreadsheet-dropdown {
-      position: absolute;
-      top: 100%;
-      left: 0;
-      margin-top: 4px;
-      background: var(--bg-primary);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      z-index: 100;
-      display: none;
-      overflow: hidden;
-    }
-
-    .spreadsheet-dropdown.show {
-      display: block;
-    }
-
-    .spreadsheet-dropdown-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 16px;
-      cursor: pointer;
-      transition: background var(--transition);
-      font-size: 13px;
-      font-weight: 500;
-    }
-
-    .spreadsheet-dropdown-item:hover {
-      background: var(--bg-secondary);
-    }
-
-    .spreadsheet-dropdown-item.rakuten::before {
-      content: '';
-      width: 12px;
-      height: 12px;
-      background: var(--rakuten-red);
-      border-radius: 3px;
-    }
-
-    .spreadsheet-dropdown-item.amazon::before {
-      content: '';
-      width: 12px;
-      height: 12px;
-      background: #ff9900;
-      border-radius: 3px;
-    }
-
-    .spreadsheet-content {
-      display: none;
-    }
-
-    .spreadsheet-content.active {
-      display: block;
-    }
-
     /* Help Text */
     .help-text {
       font-size: 11px;
@@ -2075,9 +2030,19 @@
       <div class="header-top">
         <h1 id="headerTitle" style="cursor: pointer;">レビュー収集</h1>
         <div class="header-actions">
-          <a id="spreadsheetLink" href="#" target="_blank" class="header-link disabled" title="スプレッドシートを開く">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"/></svg>
-          </a>
+          <div class="spreadsheet-link-wrapper">
+            <button id="spreadsheetLinkBtn" class="header-icon-btn" title="スプレッドシートを開く">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"/></svg>
+            </button>
+            <div id="spreadsheetLinkDropdown" class="header-dropdown">
+              <a id="spreadsheetLinkRakuten" href="#" target="_blank" class="header-dropdown-item rakuten">
+                <span class="source-dot rakuten"></span>楽天
+              </a>
+              <a id="spreadsheetLinkAmazon" href="#" target="_blank" class="header-dropdown-item amazon">
+                <span class="source-dot amazon"></span>Amazon
+              </a>
+            </div>
+          </div>
           <button id="downloadBtn" class="header-icon-btn" title="CSVダウンロード" disabled>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
           </button>
@@ -2219,27 +2184,18 @@
 
         <!-- スプレッドシート -->
         <div class="settings-section">
-          <div class="spreadsheet-header">
-            <h3>スプレッドシート</h3>
-            <span id="spreadsheetSourceSelector" class="spreadsheet-selector rakuten">楽天</span>
-            <div id="spreadsheetDropdown" class="spreadsheet-dropdown">
-              <div class="spreadsheet-dropdown-item rakuten" data-source="rakuten">楽天</div>
-              <div class="spreadsheet-dropdown-item amazon" data-source="amazon">Amazon</div>
-            </div>
+          <h3>スプレッドシート（通常収集）</h3>
+
+          <div class="form-group">
+            <label>楽天用</label>
+            <input type="text" id="spreadsheetUrl" placeholder="https://docs.google.com/spreadsheets/d/...">
+            <div id="spreadsheetUrlStatus" class="status-message"></div>
           </div>
 
-          <div id="spreadsheetRakuten" class="spreadsheet-content active">
-            <div class="form-group">
-              <input type="text" id="spreadsheetUrl" placeholder="https://docs.google.com/spreadsheets/d/...">
-              <div id="spreadsheetUrlStatus" class="status-message"></div>
-            </div>
-          </div>
-
-          <div id="spreadsheetAmazon" class="spreadsheet-content">
-            <div class="form-group">
-              <input type="text" id="amazonSpreadsheetUrl" placeholder="https://docs.google.com/spreadsheets/d/...">
-              <div id="amazonSpreadsheetUrlStatus" class="status-message"></div>
-            </div>
+          <div class="form-group" style="margin-top: 12px;">
+            <label>Amazon用</label>
+            <input type="text" id="amazonSpreadsheetUrl" placeholder="https://docs.google.com/spreadsheets/d/...">
+            <div id="amazonSpreadsheetUrlStatus" class="status-message"></div>
           </div>
 
           <label class="checkbox-label" style="margin-top: 12px;">
