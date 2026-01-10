@@ -911,6 +911,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const source = rankingUrl.includes('amazon.co.jp') ? 'Amazon' : '楽天';
             addLog(`${source}ランキングから${response.addedCount}件をキューに追加`, 'success');
             productUrl.value = '';
+            productUrl.style.height = '38px';
             rankingCountWrapper.style.display = 'none';
             // ボタンをデフォルトに戻す
             addToQueueBtn.classList.remove('btn-primary');
@@ -994,6 +995,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loadQueue();
         addLog(`${addedCount}件の商品をキューに追加`, 'success');
         productUrl.value = '';
+        productUrl.style.height = '38px';
         // ボタンをデフォルトに戻す
         addToQueueBtn.classList.remove('btn-primary');
         addToQueueBtn.classList.add('btn-secondary');
