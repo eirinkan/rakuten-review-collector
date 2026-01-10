@@ -312,17 +312,17 @@
       font-weight: 500;
     }
 
-    .quick-start-hint {
-      font-size: 0.85em;
+    .quick-start-optional {
+      font-size: 0.7em;
       color: var(--text-muted);
-      margin: 4px 0 12px 0;
+      font-weight: 400;
     }
 
     .quick-start-spreadsheet-row {
       display: flex;
       align-items: center;
-      gap: 10px;
-      margin-bottom: 10px;
+      gap: 8px;
+      margin-top: 8px;
     }
 
     .quick-start-spreadsheet-row .spreadsheet-input-wrapper {
@@ -330,37 +330,34 @@
     }
 
     .quick-start-label {
-      font-size: 0.9em;
+      font-size: 0.8em;
       font-weight: 600;
-      padding: 6px 12px;
-      border-radius: 6px;
-      min-width: 80px;
-      text-align: center;
+      padding: 8px 0;
+      min-width: 60px;
+      text-align: right;
     }
 
     .quick-start-label.rakuten {
-      background: #BF0000;
-      color: white;
+      color: #BF0000;
     }
 
     .quick-start-label.amazon {
-      background: #232F3E;
       color: #FF9900;
     }
 
     .quick-start-input {
       width: 100%;
-      padding: 12px 14px;
+      padding: 10px 12px;
       border: 1px solid var(--border-input);
-      border-radius: 8px;
+      border-radius: 6px;
       background: var(--bg-input);
       color: var(--text-primary);
-      font-size: 1em;
+      font-size: 0.95em;
     }
 
     .quick-start-spreadsheet-row .spreadsheet-title-overlay {
-      padding: 12px 14px;
-      font-size: 1em;
+      padding: 10px 12px;
+      font-size: 0.95em;
     }
 
     .quick-start-input:focus {
@@ -2528,17 +2525,16 @@
       <h2>使い方</h2>
       <div class="quick-start-steps">
         <div class="quick-start-step">
-          <p>1. レビューデータを保存するスプレッドシートを用意</p>
-          <p class="quick-start-hint">※後から設定画面で入力することもできます</p>
+          <p>1. レビューデータを保存するスプレッドシートを用意 <span class="quick-start-optional">（後で設定可）</span></p>
           <div class="quick-start-spreadsheet-row">
-            <span class="quick-start-label rakuten">楽天用</span>
+            <span class="quick-start-label rakuten">楽天</span>
             <div class="spreadsheet-input-wrapper">
               <input type="text" id="quickStartSpreadsheetUrl" class="quick-start-input" placeholder="スプレッドシートのURL">
               <div id="quickStartSpreadsheetTitle" class="spreadsheet-title-overlay"></div>
             </div>
           </div>
           <div class="quick-start-spreadsheet-row">
-            <span class="quick-start-label amazon">Amazon用</span>
+            <span class="quick-start-label amazon">Amazon</span>
             <div class="spreadsheet-input-wrapper">
               <input type="text" id="quickStartAmazonSpreadsheetUrl" class="quick-start-input" placeholder="スプレッドシートのURL">
               <div id="quickStartAmazonSpreadsheetTitle" class="spreadsheet-title-overlay"></div>
