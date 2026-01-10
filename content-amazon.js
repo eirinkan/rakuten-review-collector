@@ -183,51 +183,67 @@
 
   /**
    * 商品ページからレビューページへのリンク要素を取得
+   * 重要: アンカーリンク（#で始まるhref）ではなく、product-reviewsページへの実リンクを探す
    */
   function findReviewPageLink() {
     const asin = getASIN();
 
+    // ヘルパー: hrefがproduct-reviewsページへの実リンクかどうか確認
+    const isValidReviewLink = (elem) => {
+      if (!elem || !elem.href) return false;
+      // アンカーリンク（#）やjavascript:は除外
+      if (elem.href.startsWith('#') || elem.href.startsWith('javascript:')) return false;
+      // product-reviewsを含む実際のURLか確認
+      return elem.href.includes('/product-reviews/');
+    };
+
     // 1. 「すべてのレビューを見る」リンク（data-hook属性）
     const reviewLink = document.querySelector(AMAZON_SELECTORS.reviewLink);
-    if (reviewLink) {
+    if (isValidReviewLink(reviewLink)) {
       return reviewLink;
     }
 
-    // 2. レビューセクションのフッターリンク
-    const altLink = document.querySelector('#reviews-medley-footer a');
-    if (altLink) {
+    // 2. 「レビューをすべて見る」リンク（a.a-link-emphasis）
+    const emphasisLink = document.querySelector('a.a-link-emphasis[href*="product-reviews"]');
+    if (isValidReviewLink(emphasisLink)) {
+      return emphasisLink;
+    }
+
+    // 3. レビューセクションのフッターリンク
+    const altLink = document.querySelector('#reviews-medley-footer a[href*="product-reviews"]');
+    if (isValidReviewLink(altLink)) {
       return altLink;
     }
 
-    // 3. カスタマーレビューセクション内のリンク
+    // 4. カスタマーレビューセクション内のリンク
     const crLink = document.querySelector('#customerReviews a[href*="product-reviews"]');
-    if (crLink) {
+    if (isValidReviewLink(crLink)) {
       return crLink;
     }
 
-    // 4. レビュー数表示のリンク（「〇件のレビュー」）
-    const ratingLink = document.querySelector('#acrCustomerReviewLink');
-    if (ratingLink) {
-      return ratingLink;
+    // 5. 現在の商品ASINのproduct-reviewsリンクを検索
+    if (asin) {
+      const asinReviewLink = document.querySelector(`a[href*="/product-reviews/${asin}"]`);
+      if (isValidReviewLink(asinReviewLink)) {
+        return asinReviewLink;
+      }
     }
 
-    // 5. 任意のproduct-reviewsリンクを検索
-    const anyReviewLink = document.querySelector(`a[href*="/product-reviews/${asin}"]`);
-    if (anyReviewLink) {
-      return anyReviewLink;
-    }
-
-    // 6. ASINなしでもproduct-reviewsリンクを検索
-    const genericReviewLink = document.querySelector('a[href*="/product-reviews/"]');
-    if (genericReviewLink) {
-      return genericReviewLink;
+    // 6. ページ内のすべてのリンクから、現在の商品のレビューページリンクを探す
+    const allLinks = document.querySelectorAll('a[href*="product-reviews"]');
+    for (const link of allLinks) {
+      // 現在の商品のASINを含むリンクを優先
+      if (asin && link.href.includes(`/product-reviews/${asin}`)) {
+        if (isValidReviewLink(link)) {
+          return link;
+        }
+      }
     }
 
     // 7. 見つからない場合、ASINからレビューページURLを生成してダミーリンクを作成
     if (asin) {
       const link = document.createElement('a');
       link.href = `https://www.amazon.co.jp/product-reviews/${asin}/ref=cm_cr_dp_d_show_all_btm?ie=UTF8&reviewerType=all_reviews`;
-      link.style.display = 'none';
       document.body.appendChild(link);
       console.log('[Amazonレビュー収集] レビューリンクが見つからないため、ASINからURLを生成:', link.href);
       return link;
