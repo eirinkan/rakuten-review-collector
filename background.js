@@ -888,9 +888,12 @@ async function sendToSheets(spreadsheetUrl, reviews, separateSheets = true, isSc
     // 商品ごとにシートを分ける
     const reviewsByProduct = groupReviewsByProduct(reviews);
     for (const [productId, productReviews] of Object.entries(reviewsByProduct)) {
-      // 定期収集の場合は「定期・商品管理番号」形式（Amazonの場合はASIN）
-      const sheetName = isScheduled ? `定期・${productId}` : productId;
-      await appendToSheet(token, spreadsheetId, sheetName, productReviews, source);
+      // 定期収集の場合は「楽・商品管理番号」または「Ama・ASIN」形式
+      // 商品の販路はレビューから判定
+      const productSource = productReviews[0]?.source || source;
+      const prefix = productSource === 'amazon' ? 'Ama' : '楽';
+      const sheetName = isScheduled ? `${prefix}・${productId}` : productId;
+      await appendToSheet(token, spreadsheetId, sheetName, productReviews, productSource);
     }
   } else {
     // 全て同じシートに保存
