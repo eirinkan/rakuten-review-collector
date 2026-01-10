@@ -702,8 +702,11 @@
         incrementalOnly = state.incrementalOnly || false;
         lastCollectedDate = state.lastCollectedDate || null;
         currentQueueName = state.queueName || null;
-        log('収集を再開します');
-        startCollection();
+        // DOMが完全に更新されるまで待機（Amazonは動的にレビューをロードするため）
+        setTimeout(() => {
+          log('収集を再開します');
+          startCollection();
+        }, 2000);
       }
     });
   }

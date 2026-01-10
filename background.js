@@ -436,9 +436,11 @@ async function handleSaveReviews(reviews, tabId = null, source = 'rakuten') {
  * レビューの一意キーを生成
  */
 function getReviewKey(review) {
-  // 商品ID + レビュー日 + 投稿者 + 本文の最初の50文字で一意性を判断
-  const bodySnippet = (review.body || '').substring(0, 50);
-  return `${review.productId || ''}_${review.reviewDate || ''}_${review.author || ''}_${bodySnippet}`;
+  // 商品ID + レビュー日 + 投稿者 + タイトル + 本文の最初の100文字で一意性を判断
+  // 本文はtrim()して空白や改行を除去してから取得
+  const bodySnippet = (review.body || '').trim().substring(0, 100);
+  const titleSnippet = (review.title || '').trim().substring(0, 50);
+  return `${review.productId || ''}_${review.reviewDate || ''}_${review.author || ''}_${titleSnippet}_${bodySnippet}`;
 }
 
 /**
@@ -763,16 +765,48 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 
     '販路', '国'
   ];
 
+  // URLをHYPERLINK関数形式に変換（クリック可能にする）
+  const toHyperlink = (url) => {
+    if (!url) return '';
+    // URLに含まれるダブルクォートをエスケープ
+    const escapedUrl = url.replace(/"/g, '""');
+    return `=HYPERLINK("${escapedUrl}")`;
+  };
+
+  // テキストが=で始まる場合はエスケープ（数式として解釈されないように）
+  const escapeFormula = (text) => {
+    if (!text) return '';
+    const str = String(text);
+    if (str.startsWith('=') || str.startsWith('+') || str.startsWith('-') || str.startsWith('@')) {
+      return "'" + str;
+    }
+    return str;
+  };
+
   // データを行形式に変換（22項目）
   const dataValues = reviews.map(review => [
-    review.reviewDate || '', review.productId || '', review.productName || '',
-    review.productUrl || '', review.rating || '', review.title || '', review.body || '',
-    review.author || '', review.age || '', review.gender || '', review.orderDate || '',
-    review.variation || '', review.usage || '', review.recipient || '',
-    review.purchaseCount || '', review.helpfulCount || 0, review.shopReply || '',
-    review.shopName || '', review.pageUrl || '', review.collectedAt || '',
+    escapeFormula(review.reviewDate || ''),
+    escapeFormula(review.productId || ''),
+    escapeFormula(review.productName || ''),
+    toHyperlink(review.productUrl),  // クリック可能なリンク
+    review.rating || '',
+    escapeFormula(review.title || ''),
+    escapeFormula(review.body || ''),
+    escapeFormula(review.author || ''),
+    escapeFormula(review.age || ''),
+    escapeFormula(review.gender || ''),
+    escapeFormula(review.orderDate || ''),
+    escapeFormula(review.variation || ''),
+    escapeFormula(review.usage || ''),
+    escapeFormula(review.recipient || ''),
+    escapeFormula(review.purchaseCount || ''),
+    review.helpfulCount || 0,
+    escapeFormula(review.shopReply || ''),
+    escapeFormula(review.shopName || ''),
+    toHyperlink(review.pageUrl),  // クリック可能なリンク
+    escapeFormula(review.collectedAt || ''),
     review.source === 'amazon' ? 'Amazon' : '楽天',  // 販路
-    review.country || (review.source === 'amazon' ? '' : '日本')  // 国
+    escapeFormula(review.country || (review.source === 'amazon' ? '' : '日本'))  // 国
   ]);
 
   // ヘッダー + データを結合
@@ -789,8 +823,9 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 
   );
 
   // 2. ヘッダーとデータを書き込み（A1:V${totalRows}に拡張）
+  // USER_ENTERED: HYPERLINK関数を評価してクリック可能なリンクにする
   const writeResponse = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A1:V${totalRows}?valueInputOption=RAW`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A1:V${totalRows}?valueInputOption=USER_ENTERED`,
     {
       method: 'PUT',
       headers: {
