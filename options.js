@@ -216,8 +216,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const text = productUrl.value.trim();
       const urls = text.split('\n').map(u => u.trim()).filter(u => u.length > 0);
 
-      // ランキングURLチェック（楽天のみ）
-      const hasRankingUrl = urls.some(u => u.includes('ranking.rakuten.co.jp'));
+      // ランキングURLチェック（楽天 + Amazon）
+      const isRakutenRanking = urls.some(u => u.includes('ranking.rakuten.co.jp'));
+      const isAmazonRanking = urls.some(u =>
+        u.includes('amazon.co.jp') && (u.includes('/bestsellers/') || u.includes('/ranking/'))
+      );
+      const hasRankingUrl = isRakutenRanking || isAmazonRanking;
       if (hasRankingUrl && urls.length === 1) {
         rankingCountWrapper.style.display = 'flex';
       } else {
@@ -229,7 +233,13 @@ document.addEventListener('DOMContentLoaded', () => {
         u.includes('item.rakuten.co.jp') ||
         u.includes('review.rakuten.co.jp') ||
         u.includes('ranking.rakuten.co.jp') ||
-        (u.includes('amazon.co.jp') && (u.includes('/dp/') || u.includes('/gp/product/') || u.includes('/product-reviews/')))
+        (u.includes('amazon.co.jp') && (
+          u.includes('/dp/') ||
+          u.includes('/gp/product/') ||
+          u.includes('/product-reviews/') ||
+          u.includes('/bestsellers/') ||
+          u.includes('/ranking/')
+        ))
       );
 
 
@@ -879,8 +889,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // 改行で分割して複数URLを取得
     const urls = text.split('\n').map(u => u.trim()).filter(u => u.length > 0);
 
-    // ランキングURLの場合（1件のみ対応）
-    const rankingUrl = urls.find(u => u.includes('ranking.rakuten.co.jp'));
+    // ランキングURLの場合（1件のみ対応）- 楽天 + Amazon
+    const rankingUrl = urls.find(u =>
+      u.includes('ranking.rakuten.co.jp') ||
+      (u.includes('amazon.co.jp') && (u.includes('/bestsellers/') || u.includes('/ranking/')))
+    );
     if (rankingUrl && urls.length === 1) {
       const count = parseInt(rankingCount.value) || 10;
       addToQueueBtn.disabled = true;
@@ -895,7 +908,8 @@ document.addEventListener('DOMContentLoaded', () => {
           if (response && response.success) {
             loadQueue();
             showStatus(addStatus, 'success', `${response.addedCount}件追加しました`);
-            addLog(`ランキングから${response.addedCount}件をキューに追加`, 'success');
+            const source = rankingUrl.includes('amazon.co.jp') ? 'Amazon' : '楽天';
+            addLog(`${source}ランキングから${response.addedCount}件をキューに追加`, 'success');
             productUrl.value = '';
             rankingCountWrapper.style.display = 'none';
             // ボタンをデフォルトに戻す
