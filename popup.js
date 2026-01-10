@@ -395,12 +395,18 @@ document.addEventListener('DOMContentLoaded', () => {
       const exists = queue.some(item => item.url === productInfo.url);
       if (exists) {
         showMessage('既にキューに追加済みです', 'error');
+        chrome.runtime.sendMessage({ action: 'log', text: '既にキューに追加済みです', type: 'error' });
         return;
       }
 
       queue.push(productInfo);
       chrome.storage.local.set({ queue: queue }, () => {
         showMessage('キューに追加しました', 'success');
+        // ログを送信
+        const title = productInfo.title || productInfo.url;
+        chrome.runtime.sendMessage({ action: 'log', text: `「${title}」をキューに追加しました`, type: 'success' });
+        // キュー更新を通知
+        chrome.runtime.sendMessage({ action: 'queueUpdated' });
       });
     });
   }

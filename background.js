@@ -1539,8 +1539,15 @@ async function fetchRakutenRankingProducts(url, count) {
 
     forwardToAll({ action: 'queueUpdated' });
 
+    if (addedCount > 0) {
+      log(`楽天ランキングから${addedCount}件の商品をキューに追加しました`, 'success');
+    } else {
+      log('追加する商品がありません（全て重複）', 'info');
+    }
+
     return { success: true, addedCount };
   } catch (error) {
+    log(`楽天ランキング取得エラー: ${error.message}`, 'error');
     return { success: false, error: error.message };
   }
 }
@@ -1628,11 +1635,15 @@ async function fetchAmazonRankingProducts(url, count) {
 
     forwardToAll({ action: 'queueUpdated' });
 
-    log(`Amazonランキングから${addedCount}件の商品を追加しました`, 'success');
+    if (addedCount > 0) {
+      log(`Amazonランキングから${addedCount}件の商品をキューに追加しました`, 'success');
+    } else {
+      log('追加する商品がありません（全て重複）', 'info');
+    }
 
     return { success: true, addedCount };
   } catch (error) {
-    console.error('Amazonランキング取得エラー:', error);
+    log(`Amazonランキング取得エラー: ${error.message}`, 'error');
     return { success: false, error: error.message };
   }
 }
