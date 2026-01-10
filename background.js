@@ -1314,18 +1314,17 @@ async function startQueueCollection() {
   // 収集中フラグを立てる
   await chrome.storage.local.set({ isQueueCollecting: true, collectingItems: [] });
 
-  // 収集用ウィンドウを新規作成して最小化
+  // 収集用ウィンドウを新規作成（画面外に配置してAmazonのボット検知を回避）
   try {
     const window = await chrome.windows.create({
       url: 'about:blank',
-      width: 400,
-      height: 300,
+      width: 1280,
+      height: 800,
+      left: -2000,  // 画面外に配置
+      top: -2000,
       focused: false
     });
     collectionWindowId = window.id;
-
-    // 作成後に最小化を試行
-    await chrome.windows.update(collectionWindowId, { state: 'minimized' });
 
     // about:blankタブは後で閉じる
     if (window.tabs && window.tabs[0]) {
