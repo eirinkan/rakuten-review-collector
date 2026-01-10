@@ -165,6 +165,48 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
+    // スプレッドシートソース選択
+    const spreadsheetSourceSelector = document.getElementById('spreadsheetSourceSelector');
+    const spreadsheetDropdown = document.getElementById('spreadsheetDropdown');
+    const spreadsheetRakuten = document.getElementById('spreadsheetRakuten');
+    const spreadsheetAmazon = document.getElementById('spreadsheetAmazon');
+
+    if (spreadsheetSourceSelector && spreadsheetDropdown) {
+      spreadsheetSourceSelector.addEventListener('click', (e) => {
+        e.stopPropagation();
+        spreadsheetDropdown.classList.toggle('show');
+      });
+
+      spreadsheetDropdown.querySelectorAll('.spreadsheet-dropdown-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const source = item.dataset.source;
+
+          // セレクターの表示を更新
+          spreadsheetSourceSelector.textContent = source === 'amazon' ? 'Amazon' : '楽天';
+          spreadsheetSourceSelector.className = `spreadsheet-selector ${source}`;
+
+          // コンテンツの切り替え
+          if (source === 'amazon') {
+            spreadsheetRakuten.classList.remove('active');
+            spreadsheetAmazon.classList.add('active');
+          } else {
+            spreadsheetAmazon.classList.remove('active');
+            spreadsheetRakuten.classList.add('active');
+          }
+
+          spreadsheetDropdown.classList.remove('show');
+        });
+      });
+
+      // ドロップダウン外クリックで閉じる
+      document.addEventListener('click', (e) => {
+        if (!spreadsheetDropdown.contains(e.target) && !spreadsheetSourceSelector.contains(e.target)) {
+          spreadsheetDropdown.classList.remove('show');
+        }
+      });
+    }
+
     // ヘッダータイトルクリックで収集画面に遷移
     if (headerTitle) {
       headerTitle.addEventListener('click', showMainView);

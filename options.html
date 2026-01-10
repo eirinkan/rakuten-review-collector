@@ -1215,6 +1215,109 @@
       box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
     }
 
+    /* Spreadsheet Selector */
+    .spreadsheet-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .spreadsheet-header h3 {
+      margin: 0;
+    }
+
+    .spreadsheet-selector {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+
+    .spreadsheet-selector.rakuten {
+      background: var(--rakuten-red);
+      color: white;
+    }
+
+    .spreadsheet-selector.amazon {
+      background: #ff9900;
+      color: #000;
+    }
+
+    .spreadsheet-selector:hover {
+      opacity: 0.9;
+      transform: scale(1.02);
+    }
+
+    .spreadsheet-selector::after {
+      content: '▼';
+      font-size: 8px;
+      margin-left: 2px;
+    }
+
+    .spreadsheet-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      margin-top: 4px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 100;
+      display: none;
+      overflow: hidden;
+    }
+
+    .spreadsheet-dropdown.show {
+      display: block;
+    }
+
+    .spreadsheet-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      cursor: pointer;
+      transition: background var(--transition);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .spreadsheet-dropdown-item:hover {
+      background: var(--bg-secondary);
+    }
+
+    .spreadsheet-dropdown-item.rakuten::before {
+      content: '';
+      width: 12px;
+      height: 12px;
+      background: var(--rakuten-red);
+      border-radius: 3px;
+    }
+
+    .spreadsheet-dropdown-item.amazon::before {
+      content: '';
+      width: 12px;
+      height: 12px;
+      background: #ff9900;
+      border-radius: 3px;
+    }
+
+    .spreadsheet-content {
+      display: none;
+    }
+
+    .spreadsheet-content.active {
+      display: block;
+    }
+
     /* Help Text */
     .help-text {
       font-size: 11px;
@@ -2116,18 +2219,27 @@
 
         <!-- スプレッドシート -->
         <div class="settings-section">
-          <h3>スプレッドシート（通常収集）</h3>
-
-          <div class="form-group">
-            <label>楽天用</label>
-            <input type="text" id="spreadsheetUrl" placeholder="https://docs.google.com/spreadsheets/d/...">
-            <div id="spreadsheetUrlStatus" class="status-message"></div>
+          <div class="spreadsheet-header">
+            <h3>スプレッドシート</h3>
+            <span id="spreadsheetSourceSelector" class="spreadsheet-selector rakuten">楽天</span>
+            <div id="spreadsheetDropdown" class="spreadsheet-dropdown">
+              <div class="spreadsheet-dropdown-item rakuten" data-source="rakuten">楽天</div>
+              <div class="spreadsheet-dropdown-item amazon" data-source="amazon">Amazon</div>
+            </div>
           </div>
 
-          <div class="form-group" style="margin-top: 12px;">
-            <label>Amazon用</label>
-            <input type="text" id="amazonSpreadsheetUrl" placeholder="https://docs.google.com/spreadsheets/d/...">
-            <div id="amazonSpreadsheetUrlStatus" class="status-message"></div>
+          <div id="spreadsheetRakuten" class="spreadsheet-content active">
+            <div class="form-group">
+              <input type="text" id="spreadsheetUrl" placeholder="https://docs.google.com/spreadsheets/d/...">
+              <div id="spreadsheetUrlStatus" class="status-message"></div>
+            </div>
+          </div>
+
+          <div id="spreadsheetAmazon" class="spreadsheet-content">
+            <div class="form-group">
+              <input type="text" id="amazonSpreadsheetUrl" placeholder="https://docs.google.com/spreadsheets/d/...">
+              <div id="amazonSpreadsheetUrlStatus" class="status-message"></div>
+            </div>
           </div>
 
           <label class="checkbox-label" style="margin-top: 12px;">
