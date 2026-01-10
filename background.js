@@ -1417,23 +1417,53 @@ async function processNextInQueue() {
   const queuePrefix = nextItem.queueName ? `[${nextItem.queueName}・${productId}]` : '';
   log(`${queuePrefix ? queuePrefix + ' ' : ''}収集中: ${nextItem.title || nextItem.url}`);
 
-  // 収集用ウィンドウにタブを作成（最小化ウィンドウ内）
+  // 収集用ウィンドウにタブを作成
   let tab;
+  const isAmazonUrl = nextItem.url.includes('amazon.co.jp');
+
+  // Amazon URLの場合、まずトップページにアクセスしてからリダイレクト（ボット検知回避）
+  const initialUrl = isAmazonUrl ? 'https://www.amazon.co.jp/' : nextItem.url;
+
   if (collectionWindowId) {
     try {
       tab = await chrome.tabs.create({
-        url: nextItem.url,
+        url: initialUrl,
         windowId: collectionWindowId,
         active: false
       });
     } catch (e) {
       // ウィンドウが閉じられている場合は通常のタブで開く
       console.error('収集用ウィンドウにタブ作成失敗:', e);
-      tab = await chrome.tabs.create({ url: nextItem.url, active: false });
+      tab = await chrome.tabs.create({ url: initialUrl, active: false });
     }
   } else {
     // フォールバック: 通常のバックグラウンドタブ
-    tab = await chrome.tabs.create({ url: nextItem.url, active: false });
+    tab = await chrome.tabs.create({ url: initialUrl, active: false });
+  }
+
+  // Amazonの場合、トップページ読み込み後に実際のURLにリダイレクト
+  if (isAmazonUrl) {
+    await new Promise(resolve => {
+      const listener = (tabId, info) => {
+        if (tabId === tab.id && info.status === 'complete') {
+          chrome.tabs.onUpdated.removeListener(listener);
+          setTimeout(async () => {
+            try {
+              await chrome.tabs.update(tab.id, { url: nextItem.url });
+            } catch (e) {
+              console.error('Amazon URL リダイレクト失敗:', e);
+            }
+            resolve();
+          }, 1500); // 1.5秒待機してからリダイレクト
+        }
+      };
+      chrome.tabs.onUpdated.addListener(listener);
+      // タイムアウト（10秒）
+      setTimeout(() => {
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }, 10000);
+    });
   }
 
   // tabIdを収集中アイテムに設定
