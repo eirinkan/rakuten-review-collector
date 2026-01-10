@@ -482,7 +482,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // タイトル表示をクリア
         if (spreadsheetTitleEl) {
-          spreadsheetTitleEl.className = 'spreadsheet-title-overlay';
+          spreadsheetTitleEl.classList.remove('show', 'loading', 'error');
           spreadsheetTitleEl.innerHTML = '';
         }
       });
@@ -526,7 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // タイトル表示をクリア
         if (amazonSpreadsheetTitleEl) {
-          amazonSpreadsheetTitleEl.className = 'spreadsheet-title-overlay';
+          amazonSpreadsheetTitleEl.classList.remove('show', 'loading', 'error');
           amazonSpreadsheetTitleEl.innerHTML = '';
         }
       });
@@ -577,13 +577,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const spreadsheetId = extractSpreadsheetId(url);
     if (!spreadsheetId) {
-      titleEl.className = 'spreadsheet-title-overlay';
+      titleEl.classList.remove('show', 'loading', 'error');
       titleEl.innerHTML = '';
       return;
     }
 
     // ローディング表示
-    titleEl.className = 'spreadsheet-title-overlay show loading';
+    titleEl.classList.add('show', 'loading');
+    titleEl.classList.remove('error');
     titleEl.innerHTML = '読み込み中...';
 
     try {
@@ -593,7 +594,8 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       if (response.success && response.title) {
-        titleEl.className = 'spreadsheet-title-overlay show';
+        titleEl.classList.add('show');
+        titleEl.classList.remove('loading', 'error');
         titleEl.innerHTML = `${SHEETS_ICON_SVG}<span class="title-text">${response.title}</span><span class="edit-hint">クリックで編集</span>`;
 
         // クリックでURL編集モードに切り替え
@@ -605,11 +607,13 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         };
       } else {
-        titleEl.className = 'spreadsheet-title-overlay show error';
+        titleEl.classList.add('show', 'error');
+        titleEl.classList.remove('loading');
         titleEl.innerHTML = response.error || 'タイトル取得失敗';
       }
     } catch (error) {
-      titleEl.className = 'spreadsheet-title-overlay show error';
+      titleEl.classList.add('show', 'error');
+      titleEl.classList.remove('loading');
       titleEl.innerHTML = 'タイトル取得失敗';
     }
   }
@@ -1564,7 +1568,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // タイトル表示をクリア
         const titleEl = scheduledQueuesList.querySelector(`.scheduled-queue-title[data-queue-id="${queueId}"]`);
         if (titleEl) {
-          titleEl.className = 'spreadsheet-title-overlay scheduled-queue-title';
+          titleEl.classList.remove('show', 'loading', 'error');
           titleEl.innerHTML = '';
         }
 
@@ -1736,9 +1740,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const quickStartKey = 'rakuten-review-quickstart-shown';
     const overlay = document.getElementById('quickStartOverlay');
     const closeBtn = document.getElementById('quickStartCloseBtn');
-    const urlInput = document.getElementById('quickStartSpreadsheetUrl');
-    const statusEl = document.getElementById('quickStartUrlStatus');
-    const titleEl = document.getElementById('quickStartSpreadsheetTitle');
+
+    // 楽天用
+    const rakutenUrlInput = document.getElementById('quickStartSpreadsheetUrl');
+    const rakutenTitleEl = document.getElementById('quickStartSpreadsheetTitle');
+
+    // Amazon用
+    const amazonUrlInput = document.getElementById('quickStartAmazonSpreadsheetUrl');
+    const amazonTitleEl = document.getElementById('quickStartAmazonSpreadsheetTitle');
 
     if (!overlay || !closeBtn) return;
 
@@ -1747,63 +1756,101 @@ document.addEventListener('DOMContentLoaded', () => {
       overlay.style.display = 'flex';
     }
 
-    // スプレッドシートURL自動保存
-    if (urlInput && statusEl) {
-      urlInput.addEventListener('input', () => {
-        const url = urlInput.value.trim();
+    // 楽天用スプレッドシートURL自動保存
+    if (rakutenUrlInput) {
+      let saveTimeout = null;
+      rakutenUrlInput.addEventListener('input', () => {
+        const url = rakutenUrlInput.value.trim();
 
         // タイトル表示をクリア
-        if (titleEl) {
-          titleEl.className = 'spreadsheet-title-overlay';
-          titleEl.innerHTML = '';
+        if (rakutenTitleEl) {
+          rakutenTitleEl.classList.remove('show', 'loading', 'error');
+          rakutenTitleEl.innerHTML = '';
         }
 
-        if (!url) {
-          statusEl.textContent = '';
-          statusEl.className = 'quick-start-status';
-          return;
-        }
+        if (!url) return;
 
         // URL形式チェック
         const spreadsheetIdMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-        if (!spreadsheetIdMatch) {
-          statusEl.textContent = 'URLの形式が正しくありません';
-          statusEl.className = 'quick-start-status error';
-          return;
+        if (!spreadsheetIdMatch) return;
+
+        if (saveTimeout) clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+          // 保存
+          chrome.storage.sync.set({ spreadsheetUrl: url }, () => {
+            if (chrome.runtime.lastError) return;
+
+            // タイトル取得・表示
+            if (rakutenTitleEl) {
+              fetchAndShowSpreadsheetTitle(url, rakutenTitleEl, rakutenUrlInput);
+            }
+
+            // メインの設定画面の入力欄も更新
+            const mainInput = document.getElementById('spreadsheetUrl');
+            if (mainInput) mainInput.value = url;
+
+            // ヘッダーのスプレッドシートリンクも更新
+            const link = document.getElementById('spreadsheetLinkRakuten');
+            if (link) {
+              link.href = url;
+              link.classList.remove('disabled');
+            }
+
+            // メインのタイトル表示も更新
+            if (spreadsheetTitleEl) {
+              fetchAndShowSpreadsheetTitle(url, spreadsheetTitleEl, spreadsheetUrlInput);
+            }
+          });
+        }, 500);
+      });
+    }
+
+    // Amazon用スプレッドシートURL自動保存
+    if (amazonUrlInput) {
+      let saveTimeout = null;
+      amazonUrlInput.addEventListener('input', () => {
+        const url = amazonUrlInput.value.trim();
+
+        // タイトル表示をクリア
+        if (amazonTitleEl) {
+          amazonTitleEl.classList.remove('show', 'loading', 'error');
+          amazonTitleEl.innerHTML = '';
         }
 
-        // 保存
-        chrome.storage.sync.set({ spreadsheetUrl: url }, () => {
-          if (chrome.runtime.lastError) {
-            statusEl.textContent = '保存に失敗しました';
-            statusEl.className = 'quick-start-status error';
-            return;
-          }
+        if (!url) return;
 
-          statusEl.textContent = '✓ 保存しました';
-          statusEl.className = 'quick-start-status success';
+        // URL形式チェック
+        const spreadsheetIdMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+        if (!spreadsheetIdMatch) return;
 
-          // タイトル取得・表示
-          if (titleEl) {
-            fetchAndShowSpreadsheetTitle(url, titleEl, urlInput);
-          }
+        if (saveTimeout) clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+          // 保存
+          chrome.storage.sync.set({ amazonSpreadsheetUrl: url }, () => {
+            if (chrome.runtime.lastError) return;
 
-          // メインの設定画面の入力欄も更新
-          const mainInput = document.getElementById('spreadsheetUrl');
-          if (mainInput) mainInput.value = url;
+            // タイトル取得・表示
+            if (amazonTitleEl) {
+              fetchAndShowSpreadsheetTitle(url, amazonTitleEl, amazonUrlInput);
+            }
 
-          // ヘッダーのスプレッドシートリンクも更新
-          const link = document.getElementById('spreadsheetLinkRakuten');
-          if (link) {
-            link.href = url;
-            link.classList.remove('disabled');
-          }
+            // メインの設定画面の入力欄も更新
+            const mainInput = document.getElementById('amazonSpreadsheetUrl');
+            if (mainInput) mainInput.value = url;
 
-          // メインのタイトル表示も更新
-          if (spreadsheetTitleEl) {
-            fetchAndShowSpreadsheetTitle(url, spreadsheetTitleEl, spreadsheetUrlInput);
-          }
-        });
+            // ヘッダーのスプレッドシートリンクも更新
+            const link = document.getElementById('spreadsheetLinkAmazon');
+            if (link) {
+              link.href = url;
+              link.classList.remove('disabled');
+            }
+
+            // メインのタイトル表示も更新
+            if (amazonSpreadsheetTitleEl) {
+              fetchAndShowSpreadsheetTitle(url, amazonSpreadsheetTitleEl, amazonSpreadsheetUrlInput);
+            }
+          });
+        }, 500);
       });
     }
 
