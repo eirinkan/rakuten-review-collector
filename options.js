@@ -1562,7 +1562,7 @@ document.addEventListener('DOMContentLoaded', () => {
     scheduledQueuesList.querySelectorAll('.scheduled-queue-url-input').forEach(input => {
       let saveTimeout = null;
 
-      // 入力中はタイトル非表示、保存のみ（debounce）
+      // 入力時: debounceで保存 → 保存後にタイトル取得（設定欄と同じ仕様）
       input.addEventListener('input', (e) => {
         const queueId = e.target.dataset.queueId;
         const url = e.target.value.trim();
@@ -1575,24 +1575,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (saveTimeout) clearTimeout(saveTimeout);
-        saveTimeout = setTimeout(() => {
-          updateScheduledQueueProperty(queueId, 'spreadsheetUrl', url, e.target);
-        }, 500);
-      });
+        saveTimeout = setTimeout(async () => {
+          // 保存
+          await updateScheduledQueueProperty(queueId, 'spreadsheetUrl', url, e.target);
 
-      // フォーカスを外した時にタイトル取得
-      input.addEventListener('blur', (e) => {
-        const queueId = e.target.dataset.queueId;
-        const url = e.target.value.trim();
-        const titleEl = scheduledQueuesList.querySelector(`.scheduled-queue-title[data-queue-id="${queueId}"]`);
-
-        if (url && titleEl) {
-          // URL形式チェック
-          const spreadsheetIdMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-          if (spreadsheetIdMatch) {
-            fetchAndShowSpreadsheetTitle(url, titleEl, e.target);
+          // 保存後にタイトル取得（URLが有効な場合）
+          if (url && titleEl) {
+            const spreadsheetIdMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+            if (spreadsheetIdMatch) {
+              fetchAndShowSpreadsheetTitle(url, titleEl, e.target);
+            }
           }
-        }
+        }, 500);
       });
     });
 
