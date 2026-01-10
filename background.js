@@ -1424,49 +1424,22 @@ async function processNextInQueue() {
   let tab;
   const isAmazonUrl = nextItem.url.includes('amazon.co.jp');
 
-  // Amazon URLの場合、まずトップページにアクセスしてからリダイレクト（ボット検知回避）
-  const initialUrl = isAmazonUrl ? 'https://www.amazon.co.jp/' : nextItem.url;
-
+  // 直接URLにアクセス（トップページリダイレクトはchrome.tabs.updateもブロックされるため廃止）
   if (collectionWindowId) {
     try {
       tab = await chrome.tabs.create({
-        url: initialUrl,
+        url: nextItem.url,
         windowId: collectionWindowId,
         active: false
       });
     } catch (e) {
       // ウィンドウが閉じられている場合は通常のタブで開く
       console.error('収集用ウィンドウにタブ作成失敗:', e);
-      tab = await chrome.tabs.create({ url: initialUrl, active: false });
+      tab = await chrome.tabs.create({ url: nextItem.url, active: false });
     }
   } else {
     // フォールバック: 通常のバックグラウンドタブ
-    tab = await chrome.tabs.create({ url: initialUrl, active: false });
-  }
-
-  // Amazonの場合、トップページ読み込み後に実際のURLにリダイレクト
-  if (isAmazonUrl) {
-    await new Promise(resolve => {
-      const listener = (tabId, info) => {
-        if (tabId === tab.id && info.status === 'complete') {
-          chrome.tabs.onUpdated.removeListener(listener);
-          setTimeout(async () => {
-            try {
-              await chrome.tabs.update(tab.id, { url: nextItem.url });
-            } catch (e) {
-              console.error('Amazon URL リダイレクト失敗:', e);
-            }
-            resolve();
-          }, 1500); // 1.5秒待機してからリダイレクト
-        }
-      };
-      chrome.tabs.onUpdated.addListener(listener);
-      // タイムアウト（10秒）
-      setTimeout(() => {
-        chrome.tabs.onUpdated.removeListener(listener);
-        resolve();
-      }, 10000);
-    });
+    tab = await chrome.tabs.create({ url: nextItem.url, active: false });
   }
 
   // tabIdを収集中アイテムに設定
@@ -1511,25 +1484,10 @@ async function processNextInQueue() {
   });
 
   // ページ読み込み完了後に収集開始を指示
-  // Amazonの場合は実際のURLにリダイレクトされた後に開始
-  const targetUrl = nextItem.url;
   let startCollectionSent = false; // 重複送信防止フラグ
 
   chrome.tabs.onUpdated.addListener(function listener(tabId, info, tabInfo) {
     if (tabId === tab.id && info.status === 'complete') {
-      // Amazonの場合、トップページではなく実際のURLにリダイレクトされたか確認
-      if (isAmazonUrl) {
-        const currentUrl = tabInfo.url || '';
-        // トップページやホームページの場合は待機
-        if (currentUrl === 'https://www.amazon.co.jp/' ||
-            currentUrl === 'https://www.amazon.co.jp' ||
-            currentUrl.includes('amazon.co.jp/ref=') ||
-            !currentUrl.includes('/dp/') && !currentUrl.includes('/product-reviews/')) {
-          console.log('[Amazon] トップページ読み込み完了、実際のURLへのリダイレクトを待機');
-          return; // リダイレクト待ち
-        }
-      }
-
       // 重複送信防止
       if (startCollectionSent) {
         console.log('[キュー処理] startCollection既に送信済みのためスキップ');
