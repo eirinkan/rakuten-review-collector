@@ -748,6 +748,102 @@ async function formatDataRows(token, spreadsheetId, sheetId, startRow, endRow) {
 }
 
 /**
+ * URL列（D列、S列）にクリック可能なリンク書式を適用
+ * @param {string} token - OAuth token
+ * @param {string} spreadsheetId - スプレッドシートID
+ * @param {number} sheetId - シートID
+ * @param {Array} reviews - レビューデータ配列
+ */
+async function formatUrlColumns(token, spreadsheetId, sheetId, reviews) {
+  if (!reviews || reviews.length === 0) return;
+
+  const requests = [];
+
+  // 各レビュー行のURL列にリンク書式を適用
+  reviews.forEach((review, index) => {
+    const rowIndex = index + 1; // ヘッダー行の次から
+
+    // D列（商品URL、列インデックス3）
+    if (review.productUrl) {
+      requests.push({
+        updateCells: {
+          range: {
+            sheetId: sheetId,
+            startRowIndex: rowIndex,
+            endRowIndex: rowIndex + 1,
+            startColumnIndex: 3,
+            endColumnIndex: 4
+          },
+          rows: [{
+            values: [{
+              userEnteredValue: { stringValue: review.productUrl },
+              textFormatRuns: [{
+                startIndex: 0,
+                format: {
+                  link: { uri: review.productUrl }
+                }
+              }]
+            }]
+          }],
+          fields: 'userEnteredValue,textFormatRuns'
+        }
+      });
+    }
+
+    // S列（レビュー掲載URL、列インデックス18）
+    if (review.pageUrl) {
+      requests.push({
+        updateCells: {
+          range: {
+            sheetId: sheetId,
+            startRowIndex: rowIndex,
+            endRowIndex: rowIndex + 1,
+            startColumnIndex: 18,
+            endColumnIndex: 19
+          },
+          rows: [{
+            values: [{
+              userEnteredValue: { stringValue: review.pageUrl },
+              textFormatRuns: [{
+                startIndex: 0,
+                format: {
+                  link: { uri: review.pageUrl }
+                }
+              }]
+            }]
+          }],
+          fields: 'userEnteredValue,textFormatRuns'
+        }
+      });
+    }
+  });
+
+  // リクエストがない場合はスキップ
+  if (requests.length === 0) return;
+
+  // Google Sheets APIは一度に最大100リクエストまでのため、分割して送信
+  const chunkSize = 100;
+  for (let i = 0; i < requests.length; i += chunkSize) {
+    const chunk = requests.slice(i, i + chunkSize);
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ requests: chunk })
+      }
+    );
+
+    if (!response.ok) {
+      console.error('[background] URL列のリンク書式適用エラー:', await response.text());
+    }
+  }
+}
+
+/**
  * ヘッダー行に書式を適用
  * 楽天: 赤背景・白テキスト
  * Amazon: 黒背景・オレンジテキスト (#ff9900)
@@ -848,14 +944,6 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 
     '販路', '国'
   ];
 
-  // URLをHYPERLINK関数形式に変換（クリック可能にする）
-  const toHyperlink = (url) => {
-    if (!url) return '';
-    // URLに含まれるダブルクォートをエスケープ
-    const escapedUrl = url.replace(/"/g, '""');
-    return `=HYPERLINK("${escapedUrl}")`;
-  };
-
   // テキストが=で始まる場合はエスケープ（数式として解釈されないように）
   const escapeFormula = (text) => {
     if (!text) return '';
@@ -871,7 +959,7 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 
     escapeFormula(review.reviewDate || ''),
     escapeFormula(review.productId || ''),
     escapeFormula(review.productName || ''),
-    review.productUrl || '',  // URLはそのまま（Sheetsが自動リンク化）
+    review.productUrl || '',  // URLは後でformatUrlColumnsでリンク化
     review.rating || '',
     escapeFormula(review.title || ''),
     escapeFormula(review.body || ''),
@@ -886,7 +974,7 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 
     review.helpfulCount || 0,
     escapeFormula(review.shopReply || ''),
     escapeFormula(review.shopName || ''),
-    review.pageUrl || '',  // URLはそのまま（Sheetsが自動リンク化）
+    review.pageUrl || '',  // URLは後でformatUrlColumnsでリンク化
     escapeFormula(review.collectedAt || ''),
     review.source === 'amazon' ? 'Amazon' : '楽天',  // 販路
     escapeFormula(review.country || (review.source === 'amazon' ? '' : '日本'))  // 国
@@ -965,6 +1053,11 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 
   // 5. データ行に書式を適用（白背景・黒テキスト・垂直中央揃え）
   if (dataValues.length > 0) {
     await formatDataRows(token, spreadsheetId, sheetId, 1, totalRows);
+  }
+
+  // 6. URL列（D列・S列）にクリック可能なリンク書式を適用
+  if (reviews.length > 0) {
+    await formatUrlColumns(token, spreadsheetId, sheetId, reviews);
   }
 }
 
