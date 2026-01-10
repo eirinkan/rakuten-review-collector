@@ -1750,6 +1750,28 @@
       margin-bottom: 4px;
     }
 
+    /* 定期キューのスプレッドシート入力欄 - オーバーレイ制御 */
+    .scheduled-queue-settings .spreadsheet-title-overlay {
+      display: none !important;
+    }
+
+    .scheduled-queue-settings .spreadsheet-title-overlay.show {
+      display: flex !important;
+    }
+
+    .scheduled-queue-settings .auto-save-indicator {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      margin-left: 0;
+    }
+
+    /* オーバーレイ表示時は入力欄のボーダーを非表示 */
+    .scheduled-queue-settings .spreadsheet-input-wrapper:has(.spreadsheet-title-overlay.show) input {
+      border-color: transparent;
+    }
+
     .scheduled-queue-card .scheduled-queue-last-run {
       font-size: 11px;
       color: var(--text-muted);
