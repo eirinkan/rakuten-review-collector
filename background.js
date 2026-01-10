@@ -11,6 +11,39 @@ let collectionWindowId = null;
 // タブごとのスプレッドシートURL（定期収集用）
 const tabSpreadsheetUrls = new Map();
 
+// Amazonページ遷移時の収集再開リスナー（グローバル）
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  // アクティブな収集タブでない場合はスキップ
+  if (!activeCollectionTabs.has(tabId)) return;
+
+  // ページ読み込み完了時のみ処理
+  if (changeInfo.status !== 'complete') return;
+
+  // Amazonレビューページかどうか確認
+  const url = tab.url || '';
+  if (!url.includes('amazon.co.jp/product-reviews/')) return;
+
+  // 収集状態を確認
+  const result = await chrome.storage.local.get(['collectionState']);
+  const state = result.collectionState;
+
+  if (state && state.isRunning && state.source === 'amazon') {
+    console.log('[background] Amazonレビューページ遷移検出、収集再開メッセージを送信:', url);
+
+    // 少し待ってからメッセージを送信（DOM読み込み完了を待つ）
+    setTimeout(() => {
+      chrome.tabs.sendMessage(tabId, {
+        action: 'resumeCollection',
+        incrementalOnly: state.incrementalOnly || false,
+        lastCollectedDate: state.lastCollectedDate || null,
+        queueName: state.queueName || null
+      }).catch((err) => {
+        console.log('[background] 収集再開メッセージ送信エラー:', err);
+      });
+    }, 3000);
+  }
+});
+
 /**
  * URLが楽天かAmazonかを判定
  * @param {string} url - URL

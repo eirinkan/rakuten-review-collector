@@ -122,6 +122,30 @@
         sendResponse({ success: true });
         break;
 
+      case 'resumeCollection':
+        // backgroundからのページ遷移後の収集再開
+        console.log('[Amazonレビュー収集] resumeCollectionメッセージ受信');
+        if (!isReviewPage) {
+          console.log('[Amazonレビュー収集] レビューページではないためスキップ');
+          sendResponse({ success: false, error: 'レビューページではありません' });
+          break;
+        }
+        if (isCollecting) {
+          console.log('[Amazonレビュー収集] 既に収集中のためスキップ');
+          sendResponse({ success: false, error: '既に収集中' });
+          break;
+        }
+        // 収集を再開
+        incrementalOnly = message.incrementalOnly || false;
+        lastCollectedDate = message.lastCollectedDate || null;
+        currentQueueName = message.queueName || null;
+        startCollectionLock = false; // ロックをリセット
+        autoResumeExecuted = false; // 自動再開フラグをリセット
+        log('収集を再開します（background経由）');
+        startCollection();
+        sendResponse({ success: true });
+        break;
+
       case 'getProductInfo':
         const productInfo = getProductInfo();
         sendResponse({ success: true, productInfo: productInfo });
