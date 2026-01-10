@@ -1479,7 +1479,8 @@ async function processNextInQueue() {
       totalPages: 0,
       reviews: [],
       queueName: nextItem.queueName || null,
-      incrementalOnly: nextItem.incrementalOnly || false
+      incrementalOnly: nextItem.incrementalOnly || false,
+      source: isAmazonUrl ? 'amazon' : 'rakuten' // 販路を設定（自動再開に必要）
     }
   });
 
