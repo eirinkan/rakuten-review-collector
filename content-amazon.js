@@ -799,14 +799,26 @@
 
   // ページ読み込み時に収集状態を確認し、自動再開（レビューページのみ）
   if (isReviewPage) {
+    console.log('[Amazonレビュー収集] レビューページ検出、自動再開チェック開始');
     chrome.storage.local.get(['collectionState'], (result) => {
       const state = result.collectionState;
+      console.log('[Amazonレビュー収集] 状態:', JSON.stringify({
+        hasState: !!state,
+        isRunning: state?.isRunning,
+        source: state?.source,
+        isCollecting,
+        autoResumeExecuted,
+        lastProcessedPage: state?.lastProcessedPage
+      }));
+
       if (state && state.isRunning && state.source === 'amazon' && !isCollecting && !autoResumeExecuted) {
         // 同じURLで再度実行されないようにチェック（ページ遷移が実際に発生したか確認）
         const currentUrl = window.location.href.split('?')[0]; // クエリパラメータを除く
         const lastUrl = (state.lastProcessedUrl || '').split('?')[0];
         const currentPage = getCurrentPageNumber();
         const lastPage = state.lastProcessedPage || 0;
+
+        console.log('[Amazonレビュー収集] ページチェック:', { currentPage, lastPage, shouldResume: currentPage > lastPage });
 
         // ページ番号が進んでいるか、URLが異なる場合のみ再開
         if (currentPage > lastPage || currentUrl !== lastUrl) {
@@ -821,13 +833,19 @@
             if (!isCollecting) {
               log('収集を再開します');
               startCollection();
+            } else {
+              console.log('[Amazonレビュー収集] 既に収集中のため再開スキップ');
             }
           }, 2500);
         } else {
           console.log('[Amazonレビュー収集] 同じページのため自動再開をスキップ');
         }
+      } else {
+        console.log('[Amazonレビュー収集] 自動再開条件を満たさず');
       }
     });
+  } else {
+    console.log('[Amazonレビュー収集] レビューページではない:', window.location.href);
   }
 
   // テスト用API（メインワールドに注入）
