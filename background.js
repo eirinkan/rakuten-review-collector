@@ -871,7 +871,7 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 
     escapeFormula(review.reviewDate || ''),
     escapeFormula(review.productId || ''),
     escapeFormula(review.productName || ''),
-    toHyperlink(review.productUrl),  // クリック可能なリンク
+    review.productUrl || '',  // URLはそのまま（Sheetsが自動リンク化）
     review.rating || '',
     escapeFormula(review.title || ''),
     escapeFormula(review.body || ''),
@@ -886,7 +886,7 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 
     review.helpfulCount || 0,
     escapeFormula(review.shopReply || ''),
     escapeFormula(review.shopName || ''),
-    toHyperlink(review.pageUrl),  // クリック可能なリンク
+    review.pageUrl || '',  // URLはそのまま（Sheetsが自動リンク化）
     escapeFormula(review.collectedAt || ''),
     review.source === 'amazon' ? 'Amazon' : '楽天',  // 販路
     escapeFormula(review.country || (review.source === 'amazon' ? '' : '日本'))  // 国
