@@ -575,6 +575,17 @@ document.addEventListener('DOMContentLoaded', () => {
   async function fetchAndShowSpreadsheetTitle(url, titleEl, inputEl) {
     if (!titleEl) return;
 
+    // クリックでURL編集モードに切り替え（どの状態でも有効）
+    const setupClickHandler = () => {
+      titleEl.onclick = () => {
+        titleEl.classList.remove('show');
+        if (inputEl) {
+          inputEl.focus();
+          inputEl.select();
+        }
+      };
+    };
+
     const spreadsheetId = extractSpreadsheetId(url);
     if (!spreadsheetId) {
       titleEl.classList.remove('show', 'loading', 'error');
@@ -586,6 +597,7 @@ document.addEventListener('DOMContentLoaded', () => {
     titleEl.classList.add('show', 'loading');
     titleEl.classList.remove('error');
     titleEl.innerHTML = '読み込み中...';
+    setupClickHandler(); // ローディング中もクリック可能
 
     try {
       const response = await chrome.runtime.sendMessage({
@@ -597,24 +609,18 @@ document.addEventListener('DOMContentLoaded', () => {
         titleEl.classList.add('show');
         titleEl.classList.remove('loading', 'error');
         titleEl.innerHTML = `${SHEETS_ICON_SVG}<span class="title-text">${response.title}</span><span class="edit-hint">クリックで編集</span>`;
-
-        // クリックでURL編集モードに切り替え
-        titleEl.onclick = () => {
-          titleEl.classList.remove('show');
-          if (inputEl) {
-            inputEl.focus();
-            inputEl.select();
-          }
-        };
+        setupClickHandler();
       } else {
         titleEl.classList.add('show', 'error');
         titleEl.classList.remove('loading');
-        titleEl.innerHTML = response.error || 'タイトル取得失敗';
+        titleEl.innerHTML = (response.error || 'タイトル取得失敗') + '<span class="edit-hint">クリックで編集</span>';
+        setupClickHandler(); // エラー時もクリック可能
       }
     } catch (error) {
       titleEl.classList.add('show', 'error');
       titleEl.classList.remove('loading');
-      titleEl.innerHTML = 'タイトル取得失敗';
+      titleEl.innerHTML = 'タイトル取得失敗<span class="edit-hint">クリックで編集</span>';
+      setupClickHandler(); // エラー時もクリック可能
     }
   }
 
