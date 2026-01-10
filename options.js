@@ -1471,13 +1471,27 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div class="scheduled-queue-row">
               <span class="scheduled-queue-label">保存先スプレッドシート:</span>
-              <input type="text" class="scheduled-queue-url-input" data-queue-id="${queue.id}"
-                     value="${escapeHtml(queue.spreadsheetUrl || '')}" placeholder="未入力で通常収集と同じスプレッドシートを使用">
+              <div class="spreadsheet-input-wrapper scheduled-queue-url-wrapper">
+                <input type="text" class="scheduled-queue-url-input" data-queue-id="${queue.id}"
+                       value="${escapeHtml(queue.spreadsheetUrl || '')}" placeholder="未入力で通常収集と同じスプレッドシートを使用">
+                <div class="spreadsheet-title-overlay scheduled-queue-title" data-queue-id="${queue.id}"></div>
+              </div>
             </div>
           </div>
         </div>
       `;
     }).join('');
+
+    // スプレッドシートタイトルを取得・表示
+    scheduledQueues.forEach(queue => {
+      if (queue.spreadsheetUrl) {
+        const titleEl = scheduledQueuesList.querySelector(`.scheduled-queue-title[data-queue-id="${queue.id}"]`);
+        const inputEl = scheduledQueuesList.querySelector(`.scheduled-queue-url-input[data-queue-id="${queue.id}"]`);
+        if (titleEl && inputEl) {
+          fetchAndShowSpreadsheetTitle(queue.spreadsheetUrl, titleEl, inputEl);
+        }
+      }
+    });
 
     // イベントリスナー
     scheduledQueuesList.querySelectorAll('.scheduled-queue-toggle').forEach(toggle => {
@@ -1547,9 +1561,23 @@ document.addEventListener('DOMContentLoaded', () => {
     scheduledQueuesList.querySelectorAll('.scheduled-queue-url-input').forEach(input => {
       let saveTimeout = null;
       input.addEventListener('input', (e) => {
+        const queueId = e.target.dataset.queueId;
+        const url = e.target.value.trim();
+
+        // タイトル表示をクリア
+        const titleEl = scheduledQueuesList.querySelector(`.scheduled-queue-title[data-queue-id="${queueId}"]`);
+        if (titleEl) {
+          titleEl.className = 'spreadsheet-title-overlay scheduled-queue-title';
+          titleEl.innerHTML = '';
+        }
+
         if (saveTimeout) clearTimeout(saveTimeout);
         saveTimeout = setTimeout(() => {
-          updateScheduledQueueProperty(e.target.dataset.queueId, 'spreadsheetUrl', e.target.value.trim(), e.target);
+          updateScheduledQueueProperty(queueId, 'spreadsheetUrl', url, e.target);
+          // URL保存後にタイトル取得
+          if (url && titleEl) {
+            fetchAndShowSpreadsheetTitle(url, titleEl, e.target);
+          }
         }, 500);
       });
     });
@@ -1713,6 +1741,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeBtn = document.getElementById('quickStartCloseBtn');
     const urlInput = document.getElementById('quickStartSpreadsheetUrl');
     const statusEl = document.getElementById('quickStartUrlStatus');
+    const titleEl = document.getElementById('quickStartSpreadsheetTitle');
 
     if (!overlay || !closeBtn) return;
 
@@ -1725,6 +1754,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (urlInput && statusEl) {
       urlInput.addEventListener('input', () => {
         const url = urlInput.value.trim();
+
+        // タイトル表示をクリア
+        if (titleEl) {
+          titleEl.className = 'spreadsheet-title-overlay';
+          titleEl.innerHTML = '';
+        }
 
         if (!url) {
           statusEl.textContent = '';
@@ -1751,6 +1786,11 @@ document.addEventListener('DOMContentLoaded', () => {
           statusEl.textContent = '✓ 保存しました';
           statusEl.className = 'quick-start-status success';
 
+          // タイトル取得・表示
+          if (titleEl) {
+            fetchAndShowSpreadsheetTitle(url, titleEl, urlInput);
+          }
+
           // メインの設定画面の入力欄も更新
           const mainInput = document.getElementById('spreadsheetUrl');
           if (mainInput) mainInput.value = url;
@@ -1760,6 +1800,11 @@ document.addEventListener('DOMContentLoaded', () => {
           if (link) {
             link.href = url;
             link.classList.remove('disabled');
+          }
+
+          // メインのタイトル表示も更新
+          if (spreadsheetTitleEl) {
+            fetchAndShowSpreadsheetTitle(url, spreadsheetTitleEl, spreadsheetUrlInput);
           }
         });
       });

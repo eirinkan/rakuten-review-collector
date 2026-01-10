@@ -1722,6 +1722,25 @@
       font-size: 11px;
     }
 
+    .scheduled-queue-url-wrapper {
+      flex: 1;
+      min-width: 100px;
+    }
+
+    .scheduled-queue-url-wrapper .spreadsheet-title-overlay {
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+
+    .scheduled-queue-url-wrapper .spreadsheet-title-overlay .sheets-icon {
+      width: 14px;
+      height: 14px;
+    }
+
+    .scheduled-queue-url-wrapper .spreadsheet-title-overlay .edit-hint {
+      font-size: 10px;
+    }
+
     .scheduled-queue-last-run {
       font-size: 10px;
       color: var(--text-muted);
@@ -2469,7 +2488,10 @@
         <div class="quick-start-step">
           <p>1. レビューデータを入力するスプレッドシートを用意しましょう</p>
           <div class="quick-start-input-group">
-            <input type="text" id="quickStartSpreadsheetUrl" class="quick-start-input" placeholder="スプレッドシートのURLを入力">
+            <div class="spreadsheet-input-wrapper">
+              <input type="text" id="quickStartSpreadsheetUrl" class="quick-start-input" placeholder="スプレッドシートのURLを入力">
+              <div id="quickStartSpreadsheetTitle" class="spreadsheet-title-overlay"></div>
+            </div>
           </div>
           <span id="quickStartUrlStatus" class="quick-start-status"></span>
         </div>
