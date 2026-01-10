@@ -1581,7 +1581,7 @@ async function fetchAmazonRankingProducts(url, count) {
 
       products.push({
         url: productUrl,
-        title: `Amazon商品 - ${asin}`,
+        title: asin,
         addedAt: new Date().toISOString(),
         source: 'amazon'
       });
@@ -1600,7 +1600,7 @@ async function fetchAmazonRankingProducts(url, count) {
 
         products.push({
           url: productUrl,
-          title: `Amazon商品 - ${asin}`,
+          title: asin,
           addedAt: new Date().toISOString(),
           source: 'amazon'
         });
