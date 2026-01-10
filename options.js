@@ -305,7 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
           spreadsheetLinkRakutenEl.classList.remove('disabled');
         }
         // タイトル取得
-        fetchAndShowSpreadsheetTitle(result.spreadsheetUrl, spreadsheetTitleEl);
+        fetchAndShowSpreadsheetTitle(result.spreadsheetUrl, spreadsheetTitleEl, spreadsheetUrlInput);
       }
       // Amazon用スプレッドシートURL
       if (result.amazonSpreadsheetUrl && amazonSpreadsheetUrlInput) {
@@ -315,7 +315,7 @@ document.addEventListener('DOMContentLoaded', () => {
           spreadsheetLinkAmazonEl.classList.remove('disabled');
         }
         // タイトル取得
-        fetchAndShowSpreadsheetTitle(result.amazonSpreadsheetUrl, amazonSpreadsheetTitleEl);
+        fetchAndShowSpreadsheetTitle(result.amazonSpreadsheetUrl, amazonSpreadsheetTitleEl, amazonSpreadsheetUrlInput);
       }
       // CSV機能は常に表示（スプレッドシートと併用可能）
       dataButtons.style.display = 'flex';
@@ -482,7 +482,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // タイトル表示をクリア
         if (spreadsheetTitleEl) {
-          spreadsheetTitleEl.className = 'spreadsheet-title';
+          spreadsheetTitleEl.className = 'spreadsheet-title-overlay';
           spreadsheetTitleEl.innerHTML = '';
         }
       });
@@ -509,7 +509,7 @@ document.addEventListener('DOMContentLoaded', () => {
         spreadsheetLinkRakutenEl.classList.remove('disabled');
       }
       // タイトル取得
-      fetchAndShowSpreadsheetTitle(url, spreadsheetTitleEl);
+      fetchAndShowSpreadsheetTitle(url, spreadsheetTitleEl, spreadsheetUrlInput);
     });
   }
 
@@ -526,7 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // タイトル表示をクリア
         if (amazonSpreadsheetTitleEl) {
-          amazonSpreadsheetTitleEl.className = 'spreadsheet-title';
+          amazonSpreadsheetTitleEl.className = 'spreadsheet-title-overlay';
           amazonSpreadsheetTitleEl.innerHTML = '';
         }
       });
@@ -553,7 +553,7 @@ document.addEventListener('DOMContentLoaded', () => {
         spreadsheetLinkAmazonEl.classList.remove('disabled');
       }
       // タイトル取得
-      fetchAndShowSpreadsheetTitle(url, amazonSpreadsheetTitleEl);
+      fetchAndShowSpreadsheetTitle(url, amazonSpreadsheetTitleEl, amazonSpreadsheetUrlInput);
     });
   }
 
@@ -564,19 +564,26 @@ document.addEventListener('DOMContentLoaded', () => {
     return match ? match[1] : '';
   }
 
+  // Google Sheetsアイコン（SVG）
+  const SHEETS_ICON_SVG = `<svg class="sheets-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2Z" fill="#23A566"/>
+    <path d="M14 2V8H20L14 2Z" fill="#8ED1B1"/>
+    <path d="M8 13H16V14H8V13ZM8 15H16V16H8V15ZM8 17H13V18H8V17Z" fill="white"/>
+  </svg>`;
+
   // スプレッドシートのタイトルを取得して表示
-  async function fetchAndShowSpreadsheetTitle(url, titleEl) {
+  async function fetchAndShowSpreadsheetTitle(url, titleEl, inputEl) {
     if (!titleEl) return;
 
     const spreadsheetId = extractSpreadsheetId(url);
     if (!spreadsheetId) {
-      titleEl.className = 'spreadsheet-title';
+      titleEl.className = 'spreadsheet-title-overlay';
       titleEl.innerHTML = '';
       return;
     }
 
     // ローディング表示
-    titleEl.className = 'spreadsheet-title show loading';
+    titleEl.className = 'spreadsheet-title-overlay show loading';
     titleEl.innerHTML = '読み込み中...';
 
     try {
@@ -586,14 +593,23 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       if (response.success && response.title) {
-        titleEl.className = 'spreadsheet-title show';
-        titleEl.innerHTML = `<span class="title-icon">📊</span> ${response.title}`;
+        titleEl.className = 'spreadsheet-title-overlay show';
+        titleEl.innerHTML = `${SHEETS_ICON_SVG}<span class="title-text">${response.title}</span><span class="edit-hint">クリックで編集</span>`;
+
+        // クリックでURL編集モードに切り替え
+        titleEl.onclick = () => {
+          titleEl.classList.remove('show');
+          if (inputEl) {
+            inputEl.focus();
+            inputEl.select();
+          }
+        };
       } else {
-        titleEl.className = 'spreadsheet-title show error';
+        titleEl.className = 'spreadsheet-title-overlay show error';
         titleEl.innerHTML = response.error || 'タイトル取得失敗';
       }
     } catch (error) {
-      titleEl.className = 'spreadsheet-title show error';
+      titleEl.className = 'spreadsheet-title-overlay show error';
       titleEl.innerHTML = 'タイトル取得失敗';
     }
   }
