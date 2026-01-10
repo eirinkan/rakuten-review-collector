@@ -213,6 +213,14 @@
 
     currentProductId = getASIN();
 
+    // レビュー要素が読み込まれるまで待機（最大10秒）
+    const reviewsFound = await waitForReviews(10000, 500);
+    if (!reviewsFound) {
+      log('レビュー要素の読み込みを待機中...');
+      // 追加で3秒待機
+      await sleep(3000);
+    }
+
     // 収集済みレビューキーをストレージから復元
     const storedState = await new Promise(resolve => {
       chrome.storage.local.get(['collectionState'], result => resolve(result.collectionState || {}));
@@ -739,6 +747,23 @@
    */
   function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * レビュー要素が表示されるまで待機
+   */
+  async function waitForReviews(maxWaitMs = 10000, intervalMs = 500) {
+    const startTime = Date.now();
+    while (Date.now() - startTime < maxWaitMs) {
+      const reviews = document.querySelectorAll(AMAZON_SELECTORS.reviewContainer);
+      if (reviews.length > 0) {
+        console.log(`[Amazonレビュー収集] ${reviews.length}件のレビュー要素を検出（${Date.now() - startTime}ms）`);
+        return true;
+      }
+      await sleep(intervalMs);
+    }
+    console.log(`[Amazonレビュー収集] レビュー要素が見つかりませんでした（${maxWaitMs}ms待機後）`);
+    return false;
   }
 
   /**
