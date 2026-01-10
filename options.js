@@ -59,6 +59,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const queueRemaining = document.getElementById('queueRemaining');
   const spreadsheetLinkRakutenEl = document.getElementById('spreadsheetLinkRakuten');
   const spreadsheetLinkAmazonEl = document.getElementById('spreadsheetLinkAmazon');
+  const spreadsheetLinkBtn = document.getElementById('spreadsheetLinkBtn');
+  const spreadsheetLinkDropdown = document.getElementById('spreadsheetLinkDropdown');
   const downloadBtn = document.getElementById('downloadBtn');
   const clearDataBtn = document.getElementById('clearDataBtn');
   const dataButtons = document.getElementById('dataButtons');
@@ -117,6 +119,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const addScheduledQueueDropdown = document.getElementById('addScheduledQueueDropdown');
   const addScheduledQueueList = document.getElementById('addScheduledQueueList');
 
+  // スプレッドシートボタンの有効/無効を更新
+  function updateSpreadsheetBtnState() {
+    if (!spreadsheetLinkBtn) return;
+    const rakutenHasUrl = spreadsheetLinkRakutenEl && !spreadsheetLinkRakutenEl.classList.contains('disabled');
+    const amazonHasUrl = spreadsheetLinkAmazonEl && !spreadsheetLinkAmazonEl.classList.contains('disabled');
+    if (rakutenHasUrl || amazonHasUrl) {
+      spreadsheetLinkBtn.classList.remove('disabled');
+    } else {
+      spreadsheetLinkBtn.classList.add('disabled');
+    }
+  }
+
   // 初期化
   init();
 
@@ -169,23 +183,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ヘッダーのスプレッドシートリンクドロップダウン
-    const spreadsheetLinkBtn = document.getElementById('spreadsheetLinkBtn');
-    const spreadsheetLinkDropdown = document.getElementById('spreadsheetLinkDropdown');
-    const spreadsheetLinkRakuten = document.getElementById('spreadsheetLinkRakuten');
-    const spreadsheetLinkAmazon = document.getElementById('spreadsheetLinkAmazon');
-
-    // スプレッドシートボタンの有効/無効を更新
-    function updateSpreadsheetBtnState() {
-      if (!spreadsheetLinkBtn) return;
-      const rakutenHasUrl = spreadsheetLinkRakutenEl && !spreadsheetLinkRakutenEl.classList.contains('disabled');
-      const amazonHasUrl = spreadsheetLinkAmazonEl && !spreadsheetLinkAmazonEl.classList.contains('disabled');
-      if (rakutenHasUrl || amazonHasUrl) {
-        spreadsheetLinkBtn.classList.remove('disabled');
-      } else {
-        spreadsheetLinkBtn.classList.add('disabled');
-      }
-    }
-
     if (spreadsheetLinkBtn && spreadsheetLinkDropdown) {
       spreadsheetLinkBtn.addEventListener('click', (e) => {
         if (spreadsheetLinkBtn.classList.contains('disabled')) return;
