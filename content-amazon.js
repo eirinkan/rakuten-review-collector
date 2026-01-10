@@ -269,12 +269,21 @@
 
     currentProductId = getASIN();
 
+    // 現在のページ情報をログ出力
+    console.log('[Amazonレビュー収集] 収集開始 - URL:', window.location.href);
+    console.log('[Amazonレビュー収集] isReviewPage:', window.location.pathname.includes('/product-reviews/'));
+
     // レビュー要素が読み込まれるまで待機（最大10秒）
     const reviewsFound = await waitForReviews(10000, 500);
     if (!reviewsFound) {
       log('レビュー要素の読み込みを待機中...');
-      // 追加で3秒待機
-      await sleep(3000);
+      // 追加で5秒待機（ページ読み込みが遅い場合に対応）
+      await sleep(5000);
+
+      // 再度確認
+      const reviewsAfterWait = document.querySelectorAll(AMAZON_SELECTORS.reviewContainer);
+      console.log('[Amazonレビュー収集] 待機後のレビュー要素数:', reviewsAfterWait.length);
+      console.log('[Amazonレビュー収集] ページタイトル:', document.title);
     }
 
     // 収集済みレビューキーをストレージから復元
@@ -880,6 +889,7 @@
           autoResumeExecuted = true; // 重複実行防止フラグ
 
           // DOMが完全に更新されるまで待機（Amazonは動的にレビューをロードするため）
+          // 5秒待機に延長（ページ読み込みが遅い場合に対応）
           setTimeout(() => {
             // 再度チェック（タイムアウト中に他の処理で開始された可能性）
             if (!isCollecting) {
@@ -888,7 +898,7 @@
             } else {
               console.log('[Amazonレビュー収集] 既に収集中のため再開スキップ');
             }
-          }, 2500);
+          }, 5000);
         } else {
           console.log('[Amazonレビュー収集] 同じページのため自動再開をスキップ');
         }
