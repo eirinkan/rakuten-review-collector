@@ -16,6 +16,7 @@
   let currentQueueName = null; // 定期収集のキュー名
   let autoResumeExecuted = false; // 自動再開が実行済みかどうか
   let collectedReviewKeys = new Set(); // このセッションで収集済みのレビューキー
+  let startCollectionLock = false; // 収集開始のロック（重複防止）
 
   // Amazonセレクター（前回のテストで確認済み）
   const AMAZON_SELECTORS = {
@@ -203,10 +204,12 @@
    * 収集を開始
    */
   async function startCollection() {
-    if (isCollecting) {
-      console.log('[Amazonレビュー収集] 既に収集中のためスキップ');
+    // 同期的なロックチェック（重複実行防止）
+    if (startCollectionLock || isCollecting) {
+      console.log('[Amazonレビュー収集] 既に収集中または開始処理中のためスキップ');
       return;
     }
+    startCollectionLock = true; // 即座にロック
 
     isCollecting = true;
     shouldStop = false;
@@ -430,7 +433,16 @@
   function clickNextPage() {
     const nextLink = document.querySelector(AMAZON_SELECTORS.nextPage);
     if (nextLink) {
-      nextLink.click();
+      console.log('[Amazonレビュー収集] 次へリンクをクリック:', nextLink.href);
+      // バックグラウンドタブでも確実に動作するようMouseEventを使用
+      const event = new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        view: window
+      });
+      nextLink.dispatchEvent(event);
+    } else {
+      console.log('[Amazonレビュー収集] 次へリンクが見つかりません');
     }
   }
 
