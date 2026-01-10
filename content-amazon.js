@@ -63,8 +63,8 @@
 
         if (isProductPage) {
           // 商品ページの場合、レビューページに遷移
-          const reviewUrl = findReviewPageUrl();
-          if (reviewUrl) {
+          const reviewLink = findReviewPageLink();
+          if (reviewLink) {
             incrementalOnly = message.incrementalOnly || false;
             lastCollectedDate = message.lastCollectedDate || null;
             currentQueueName = message.queueName || null;
@@ -78,7 +78,7 @@
             }
             log(prefix + 'レビューページに移動します');
 
-            // 収集状態を設定してからリダイレクト
+            // 収集状態を設定してからクリックで遷移
             chrome.storage.local.get(['collectionState'], (result) => {
               const state = result.collectionState || {
                 isRunning: false,
@@ -94,7 +94,8 @@
               state.queueName = currentQueueName;
               state.source = 'amazon'; // 販路を追加
               chrome.storage.local.set({ collectionState: state }, () => {
-                window.location.href = reviewUrl;
+                // クリックでページ遷移（window.location.hrefはボット検出される）
+                reviewLink.click();
               });
             });
             sendResponse({ success: true, redirecting: true });
@@ -180,19 +181,19 @@
   }
 
   /**
-   * 商品ページからレビューページのURLを取得
+   * 商品ページからレビューページへのリンク要素を取得
    */
-  function findReviewPageUrl() {
+  function findReviewPageLink() {
     // 「すべてのレビューを見る」リンクを探す
     const reviewLink = document.querySelector(AMAZON_SELECTORS.reviewLink);
-    if (reviewLink && reviewLink.href) {
-      return reviewLink.href;
+    if (reviewLink) {
+      return reviewLink;
     }
 
-    // ASINからレビューページURLを構築
-    const asin = getASIN();
-    if (asin) {
-      return `https://www.amazon.co.jp/product-reviews/${asin}/ref=cm_cr_dp_d_show_all_btm?ie=UTF8&reviewerType=all_reviews`;
+    // 代替: レビューセクションのフッターリンク
+    const altLink = document.querySelector('#reviews-medley-footer a');
+    if (altLink) {
+      return altLink;
     }
 
     return null;
@@ -367,9 +368,10 @@
    */
   async function collectAllPages() {
     while (!shouldStop) {
-      const nextPageLink = findNextPageLink();
+      // 「次へ」リンクの存在確認
+      const canGoNext = hasNextPage();
 
-      if (!nextPageLink) {
+      if (!canGoNext) {
         log('最後のページに到達しました');
         return false;
       }
@@ -400,11 +402,36 @@
       });
 
       log('次のページに移動します');
-      window.location.href = nextPageLink;
+      // クリックでページ遷移（window.location.hrefはボット検出される）
+      clickNextPage();
       return true; // ページ遷移中
     }
 
     return false;
+  }
+
+  /**
+   * 次のページがあるかチェック
+   */
+  function hasNextPage() {
+    // 最後のページかどうか確認
+    const isLastPage = document.querySelector(AMAZON_SELECTORS.isLastPage);
+    if (isLastPage) {
+      return false;
+    }
+    // 「次へ」リンクが存在するか
+    const nextLink = document.querySelector(AMAZON_SELECTORS.nextPage);
+    return !!nextLink;
+  }
+
+  /**
+   * 「次へ」リンクをクリックしてページ遷移
+   */
+  function clickNextPage() {
+    const nextLink = document.querySelector(AMAZON_SELECTORS.nextPage);
+    if (nextLink) {
+      nextLink.click();
+    }
   }
 
   /**
@@ -648,35 +675,6 @@
       }
       return reviewDateNorm >= normalizedAfterDate;
     });
-  }
-
-  /**
-   * 次のページリンクを探す
-   */
-  function findNextPageLink() {
-    // 「次へ」リンクを探す
-    const nextLink = document.querySelector(AMAZON_SELECTORS.nextPage);
-    if (nextLink && nextLink.href) {
-      // キャッシュ回避のためタイムスタンプを追加
-      const url = new URL(nextLink.href);
-      url.searchParams.set('_t', Date.now());
-      return url.toString();
-    }
-
-    // 最後のページかどうか確認
-    const isLastPage = document.querySelector(AMAZON_SELECTORS.isLastPage);
-    if (isLastPage) {
-      return null;
-    }
-
-    // URLパラメータから次のページを構築
-    const url = new URL(window.location.href);
-    const currentPage = parseInt(url.searchParams.get('pageNumber') || '1', 10);
-    url.searchParams.set('pageNumber', currentPage + 1);
-    // キャッシュ回避のためタイムスタンプを追加
-    url.searchParams.set('_t', Date.now());
-
-    return url.toString();
   }
 
   /**
