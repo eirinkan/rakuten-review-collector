@@ -33,6 +33,7 @@
     totalReviews: '[data-hook="cr-filter-info-review-rating-count"]',
     reviewLink: 'a[data-hook="see-all-reviews-link-foot"]',
     productTitle: '#productTitle',
+    reviewPageTitle: '[data-hook="product-link"]',  // レビューページでの商品名
     rankingProduct: '[data-asin]',
   };
 
@@ -355,10 +356,14 @@
     // 商品名を取得
     let productName = '商品名不明';
     const titleElem = document.querySelector(AMAZON_SELECTORS.productTitle);
+    const reviewPageTitleElem = document.querySelector(AMAZON_SELECTORS.reviewPageTitle);
     if (titleElem) {
       productName = titleElem.textContent.trim();
+    } else if (reviewPageTitleElem) {
+      // レビューページでの商品名（data-hook="product-link"）
+      productName = reviewPageTitleElem.textContent.trim();
     } else {
-      // レビューページのタイトルから取得
+      // フォールバック: ページタイトルから取得
       const pageTitle = document.title;
       if (pageTitle.includes('のカスタマーレビュー')) {
         productName = pageTitle.replace(/のカスタマーレビュー.*$/, '').replace(/^Amazon.*?: /, '');
