@@ -12,10 +12,9 @@ let collectionWindowId = null;
 const tabSpreadsheetUrls = new Map();
 
 // Amazonページ遷移時の収集再開リスナー（グローバル）
+// 注意: Service Workerが再起動するとactiveCollectionTabsがリセットされるため、
+// collectionState.isRunningをメインの条件として使用
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  // アクティブな収集タブでない場合はスキップ
-  if (!activeCollectionTabs.has(tabId)) return;
-
   // ページ読み込み完了時のみ処理
   if (changeInfo.status !== 'complete') return;
 
@@ -23,20 +22,42 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   const url = tab.url || '';
   if (!url.includes('amazon.co.jp/product-reviews/')) return;
 
-  // 収集状態を確認
+  // 収集状態を確認（Service Worker再起動後もストレージは永続化される）
   const result = await chrome.storage.local.get(['collectionState']);
   const state = result.collectionState;
 
+  console.log('[background] Amazonレビューページ検出:', {
+    tabId,
+    url: url.substring(0, 100),
+    isActiveTab: activeCollectionTabs.has(tabId),
+    activeTabsCount: activeCollectionTabs.size,
+    state: state ? {
+      isRunning: state.isRunning,
+      source: state.source,
+      lastProcessedPage: state.lastProcessedPage
+    } : null
+  });
+
+  // 収集中でAmazonの場合のみ処理
   if (state && state.isRunning && state.source === 'amazon') {
-    console.log('[background] Amazonレビューページ遷移検出、収集再開メッセージを送信:', url);
+    console.log('[background] Amazonレビューページ遷移検出、収集再開メッセージを送信');
+
+    // Service Workerが再起動している可能性があるので、タブをアクティブに追加
+    if (!activeCollectionTabs.has(tabId)) {
+      console.log('[background] タブをactiveCollectionTabsに追加:', tabId);
+      activeCollectionTabs.add(tabId);
+    }
 
     // 少し待ってからメッセージを送信（DOM読み込み完了を待つ）
     setTimeout(() => {
+      console.log('[background] resumeCollectionメッセージ送信...');
       chrome.tabs.sendMessage(tabId, {
         action: 'resumeCollection',
         incrementalOnly: state.incrementalOnly || false,
         lastCollectedDate: state.lastCollectedDate || null,
         queueName: state.queueName || null
+      }).then((response) => {
+        console.log('[background] resumeCollection応答:', response);
       }).catch((err) => {
         console.log('[background] 収集再開メッセージ送信エラー:', err);
       });

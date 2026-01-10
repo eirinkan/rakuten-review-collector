@@ -124,7 +124,13 @@
 
       case 'resumeCollection':
         // backgroundからのページ遷移後の収集再開
-        console.log('[Amazonレビュー収集] resumeCollectionメッセージ受信');
+        console.log('[Amazonレビュー収集] resumeCollectionメッセージ受信', {
+          isReviewPage,
+          isCollecting,
+          startCollectionLock,
+          autoResumeExecuted,
+          currentUrl: window.location.href.substring(0, 80)
+        });
         if (!isReviewPage) {
           console.log('[Amazonレビュー収集] レビューページではないためスキップ');
           sendResponse({ success: false, error: 'レビューページではありません' });
@@ -136,6 +142,7 @@
           break;
         }
         // 収集を再開
+        console.log('[Amazonレビュー収集] 収集再開を開始します');
         incrementalOnly = message.incrementalOnly || false;
         lastCollectedDate = message.lastCollectedDate || null;
         currentQueueName = message.queueName || null;
@@ -477,6 +484,7 @@
       await new Promise((resolve) => {
         chrome.storage.local.get(['collectionState'], (result) => {
           const state = result.collectionState || {};
+          state.isRunning = true; // 重要: 収集中フラグを維持
           state.incrementalOnly = incrementalOnly;
           state.lastCollectedDate = lastCollectedDate;
           state.source = 'amazon';
@@ -485,6 +493,7 @@
           state.collectedReviewKeys = Array.from(collectedReviewKeys);
           state.lastProcessedUrl = window.location.href;
           state.lastProcessedPage = getCurrentPageNumber();
+          console.log('[Amazonレビュー収集] 次ページ遷移前の状態保存:', JSON.stringify(state, null, 2));
           chrome.storage.local.set({ collectionState: state }, resolve);
         });
       });
