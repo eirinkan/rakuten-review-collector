@@ -380,12 +380,14 @@
       return;
     }
 
-    // ページネーションがある場合、次のページも収集（fetchベース）
-    await collectAllPages();
+    // ページネーションがある場合、次のページも収集
+    const navigated = await collectAllPages();
 
-    // 収集完了
+    if (navigated) {
+      return;
+    }
+
     isCollecting = false;
-    startCollectionLock = false;
 
     if (!shouldStop) {
       chrome.runtime.sendMessage({ action: 'collectionComplete' });
@@ -480,20 +482,20 @@
   }
 
   /**
-   * すべてのページを収集（fetchベース - ページ遷移なし）
+   * すべてのページを収集
    */
   async function collectAllPages() {
-    // 現在のページに次ページがあるかチェック
-    if (!hasNextPage()) {
-      log('最後のページに到達しました');
-      return false;
-    }
-
-    let pageNumber = getCurrentPageNumber() + 1; // 現在ページの次から
-
     while (!shouldStop) {
-      // ランダムウェイト（2-4秒）- fetchは速いので短くできる
-      const waitTime = getRandomWait(2000, 4000);
+      // 「次へ」リンクの存在確認
+      const canGoNext = hasNextPage();
+
+      if (!canGoNext) {
+        log('最後のページに到達しました');
+        return false;
+      }
+
+      // ランダムウェイト（6-12秒）- Amazonはボット対策が厳しいため長めに設定
+      const waitTime = getRandomWait(6000, 12000);
       log(`${(waitTime / 1000).toFixed(1)}秒待機中...`);
       await sleep(waitTime);
 
@@ -501,72 +503,28 @@
         return false;
       }
 
-      try {
-        log(`ページ${pageNumber}を取得中...`);
-        const { reviews, hasNextPage: hasMore } = await fetchReviewPage(pageNumber);
-
-        if (reviews.length === 0) {
-          log('最後のページに到達しました');
-          return false;
-        }
-
-        // 差分取得モードの処理
-        let filteredReviews = reviews;
-        let reachedOldReviews = false;
-
-        if (incrementalOnly && lastCollectedDate) {
-          const beforeFilter = filteredReviews.length;
-          filteredReviews = filterReviewsByDate(filteredReviews, lastCollectedDate);
-          if (filteredReviews.length < beforeFilter) {
-            reachedOldReviews = true;
-          }
-        }
-
-        // 重複チェック（セッション内）
-        filteredReviews = filteredReviews.filter(review => {
-          const key = generateReviewKey(review);
-          if (collectedReviewKeys.has(key)) {
-            return false;
-          }
-          collectedReviewKeys.add(key);
-          return true;
+      // 差分取得設定と収集済みキーを保存してからページ遷移
+      await new Promise((resolve) => {
+        chrome.storage.local.get(['collectionState'], (result) => {
+          const state = result.collectionState || {};
+          state.isRunning = true; // 重要: 収集中フラグを維持
+          state.incrementalOnly = incrementalOnly;
+          state.lastCollectedDate = lastCollectedDate;
+          state.source = 'amazon';
+          state.queueName = currentQueueName;
+          // 収集済みレビューキーを保存（次のページでも重複チェックできるように）
+          state.collectedReviewKeys = Array.from(collectedReviewKeys);
+          state.lastProcessedUrl = window.location.href;
+          state.lastProcessedPage = getCurrentPageNumber();
+          console.log('[Amazonレビュー収集] 次ページ遷移前の状態保存:', JSON.stringify(state, null, 2));
+          chrome.storage.local.set({ collectionState: state }, resolve);
         });
+      });
 
-        if (filteredReviews.length > 0) {
-          log(`ページ${pageNumber}: ${filteredReviews.length}件のレビューを検出`);
-
-          // バックグラウンドに送信
-          await new Promise(resolve => {
-            chrome.runtime.sendMessage({
-              action: 'saveReviews',
-              reviews: filteredReviews,
-              source: 'amazon'
-            }, resolve);
-          });
-
-          await updateState(filteredReviews.length);
-        } else {
-          log(`ページ${pageNumber}: 新着レビューなし`);
-        }
-
-        // 終了条件
-        if (reachedOldReviews) {
-          log('前回収集済みのレビューに到達しました');
-          return false;
-        }
-
-        if (!hasMore) {
-          log('最後のページに到達しました');
-          return false;
-        }
-
-        pageNumber++;
-
-      } catch (error) {
-        console.error('[Amazonレビュー収集] fetchエラー:', error);
-        log(`ページ${pageNumber}の取得に失敗: ${error.message}`, 'error');
-        return false;
-      }
+      log('次のページに移動します');
+      // クリックでページ遷移（window.location.hrefはボット検出される）
+      clickNextPage();
+      return true; // ページ遷移中
     }
 
     return false;
@@ -587,12 +545,13 @@
   }
 
   /**
-   * 「次へ」リンクをクリックしてページ遷移（レガシー - 現在は未使用）
+   * 「次へ」リンクをクリックしてページ遷移
    */
   function clickNextPage() {
     const nextLink = document.querySelector(AMAZON_SELECTORS.nextPage);
     if (nextLink) {
       console.log('[Amazonレビュー収集] 次へリンクをクリック:', nextLink.href);
+      // バックグラウンドタブでも確実に動作するようMouseEventを使用
       const event = new MouseEvent('click', {
         bubbles: true,
         cancelable: true,
@@ -602,90 +561,6 @@
     } else {
       console.log('[Amazonレビュー収集] 次へリンクが見つかりません');
     }
-  }
-
-  /**
-   * 指定ページのレビューをfetchで取得
-   * @param {number} pageNumber - ページ番号
-   * @returns {Promise<{reviews: Array, hasNextPage: boolean}>}
-   */
-  async function fetchReviewPage(pageNumber) {
-    const asin = getASIN();
-    const url = `https://www.amazon.co.jp/product-reviews/${asin}?pageNumber=${pageNumber}&reviewerType=all_reviews`;
-
-    console.log('[Amazonレビュー収集] fetchでページ取得:', url);
-
-    const response = await fetch(url, {
-      credentials: 'include',
-      headers: {
-        'Accept': 'text/html,application/xhtml+xml'
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error: ${response.status}`);
-    }
-
-    const html = await response.text();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-
-    // ボット検出チェック
-    const robotCheck = doc.querySelector('form[action="/errors/validateCaptcha"]');
-    if (robotCheck) {
-      throw new Error('ボット検出されました。しばらく待ってから再試行してください。');
-    }
-
-    // レビューを抽出
-    const reviews = extractReviewsFromDocument(doc);
-
-    // 次ページ存在チェック
-    const isLastPage = !!doc.querySelector(AMAZON_SELECTORS.isLastPage);
-    const hasNextLink = !!doc.querySelector(AMAZON_SELECTORS.nextPage);
-    const hasNextPage = !isLastPage && hasNextLink;
-
-    console.log('[Amazonレビュー収集] ページ', pageNumber, '取得完了:', reviews.length, '件, 次ページ:', hasNextPage);
-
-    return { reviews, hasNextPage };
-  }
-
-  /**
-   * DOMDocumentからレビューを抽出
-   * @param {Document} doc - パース済みのDocument
-   * @returns {Array} レビュー配列
-   */
-  function extractReviewsFromDocument(doc) {
-    const reviews = [];
-    const asin = getASIN();
-
-    // 商品名を取得
-    let productName = '商品名不明';
-    const titleElem = doc.querySelector(AMAZON_SELECTORS.reviewPageTitle);
-    if (titleElem) {
-      productName = titleElem.textContent.trim();
-    } else {
-      // フォールバック: タイトルから取得
-      const pageTitle = doc.title || '';
-      if (pageTitle.includes('のカスタマーレビュー')) {
-        productName = pageTitle.replace(/のカスタマーレビュー.*$/, '').replace(/^Amazon.*?: /, '');
-      }
-    }
-
-    const productUrl = `https://www.amazon.co.jp/dp/${asin}`;
-    const reviewElements = doc.querySelectorAll(AMAZON_SELECTORS.reviewContainer);
-
-    reviewElements.forEach((elem, index) => {
-      try {
-        const review = extractReviewData(elem, productName, productUrl, asin);
-        if (review) {
-          reviews.push(review);
-        }
-      } catch (error) {
-        console.error(`[fetch] レビュー ${index + 1} の抽出エラー:`, error);
-      }
-    });
-
-    return reviews;
   }
 
   /**
