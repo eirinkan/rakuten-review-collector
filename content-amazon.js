@@ -9,11 +9,246 @@
   // ===== ボット対策: 定数 =====
   const MAX_PAGES_PER_SESSION = 25;      // 1セッションあたりの最大ページ数
   const MICRO_BREAK_INTERVAL = 10;       // マイクロブレイクの間隔（ページ数）
-  const MICRO_BREAK_MIN_MS = 30000;      // マイクロブレイク最小時間（30秒）
-  const MICRO_BREAK_MAX_MS = 60000;      // マイクロブレイク最大時間（60秒）
-  const PAGE_WAIT_MIN_MS = 30000;        // ページ遷移前の最小待機時間（30秒）
-  const PAGE_WAIT_MAX_MS = 60000;        // ページ遷移前の最大待機時間（60秒）
+  const MICRO_BREAK_MIN_MS = 5000;       // マイクロブレイク最小時間（5秒）
+  const MICRO_BREAK_MAX_MS = 15000;      // マイクロブレイク最大時間（15秒）
+  const PAGE_WAIT_MIN_MS = 3000;         // ページ遷移前の最小待機時間（3秒）
+  const PAGE_WAIT_MAX_MS = 12000;        // ページ遷移前の最大待機時間（12秒）
   const ACTIVE_TAB_CHECK_INTERVAL = 2000; // アクティブタブチェック間隔（2秒）
+
+  // ===== ボット対策: マウス・スクロール関連関数 =====
+
+  /**
+   * ベジェ曲線でポイントを計算（3次ベジェ曲線）
+   * 人間らしいマウス軌道を生成するため
+   */
+  function bezierPoint(t, p0, p1, p2, p3) {
+    const u = 1 - t;
+    return u * u * u * p0 +
+           3 * u * u * t * p1 +
+           3 * u * t * t * p2 +
+           t * t * t * p3;
+  }
+
+  /**
+   * ベジェ曲線に沿ってマウスを移動（イベント発火）
+   * @param {number} startX - 開始X座標
+   * @param {number} startY - 開始Y座標
+   * @param {number} endX - 終了X座標
+   * @param {number} endY - 終了Y座標
+   * @param {number} steps - ステップ数（デフォルト20-40）
+   */
+  async function moveMouseAlongBezier(startX, startY, endX, endY, steps = null) {
+    // ステップ数をランダムに（20-40）
+    if (!steps) {
+      steps = 20 + Math.floor(Math.random() * 20);
+    }
+
+    // 制御点をランダムに生成（曲線の形状を決める）
+    const distX = endX - startX;
+    const distY = endY - startY;
+
+    // 制御点1: 始点から1/3程度、ランダムにずらす
+    const cp1x = startX + distX * 0.3 + (Math.random() - 0.5) * Math.abs(distX) * 0.5;
+    const cp1y = startY + distY * 0.3 + (Math.random() - 0.5) * Math.abs(distY) * 0.5;
+
+    // 制御点2: 終点から1/3程度、ランダムにずらす
+    const cp2x = startX + distX * 0.7 + (Math.random() - 0.5) * Math.abs(distX) * 0.5;
+    const cp2y = startY + distY * 0.7 + (Math.random() - 0.5) * Math.abs(distY) * 0.5;
+
+    for (let i = 0; i <= steps; i++) {
+      // フィッツの法則: 最後の方は減速
+      let t;
+      if (i < steps * 0.7) {
+        // 前半70%は通常速度
+        t = (i / steps) * 0.7;
+      } else {
+        // 後半30%は減速（細かく移動）
+        const remaining = (i - steps * 0.7) / (steps * 0.3);
+        t = 0.7 + remaining * 0.3;
+      }
+
+      const x = bezierPoint(t, startX, cp1x, cp2x, endX);
+      const y = bezierPoint(t, startY, cp1y, cp2y, endY);
+
+      // わずかな振れ（手のブレ）を追加
+      const jitterX = (Math.random() - 0.5) * 2;
+      const jitterY = (Math.random() - 0.5) * 2;
+
+      // mousemoveイベントを発火
+      const event = new MouseEvent('mousemove', {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        clientX: x + jitterX,
+        clientY: y + jitterY
+      });
+      document.dispatchEvent(event);
+
+      // 間隔をランダムに（5-20ms）
+      await sleep(5 + Math.random() * 15);
+    }
+  }
+
+  /**
+   * 要素にマウスを移動してクリック（人間らしく）
+   * @param {Element} element - クリック対象の要素
+   */
+  async function humanClick(element) {
+    if (!element) return false;
+
+    const rect = element.getBoundingClientRect();
+
+    // 現在のマウス位置（ページの適当な場所から開始）
+    const startX = Math.random() * window.innerWidth;
+    const startY = Math.random() * window.innerHeight;
+
+    // ターゲットの中心座標（少しランダムにずらす）
+    const targetX = rect.left + rect.width * (0.3 + Math.random() * 0.4);
+    const targetY = rect.top + rect.height * (0.3 + Math.random() * 0.4);
+
+    // ベジェ曲線でマウスを移動
+    await moveMouseAlongBezier(startX, startY, targetX, targetY);
+
+    // ホバー効果のために少し待機（100-300ms）
+    await sleep(100 + Math.random() * 200);
+
+    // mouseenterイベント
+    element.dispatchEvent(new MouseEvent('mouseenter', {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: targetX,
+      clientY: targetY
+    }));
+
+    // mouseoverイベント
+    element.dispatchEvent(new MouseEvent('mouseover', {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: targetX,
+      clientY: targetY
+    }));
+
+    // クリック前の微小な待機（50-150ms）
+    await sleep(50 + Math.random() * 100);
+
+    // mousedownイベント
+    element.dispatchEvent(new MouseEvent('mousedown', {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      button: 0,
+      clientX: targetX,
+      clientY: targetY
+    }));
+
+    // mouseup/click の間隔（50-150ms）
+    await sleep(50 + Math.random() * 100);
+
+    // mouseupイベント
+    element.dispatchEvent(new MouseEvent('mouseup', {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      button: 0,
+      clientX: targetX,
+      clientY: targetY
+    }));
+
+    // clickイベント
+    element.dispatchEvent(new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      button: 0,
+      clientX: targetX,
+      clientY: targetY
+    }));
+
+    return true;
+  }
+
+  /**
+   * 人間らしいスクロール動作
+   * - 加速・減速パターン
+   * - 不規則な間隔
+   * - 時々逆方向にスクロール
+   */
+  async function humanScroll(targetY, options = {}) {
+    const {
+      maxDuration = 3000,  // 最大スクロール時間
+      allowOvershoot = true // 行き過ぎを許可
+    } = options;
+
+    const startY = window.scrollY;
+    const distance = targetY - startY;
+    const direction = distance > 0 ? 1 : -1;
+    const absDistance = Math.abs(distance);
+
+    if (absDistance < 50) {
+      window.scrollTo({ top: targetY, behavior: 'smooth' });
+      return;
+    }
+
+    const startTime = Date.now();
+    let currentY = startY;
+    let velocity = 0;
+    const maxVelocity = 15 + Math.random() * 10; // 最大速度（ランダム）
+
+    while (Math.abs(currentY - targetY) > 30 && Date.now() - startTime < maxDuration) {
+      if (shouldStop) return;
+
+      const remaining = Math.abs(targetY - currentY);
+      const progress = 1 - (remaining / absDistance);
+
+      // 加速・減速パターン
+      if (progress < 0.3) {
+        // 加速フェーズ
+        velocity = Math.min(velocity + 1.5, maxVelocity * progress * 3);
+      } else if (progress > 0.7) {
+        // 減速フェーズ
+        velocity = maxVelocity * (1 - progress) * 2;
+      } else {
+        // 定速フェーズ（わずかな変動）
+        velocity = maxVelocity * (0.8 + Math.random() * 0.4);
+      }
+
+      // 最小速度を保証
+      velocity = Math.max(velocity, 3);
+
+      // 時々微小な逆方向スクロール（読み返しのシミュレーション）
+      if (Math.random() < 0.02 && progress > 0.2 && progress < 0.8) {
+        const backScroll = 20 + Math.random() * 50;
+        currentY -= direction * backScroll;
+        window.scrollTo({ top: currentY, behavior: 'auto' });
+        await sleep(200 + Math.random() * 300);
+        continue;
+      }
+
+      currentY += direction * velocity;
+      window.scrollTo({ top: currentY, behavior: 'auto' });
+
+      // 不規則な間隔（10-40ms）
+      await sleep(10 + Math.random() * 30);
+
+      // 時々読んでいるような停止（2%の確率）
+      if (Math.random() < 0.02) {
+        await sleep(300 + Math.random() * 700);
+      }
+    }
+
+    // 行き過ぎの修正（オプション）
+    if (allowOvershoot && Math.random() < 0.3) {
+      // 30%の確率で少し行き過ぎる
+      const overshoot = 20 + Math.random() * 40;
+      window.scrollTo({ top: targetY + direction * overshoot, behavior: 'smooth' });
+      await sleep(200 + Math.random() * 200);
+      window.scrollTo({ top: targetY, behavior: 'smooth' });
+    } else {
+      window.scrollTo({ top: targetY, behavior: 'smooth' });
+    }
+  }
 
   // 収集状態
   let isCollecting = false;
@@ -104,9 +339,9 @@
               state.lastCollectedDate = lastCollectedDate;
               state.queueName = currentQueueName;
               state.source = 'amazon'; // 販路を追加
-              chrome.storage.local.set({ collectionState: state }, () => {
-                // クリックでページ遷移（window.location.hrefはボット検出される）
-                reviewLink.click();
+              chrome.storage.local.set({ collectionState: state }, async () => {
+                // クリックでページ遷移（人間らしいマウス移動＋クリック）
+                await humanClick(reviewLink);
               });
             });
             sendResponse({ success: true, redirecting: true });
@@ -618,8 +853,8 @@
       startCollectionLock = false;
       autoResumeExecuted = false;
 
-      // クリックでページ遷移（window.location.hrefはボット検出される）
-      clickNextPage();
+      // クリックでページ遷移（人間らしいマウス移動＋クリック）
+      await clickNextPage();
       return true; // ページ遷移中
     }
 
@@ -641,19 +876,14 @@
   }
 
   /**
-   * 「次へ」リンクをクリックしてページ遷移
+   * 「次へ」リンクをクリックしてページ遷移（人間らしく）
    */
-  function clickNextPage() {
+  async function clickNextPage() {
     const nextLink = document.querySelector(AMAZON_SELECTORS.nextPage);
     if (nextLink) {
       console.log('[Amazonレビュー収集] 次へリンクをクリック:', nextLink.href);
-      // バックグラウンドタブでも確実に動作するようMouseEventを使用
-      const event = new MouseEvent('click', {
-        bubbles: true,
-        cancelable: true,
-        view: window
-      });
-      nextLink.dispatchEvent(event);
+      // 人間らしいクリック（ベジェ曲線でマウス移動 → ホバー → クリック）
+      await humanClick(nextLink);
     } else {
       console.log('[Amazonレビュー収集] 次へリンクが見つかりません');
     }
@@ -672,8 +902,9 @@
 
   /**
    * 人間らしくスクロールして「次へ」ボタンまで移動
-   * - ランダムな速度でスクロール
+   * - 加速・減速パターン
    * - 途中で2-4回停止（レビューを読んでいるように見せる）
+   * - 時々戻り読み
    * - 「次へ」ボタンが見えたら停止
    */
   async function scrollToNextButton() {
@@ -686,7 +917,6 @@
     // ページの高さとスクロール位置
     const pageHeight = document.body.scrollHeight;
     const viewportHeight = window.innerHeight;
-    let currentScroll = window.scrollY;
 
     // 停止ポイントを計算
     const pausePoints = [];
@@ -695,33 +925,43 @@
     }
 
     let pauseIndex = 0;
+    let lastScrollY = window.scrollY;
 
     while (!isElementInViewport(nextButton)) {
       if (shouldStop) return false;
 
-      // スクロール量（50-150px）
-      const scrollAmount = 50 + Math.floor(Math.random() * 100);
-      currentScroll += scrollAmount;
+      // 次の停止ポイントまたはボタン位置までスクロール
+      const buttonRect = nextButton.getBoundingClientRect();
+      const buttonAbsY = window.scrollY + buttonRect.top - viewportHeight + 100;
 
-      window.scrollTo({
-        top: currentScroll,
-        behavior: 'smooth'
-      });
+      let targetY;
+      if (pauseIndex < pausePoints.length && pausePoints[pauseIndex] < buttonAbsY) {
+        targetY = pausePoints[pauseIndex];
+      } else {
+        targetY = buttonAbsY;
+      }
 
-      // スクロール間隔（100-300ms）
-      await sleep(100 + Math.random() * 200);
+      // 人間らしいスクロール（加速・減速・時々戻り読み）
+      await humanScroll(targetY, { maxDuration: 2000 + Math.random() * 1000 });
 
       // 停止ポイントに到達したら一時停止
-      if (pauseIndex < pausePoints.length && currentScroll >= pausePoints[pauseIndex]) {
-        const pauseTime = 1000 + Math.random() * 2000; // 1-3秒
-        log('ページを確認中...');
+      if (pauseIndex < pausePoints.length && window.scrollY >= pausePoints[pauseIndex] - 50) {
+        const pauseTime = 800 + Math.random() * 1500; // 0.8-2.3秒
         await sleep(pauseTime);
         pauseIndex++;
       }
+
+      // 無限ループ防止
+      if (Math.abs(window.scrollY - lastScrollY) < 10) {
+        // スクロールが進んでいない場合は強制スクロール
+        window.scrollTo({ top: window.scrollY + 100, behavior: 'smooth' });
+        await sleep(200);
+      }
+      lastScrollY = window.scrollY;
     }
 
-    // ボタンが見えたら少し待機してからクリック
-    await sleep(500 + Math.random() * 500);
+    // ボタンが見えたら少し待機
+    await sleep(300 + Math.random() * 400);
     return true;
   }
 
