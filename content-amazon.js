@@ -651,10 +651,47 @@
       title = titleElem.textContent.trim();
     }
 
-    // 本文を取得
+    // 本文を取得（ビデオプレイヤー要素を除外）
     const bodyElem = elem.querySelector(AMAZON_SELECTORS.body);
     if (bodyElem) {
-      body = bodyElem.textContent.trim();
+      // クローンを作成してビデオプレイヤー関連要素を除去
+      const bodyClone = bodyElem.cloneNode(true);
+
+      // 除去する要素のセレクター（ビデオプレイヤー、スクリプト、スタイル等）
+      const removeSelectors = [
+        'script',
+        'style',
+        'video',
+        '[class*="vse"]',
+        '[class*="video"]',
+        '[class*="player"]',
+        '[data-video]',
+        '.a-icon-alt'  // 星評価のalt text
+      ];
+
+      removeSelectors.forEach(selector => {
+        const elements = bodyClone.querySelectorAll(selector);
+        elements.forEach(el => el.remove());
+      });
+
+      // JSON形式のテキストを除去してからテキストを取得
+      let cleanedText = bodyClone.textContent.trim();
+
+      // JSONデータ（{で始まり}で終わる長い文字列）を除去
+      cleanedText = cleanedText.replace(/\{[^{}]{100,}\}/g, '');
+
+      // ビデオプレイヤーUIテキストのパターンを除去
+      cleanedText = cleanedText.replace(/Loaded:\s*[\d.]+%/g, '');
+      cleanedText = cleanedText.replace(/Stream Type LIVE.*?全画面表示/g, '');
+      cleanedText = cleanedText.replace(/This is a modal window\./g, '');
+      cleanedText = cleanedText.replace(/\d+:\d+/g, ''); // タイムスタンプ
+      cleanedText = cleanedText.replace(/\d+x/g, ''); // 再生速度
+      cleanedText = cleanedText.replace(/Remaining Time -[\d:]+/g, '');
+
+      // 連続する空白を1つに
+      cleanedText = cleanedText.replace(/\s+/g, ' ').trim();
+
+      body = cleanedText;
     }
 
     // 投稿者を取得
