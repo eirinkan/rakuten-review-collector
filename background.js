@@ -765,8 +765,12 @@ async function getSheetId(token, spreadsheetId, sheetName) {
 
 /**
  * データ行に書式を適用（白背景・黒文字・垂直中央揃え）
+ * @param {string} source - 販路 ('rakuten' | 'amazon')
  */
-async function formatDataRows(token, spreadsheetId, sheetId, startRow, endRow) {
+async function formatDataRows(token, spreadsheetId, sheetId, startRow, endRow, source = 'rakuten') {
+  // 販路別の列数
+  const columnCount = source === 'amazon' ? 16 : 22;
+
   const requests = [
     {
       repeatCell: {
@@ -775,7 +779,7 @@ async function formatDataRows(token, spreadsheetId, sheetId, startRow, endRow) {
           startRowIndex: startRow,
           endRowIndex: endRow,
           startColumnIndex: 0,
-          endColumnIndex: 22  // A-V列（22項目に拡張）
+          endColumnIndex: columnCount  // 販路別の列数
         },
         cell: {
           userEnteredFormat: {
@@ -813,14 +817,22 @@ async function formatDataRows(token, spreadsheetId, sheetId, startRow, endRow) {
 }
 
 /**
- * URL列（D列、S列）にクリック可能なリンク書式を適用
+ * URL列にクリック可能なリンク書式を適用
+ * 楽天: D列（商品URL）、S列（レビュー掲載URL）
+ * Amazon: D列（商品URL）、O列（レビュー掲載URL）
  * @param {string} token - OAuth token
  * @param {string} spreadsheetId - スプレッドシートID
  * @param {number} sheetId - シートID
  * @param {Array} reviews - レビューデータ配列
+ * @param {string} source - 販路 ('rakuten' | 'amazon')
  */
-async function formatUrlColumns(token, spreadsheetId, sheetId, reviews) {
+async function formatUrlColumns(token, spreadsheetId, sheetId, reviews, source = 'rakuten') {
   if (!reviews || reviews.length === 0) return;
+
+  // 販路別のレビュー掲載URL列インデックス
+  // 楽天: S列（19番目、インデックス18）
+  // Amazon: O列（15番目、インデックス14）
+  const pageUrlColIndex = source === 'amazon' ? 14 : 18;
 
   const requests = [];
 
@@ -855,7 +867,7 @@ async function formatUrlColumns(token, spreadsheetId, sheetId, reviews) {
       });
     }
 
-    // S列（レビュー掲載URL、列インデックス18）
+    // レビュー掲載URL列（販路別）
     if (review.pageUrl) {
       requests.push({
         updateCells: {
@@ -863,8 +875,8 @@ async function formatUrlColumns(token, spreadsheetId, sheetId, reviews) {
             sheetId: sheetId,
             startRowIndex: rowIndex,
             endRowIndex: rowIndex + 1,
-            startColumnIndex: 18,
-            endColumnIndex: 19
+            startColumnIndex: pageUrlColIndex,
+            endColumnIndex: pageUrlColIndex + 1
           },
           rows: [{
             values: [{
@@ -915,8 +927,11 @@ async function formatUrlColumns(token, spreadsheetId, sheetId, reviews) {
  * @param {string} source - 販路 ('rakuten' | 'amazon')
  */
 async function formatHeaderRow(token, spreadsheetId, sheetId, source = 'rakuten') {
-  // 販路別の色設定
+  // 販路別の色設定と列数
+  // 楽天: 22列（A-V）、Amazon: 16列（A-P）
   let backgroundColor, textColor;
+  const columnCount = source === 'amazon' ? 16 : 22;
+
   if (source === 'amazon') {
     // Amazon: 黒背景・オレンジテキスト (#ff9900)
     backgroundColor = { red: 0, green: 0, blue: 0 };
@@ -936,7 +951,7 @@ async function formatHeaderRow(token, spreadsheetId, sheetId, source = 'rakuten'
           startRowIndex: 0,
           endRowIndex: 1,
           startColumnIndex: 0,
-          endColumnIndex: 22  // A-V列（22項目に拡張）
+          endColumnIndex: columnCount  // 販路別の列数
         },
         cell: {
           userEnteredFormat: {
@@ -964,14 +979,14 @@ async function formatHeaderRow(token, spreadsheetId, sheetId, source = 'rakuten'
         fields: 'gridProperties.frozenRowCount'
       }
     },
-    // W列以降を削除（23列目以降）
+    // 余分な列を削除（販路別の列数以降）
     {
       deleteDimension: {
         range: {
           sheetId: sheetId,
           dimension: 'COLUMNS',
-          startIndex: 22,  // W列（0-indexed で22）
-          endIndex: 26     // Z列まで（デフォルトの列数）
+          startIndex: columnCount,  // 販路別の列数から
+          endIndex: 26              // Z列まで（デフォルトの列数）
         }
       }
     }
@@ -1078,19 +1093,22 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 
   const allValues = [headers, ...dataValues];
   const totalRows = allValues.length;
 
-  // 1. シートの全データをクリア（A-V列に拡張）
+  // 販路別の最終列（楽天: V、Amazon: P）
+  const lastColumn = source === 'amazon' ? 'P' : 'V';
+
+  // 1. シートの全データをクリア（販路別の列範囲）
   await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A:V:clear`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A:${lastColumn}:clear`,
     {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` }
     }
   );
 
-  // 2. ヘッダーとデータを書き込み（A1:V${totalRows}に拡張）
+  // 2. ヘッダーとデータを書き込み（販路別の列範囲）
   // USER_ENTERED: HYPERLINK関数を評価してクリック可能なリンクにする
   const writeResponse = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A1:V${totalRows}?valueInputOption=USER_ENTERED`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A1:${lastColumn}${totalRows}?valueInputOption=USER_ENTERED`,
     {
       method: 'PUT',
       headers: {
@@ -1146,13 +1164,37 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 
 
   // 5. データ行に書式を適用（白背景・黒テキスト・垂直中央揃え）
   if (dataValues.length > 0) {
-    await formatDataRows(token, spreadsheetId, sheetId, 1, totalRows);
+    await formatDataRows(token, spreadsheetId, sheetId, 1, totalRows, source);
   }
 
-  // 6. URL列（D列・S列）にクリック可能なリンク書式を適用
+  // 6. URL列にクリック可能なリンク書式を適用（販路別）
   if (reviews.length > 0) {
-    await formatUrlColumns(token, spreadsheetId, sheetId, reviews);
+    await formatUrlColumns(token, spreadsheetId, sheetId, reviews, source);
   }
+
+  // 7. C列（商品名）の列幅をデータに合わせて自動調整
+  await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        requests: [{
+          autoResizeDimensions: {
+            dimensions: {
+              sheetId: sheetId,
+              dimension: 'COLUMNS',
+              startIndex: 2,  // C列（0-indexed で2）
+              endIndex: 3     // C列のみ
+            }
+          }
+        }]
+      })
+    }
+  );
 }
 
 /**
