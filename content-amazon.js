@@ -124,20 +124,24 @@
 
       case 'resumeCollection':
         // backgroundからのページ遷移後の収集再開
+        // ページ遷移後のURL（isReviewPageはスクリプトロード時点のURLで判定されるため再確認）
+        const currentPathIsReview = window.location.pathname.includes('/product-reviews/');
         console.log('[Amazonレビュー収集] resumeCollectionメッセージ受信', {
           isReviewPage,
+          currentPathIsReview,
           isCollecting,
           startCollectionLock,
           autoResumeExecuted,
-          currentUrl: window.location.href.substring(0, 80)
+          currentUrl: window.location.href.substring(0, 80),
+          currentPage: getCurrentPageNumber()
         });
-        if (!isReviewPage) {
+        if (!currentPathIsReview) {
           console.log('[Amazonレビュー収集] レビューページではないためスキップ');
           sendResponse({ success: false, error: 'レビューページではありません' });
           break;
         }
         if (isCollecting) {
-          console.log('[Amazonレビュー収集] 既に収集中のためスキップ');
+          console.log('[Amazonレビュー収集] 既に収集中のためスキップ (isCollecting=true)');
           sendResponse({ success: false, error: '既に収集中' });
           break;
         }
@@ -148,7 +152,8 @@
         currentQueueName = message.queueName || null;
         startCollectionLock = false; // ロックをリセット
         autoResumeExecuted = false; // 自動再開フラグをリセット
-        log('収集を再開します（background経由）');
+        const resumePage = getCurrentPageNumber();
+        log(`ページ${resumePage}の収集を再開します`);
         startCollection();
         sendResponse({ success: true });
         break;
@@ -522,6 +527,12 @@
       });
 
       log('次のページに移動します');
+
+      // 次のページ遷移のために状態をリセット（同一オリジン遷移でスクリプトが再注入されない場合に対応）
+      isCollecting = false;
+      startCollectionLock = false;
+      autoResumeExecuted = false;
+
       // クリックでページ遷移（window.location.hrefはボット検出される）
       clickNextPage();
       return true; // ページ遷移中
