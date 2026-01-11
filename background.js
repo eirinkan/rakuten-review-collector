@@ -112,7 +112,18 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
   // 収集中でAmazonの場合のみ処理
   if (state && state.isRunning && state.source === 'amazon') {
-    console.log('[background] Amazonレビューページ遷移検出、収集再開メッセージを送信');
+    // URLからページ番号を取得
+    const urlObj = new URL(url);
+    const currentPage = parseInt(urlObj.searchParams.get('pageNumber') || '1', 10);
+    const lastPage = state.lastProcessedPage || 0;
+
+    // 同じページなら重複実行しない
+    if (currentPage <= lastPage) {
+      console.log('[background] 同じまたは前のページのため再開スキップ:', { currentPage, lastPage });
+      return;
+    }
+
+    console.log('[background] Amazonレビューページ遷移検出、収集再開メッセージを送信:', { currentPage, lastPage });
 
     // Service Workerが再起動している可能性があるので、タブをアクティブに追加
     if (!activeCollectionTabs.has(tabId)) {
@@ -1663,8 +1674,10 @@ async function startQueueCollection() {
     throw new Error('キューが空です');
   }
 
-  // 同時収集数は固定値3
-  const maxConcurrent = 3;
+  // 最初の商品がAmazonかどうかで同時収集数を決定
+  const firstItem = queue[0];
+  const isAmazonFirst = firstItem?.url?.includes('amazon.co.jp');
+  const maxConcurrent = isAmazonFirst ? 1 : 3;
 
   // 収集中フラグを立てる
   await chrome.storage.local.set({ isQueueCollecting: true, collectingItems: [] });
