@@ -434,6 +434,70 @@
       animation: pulse 1.5s infinite;
     }
 
+    /* === Amazon Rate Limit === */
+    .amazon-rate-limit {
+      display: none;
+      background: rgba(255, 153, 0, 0.1);
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      font-size: 12px;
+    }
+
+    .amazon-rate-limit .rate-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #cc7a00;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .amazon-rate-limit .rate-title::before {
+      content: '⚠️';
+      font-size: 14px;
+    }
+
+    .amazon-rate-limit .rate-info {
+      color: var(--text-secondary);
+    }
+
+    .amazon-rate-limit .rate-bar {
+      height: 6px;
+      background: rgba(0, 0, 0, 0.1);
+      border-radius: 3px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+
+    .amazon-rate-limit .rate-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #ff9900 0%, #cc7a00 100%);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .amazon-rate-limit.warning .rate-title {
+      color: #e65100;
+    }
+
+    .amazon-rate-limit.warning .rate-bar-fill {
+      background: linear-gradient(90deg, #ff5722 0%, #e65100 100%);
+    }
+
+    .amazon-rate-limit.danger .rate-title {
+      color: #c62828;
+    }
+
+    .amazon-rate-limit.danger .rate-bar-fill {
+      background: linear-gradient(90deg, #f44336 0%, #c62828 100%);
+    }
+
+    [data-theme="dark"] .amazon-rate-limit {
+      background: rgba(255, 153, 0, 0.15);
+    }
+
     /* === Login Screen === */
     .login-screen {
       padding: 24px 24px 16px;
@@ -571,6 +635,17 @@
 
     <!-- メインコンテンツ -->
     <div id="mainContent" class="content" style="display: none;">
+      <!-- Amazonレート制限表示 -->
+      <div id="amazonRateLimit" class="amazon-rate-limit">
+        <div class="rate-title">Amazon 本日の残り</div>
+        <div class="rate-info">
+          <span id="amazonRemainingCount">100</span> / 100 ページ
+        </div>
+        <div class="rate-bar">
+          <div id="amazonRateBarFill" class="rate-bar-fill" style="width: 100%;"></div>
+        </div>
+      </div>
+
       <!-- 通常モード（商品・レビューページ） -->
       <div id="normalMode">
         <button id="startBtn" class="btn btn-start">収集開始</button>

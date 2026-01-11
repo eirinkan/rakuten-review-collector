@@ -11,6 +11,78 @@ let collectionWindowId = null;
 // タブごとのスプレッドシートURL（定期収集用）
 const tabSpreadsheetUrls = new Map();
 
+// ===== Amazonボット対策: レート制限 =====
+const AMAZON_DAILY_LIMIT = 100;  // 1日100ページまで（警戒圏）
+
+/**
+ * Amazonのレート制限をチェック・カウント
+ * @returns {Promise<{allowed: boolean, remaining: number, count: number}>}
+ */
+async function checkAmazonRateLimit() {
+  const data = await chrome.storage.local.get(['amazonRateLimit']);
+  const today = new Date().toDateString();
+  let rateLimit = data.amazonRateLimit || { count: 0, date: today };
+
+  // 日付が変わったらリセット
+  if (rateLimit.date !== today) {
+    rateLimit = { count: 0, date: today };
+  }
+
+  // 制限チェック（カウントは増やさない）
+  if (rateLimit.count >= AMAZON_DAILY_LIMIT) {
+    return { allowed: false, remaining: 0, count: rateLimit.count };
+  }
+
+  return {
+    allowed: true,
+    remaining: AMAZON_DAILY_LIMIT - rateLimit.count,
+    count: rateLimit.count
+  };
+}
+
+/**
+ * Amazonのレート制限カウントを増加
+ */
+async function incrementAmazonRateLimit() {
+  const data = await chrome.storage.local.get(['amazonRateLimit']);
+  const today = new Date().toDateString();
+  let rateLimit = data.amazonRateLimit || { count: 0, date: today };
+
+  // 日付が変わったらリセット
+  if (rateLimit.date !== today) {
+    rateLimit = { count: 0, date: today };
+  }
+
+  rateLimit.count++;
+  await chrome.storage.local.set({ amazonRateLimit: rateLimit });
+
+  return {
+    count: rateLimit.count,
+    remaining: AMAZON_DAILY_LIMIT - rateLimit.count
+  };
+}
+
+/**
+ * Amazonのレート制限情報を取得（カウントせずに現在の状態のみ）
+ */
+async function getAmazonRateLimitInfo() {
+  const data = await chrome.storage.local.get(['amazonRateLimit']);
+  const today = new Date().toDateString();
+  let rateLimit = data.amazonRateLimit || { count: 0, date: today };
+
+  // 日付が変わったらリセット
+  if (rateLimit.date !== today) {
+    rateLimit = { count: 0, date: today };
+    await chrome.storage.local.set({ amazonRateLimit: rateLimit });
+  }
+
+  return {
+    count: rateLimit.count,
+    remaining: AMAZON_DAILY_LIMIT - rateLimit.count,
+    limit: AMAZON_DAILY_LIMIT
+  };
+}
+
 // Amazonページ遷移時の収集再開リスナー（グローバル）
 // 注意: Service Workerが再起動するとactiveCollectionTabsがリセットされるため、
 // collectionState.isRunningをメインの条件として使用
@@ -404,6 +476,39 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       chrome.runtime.openOptionsPage();
       sendResponse({ success: true });
       break;
+
+    // ===== Amazonボット対策 =====
+    case 'isTabActive':
+      // タブがアクティブかどうかをチェック
+      (async () => {
+        try {
+          const tab = await chrome.tabs.get(sender.tab.id);
+          const window = await chrome.windows.get(tab.windowId);
+          const isActive = tab.active && window.focused;
+          sendResponse({ active: isActive });
+        } catch (e) {
+          sendResponse({ active: false });
+        }
+      })();
+      return true;
+
+    case 'checkAmazonRateLimit':
+      checkAmazonRateLimit()
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ allowed: false, error: error.message }));
+      return true;
+
+    case 'incrementAmazonRateLimit':
+      incrementAmazonRateLimit()
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'getAmazonRateLimitInfo':
+      getAmazonRateLimitInfo()
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ error: error.message }));
+      return true;
   }
 });
 

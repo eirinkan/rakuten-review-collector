@@ -6,6 +6,15 @@
 (function() {
   'use strict';
 
+  // ===== ボット対策: 定数 =====
+  const MAX_PAGES_PER_SESSION = 25;      // 1セッションあたりの最大ページ数
+  const MICRO_BREAK_INTERVAL = 10;       // マイクロブレイクの間隔（ページ数）
+  const MICRO_BREAK_MIN_MS = 30000;      // マイクロブレイク最小時間（30秒）
+  const MICRO_BREAK_MAX_MS = 60000;      // マイクロブレイク最大時間（60秒）
+  const PAGE_WAIT_MIN_MS = 30000;        // ページ遷移前の最小待機時間（30秒）
+  const PAGE_WAIT_MAX_MS = 60000;        // ページ遷移前の最大待機時間（60秒）
+  const ACTIVE_TAB_CHECK_INTERVAL = 2000; // アクティブタブチェック間隔（2秒）
+
   // 収集状態
   let isCollecting = false;
   let shouldStop = false;
@@ -17,6 +26,7 @@
   let autoResumeExecuted = false; // 自動再開が実行済みかどうか
   let collectedReviewKeys = new Set(); // このセッションで収集済みのレビューキー
   let startCollectionLock = false; // 収集開始のロック（重複防止）
+  let sessionPageCount = 0; // セッション内のページカウント（ボット対策）
 
   // Amazonセレクター（前回のテストで確認済み）
   const AMAZON_SELECTORS = {
@@ -299,9 +309,29 @@
     }
     startCollectionLock = true; // 即座にロック
 
+    // ===== ボット対策: レート制限チェック =====
+    const rateLimit = await checkRateLimit();
+    if (!rateLimit.allowed) {
+      log(`本日のAmazon収集上限（100ページ）に達しました。明日再試行してください。`, 'error');
+      startCollectionLock = false;
+      chrome.runtime.sendMessage({ action: 'collectionStopped' });
+      return;
+    }
+    if (rateLimit.remaining <= 10) {
+      log(`注意: 本日の残りページ数は${rateLimit.remaining}ページです。`);
+    }
+
+    // ===== ボット対策: アクティブタブチェック =====
+    if (!await waitForActiveTab()) {
+      log('収集を中断しました（タブがアクティブではありません）', 'error');
+      startCollectionLock = false;
+      return;
+    }
+
     isCollecting = true;
     shouldStop = false;
     autoResumeExecuted = true; // 収集開始したらフラグをセット
+    sessionPageCount = 0; // セッションページカウントをリセット
 
     currentProductId = getASIN();
 
@@ -491,6 +521,43 @@
    */
   async function collectAllPages() {
     while (!shouldStop) {
+      // ===== ボット対策: アクティブタブチェック =====
+      if (!await waitForActiveTab()) {
+        log('収集を中断しました（タブがアクティブではありません）', 'error');
+        return false;
+      }
+
+      // ===== ボット対策: セッション制限チェック =====
+      sessionPageCount++;
+      if (sessionPageCount >= MAX_PAGES_PER_SESSION) {
+        log(`セッション制限（${MAX_PAGES_PER_SESSION}ページ）に達しました。収集を一時停止します。`, 'error');
+        log('続きを収集する場合は、再度「収集開始」を押してください。');
+        isCollecting = false;
+        chrome.runtime.sendMessage({ action: 'collectionStopped' });
+        return false;
+      }
+
+      // ===== ボット対策: マイクロブレイク（10ページごと） =====
+      if (sessionPageCount > 0 && sessionPageCount % MICRO_BREAK_INTERVAL === 0) {
+        const breakTime = MICRO_BREAK_MIN_MS + Math.random() * (MICRO_BREAK_MAX_MS - MICRO_BREAK_MIN_MS);
+        log(`${sessionPageCount}ページ到達。${Math.round(breakTime / 1000)}秒休憩します...`);
+        await sleep(breakTime);
+
+        // 休憩後もアクティブタブチェック
+        if (!await waitForActiveTab()) {
+          return false;
+        }
+      }
+
+      // ===== ボット対策: レート制限チェック =====
+      const rateLimit = await checkRateLimit();
+      if (!rateLimit.allowed) {
+        log(`本日のAmazon収集上限（100ページ）に達しました。明日再試行してください。`, 'error');
+        isCollecting = false;
+        chrome.runtime.sendMessage({ action: 'collectionStopped' });
+        return false;
+      }
+
       // 「次へ」リンクの存在確認
       const canGoNext = hasNextPage();
 
@@ -503,6 +570,25 @@
       const scrolled = await scrollToNextButton();
       if (!scrolled || shouldStop) {
         return false;
+      }
+
+      // ===== ボット対策: ページ遷移前の長い待機（30-60秒） =====
+      const baseWait = PAGE_WAIT_MIN_MS + Math.random() * (PAGE_WAIT_MAX_MS - PAGE_WAIT_MIN_MS);
+      // ±25%のランダム化を追加
+      const variance = baseWait * 0.25 * (Math.random() * 2 - 1);
+      const waitTime = Math.max(15000, baseWait + variance); // 最低15秒
+      log(`次のページに移動する前に${Math.round(waitTime / 1000)}秒待機中...`);
+      await sleep(waitTime);
+
+      // 待機後もアクティブタブチェック
+      if (!await waitForActiveTab()) {
+        return false;
+      }
+
+      // ===== ボット対策: レート制限カウントを増加 =====
+      const updated = await incrementRateLimit();
+      if (updated.remaining <= 10 && updated.remaining > 0) {
+        log(`注意: 本日の残りページ数は${updated.remaining}ページです。`);
       }
 
       // 差分取得設定と収集済みキーを保存してからページ遷移
@@ -518,6 +604,8 @@
           state.collectedReviewKeys = Array.from(collectedReviewKeys);
           state.lastProcessedUrl = window.location.href;
           state.lastProcessedPage = getCurrentPageNumber();
+          // セッションページカウントも保存
+          state.sessionPageCount = sessionPageCount;
           console.log('[Amazonレビュー収集] 次ページ遷移前の状態保存:', JSON.stringify(state, null, 2));
           chrome.storage.local.set({ collectionState: state }, resolve);
         });
@@ -979,6 +1067,60 @@
   }
 
   /**
+   * ボット対策: タブがアクティブかチェック
+   */
+  async function isTabActive() {
+    return new Promise(resolve => {
+      chrome.runtime.sendMessage({ action: 'isTabActive' }, response => {
+        resolve(response?.active || false);
+      });
+    });
+  }
+
+  /**
+   * ボット対策: タブがアクティブになるまで待機
+   */
+  async function waitForActiveTab() {
+    if (await isTabActive()) {
+      return true;
+    }
+
+    log('タブがアクティブではありません。アクティブにしてください。', 'error');
+
+    while (!shouldStop) {
+      await sleep(ACTIVE_TAB_CHECK_INTERVAL);
+      if (await isTabActive()) {
+        log('タブがアクティブになりました。収集を再開します。');
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * ボット対策: レート制限をチェック
+   */
+  async function checkRateLimit() {
+    return new Promise(resolve => {
+      chrome.runtime.sendMessage({ action: 'checkAmazonRateLimit' }, response => {
+        resolve(response || { allowed: false, remaining: 0 });
+      });
+    });
+  }
+
+  /**
+   * ボット対策: レート制限カウントを増加
+   */
+  async function incrementRateLimit() {
+    return new Promise(resolve => {
+      chrome.runtime.sendMessage({ action: 'incrementAmazonRateLimit' }, response => {
+        resolve(response || { count: 0, remaining: 0 });
+      });
+    });
+  }
+
+  /**
    * レビュー要素が表示されるまで待機
    */
   async function waitForReviews(maxWaitMs = 10000, intervalMs = 500) {
@@ -1044,6 +1186,7 @@
           incrementalOnly = state.incrementalOnly || false;
           lastCollectedDate = state.lastCollectedDate || null;
           currentQueueName = state.queueName || null;
+          sessionPageCount = state.sessionPageCount || 0; // セッションページカウントを復元
           autoResumeExecuted = true; // 重複実行防止フラグ
 
           // DOMが完全に更新されるまで待機（Amazonは動的にレビューをロードするため）
