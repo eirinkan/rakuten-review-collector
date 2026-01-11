@@ -499,8 +499,8 @@
         return false;
       }
 
-      // ランダムウェイト（6-12秒）- Amazonはボット対策が厳しいため長めに設定
-      const waitTime = getRandomWait(6000, 12000);
+      // ランダムウェイト（8-15秒）- Amazonはボット対策が厳しいため長めに設定
+      const waitTime = getRandomWait(8000, 15000);
       log(`${(waitTime / 1000).toFixed(1)}秒待機中...`);
       await sleep(waitTime);
 
@@ -629,6 +629,9 @@
     let title = '';
     let helpfulCount = 0;
     let variation = '';
+    let isVerified = false;  // 認証購入
+    let isVine = false;      // Vineレビュー
+    let hasImage = false;    // 画像あり
     let country = '日本'; // デフォルトは日本
 
     // 評価を取得
@@ -698,6 +701,24 @@
       }
     }
 
+    // 認証購入を確認
+    const verifiedElem = elem.querySelector(AMAZON_SELECTORS.verified);
+    if (verifiedElem) {
+      isVerified = true;
+    }
+
+    // Vineレビューを確認
+    const vineElem = elem.querySelector(AMAZON_SELECTORS.vine);
+    if (vineElem && vineElem.textContent && vineElem.textContent.includes('Vine')) {
+      isVine = true;
+    }
+
+    // 画像があるか確認
+    const imageElem = elem.querySelector(AMAZON_SELECTORS.image);
+    if (imageElem) {
+      hasImage = true;
+    }
+
     // レビューがない場合はスキップ
     if (!body && !title) {
       return null;
@@ -708,9 +729,9 @@
       return null;
     }
 
-    // 楽天・Amazon共通の15項目
+    // Amazon用16項目
     return {
-      collectedAt: new Date().toISOString(),
+      reviewDate: reviewDate,
       productId: asin,
       productName: productName,
       productUrl: productUrl,
@@ -718,13 +739,15 @@
       title: title,
       body: body,
       author: author,
-      reviewDate: reviewDate,
       variation: variation,
       helpfulCount: helpfulCount,
-      shopName: 'Amazon',
+      country: country,
+      isVerified: isVerified,
+      isVine: isVine,
+      hasImage: hasImage,
       pageUrl: window.location.href,
-      source: 'amazon',
-      country: country
+      collectedAt: new Date().toISOString(),
+      source: 'amazon'
     };
   }
 

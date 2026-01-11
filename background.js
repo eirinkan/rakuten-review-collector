@@ -48,6 +48,17 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       activeCollectionTabs.add(tabId);
     }
 
+    // ボット対策: タブをアクティブにし、ウィンドウをフォーカス
+    try {
+      await chrome.tabs.update(tabId, { active: true });
+      const tabInfo = await chrome.tabs.get(tabId);
+      if (tabInfo.windowId) {
+        await chrome.windows.update(tabInfo.windowId, { focused: true });
+      }
+    } catch (e) {
+      console.log('[background] タブ/ウィンドウのアクティブ化エラー:', e);
+    }
+
     // 少し待ってからメッセージを送信（DOM読み込み完了を待つ）
     setTimeout(() => {
       console.log('[background] resumeCollectionメッセージ送信...');
@@ -990,13 +1001,6 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 
   const encodedSheetName = encodeURIComponent(actualSheetName);
   const sheetId = await getSheetId(token, spreadsheetId, actualSheetName);
 
-  // ヘッダー（15項目: 楽天・Amazon共通項目のみ）
-  const headers = [
-    'レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文',
-    '投稿者', 'バリエーション', '参考になった数', 'ショップ名', 'レビュー掲載URL', '収集日時',
-    '販路', '国'
-  ];
-
   // テキストが=で始まる場合はエスケープ（数式として解釈されないように）
   const escapeFormula = (text) => {
     if (!text) return '';
@@ -1007,24 +1011,68 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 
     return str;
   };
 
-  // データを行形式に変換（15項目）
-  const dataValues = reviews.map(review => [
-    escapeFormula(review.reviewDate || ''),
-    escapeFormula(review.productId || ''),
-    escapeFormula(review.productName || ''),
-    review.productUrl || '',  // URLは後でformatUrlColumnsでリンク化
-    review.rating || '',
-    escapeFormula(review.title || ''),
-    escapeFormula(review.body || ''),
-    escapeFormula(review.author || ''),
-    escapeFormula(review.variation || ''),
-    review.helpfulCount || 0,
-    escapeFormula(review.shopName || ''),
-    review.pageUrl || '',  // URLは後でformatUrlColumnsでリンク化
-    escapeFormula(review.collectedAt || ''),
-    review.source === 'amazon' ? 'Amazon' : '楽天',  // 販路
-    escapeFormula(review.country || (review.source === 'amazon' ? '' : '日本'))  // 国
-  ]);
+  // 販路別のヘッダーとデータマッピング
+  let headers;
+  let dataValues;
+
+  if (source === 'amazon') {
+    // Amazon用ヘッダー（16項目）
+    headers = [
+      'レビュー日', 'ASIN', '商品名', '商品URL', '評価', 'タイトル', '本文',
+      '投稿者', 'バリエーション', '参考になった数', '国', '認証購入', 'Vineレビュー',
+      '画像あり', 'レビュー掲載URL', '収集日時'
+    ];
+    dataValues = reviews.map(review => [
+      escapeFormula(review.reviewDate || ''),
+      escapeFormula(review.productId || ''),
+      escapeFormula(review.productName || ''),
+      review.productUrl || '',
+      review.rating || '',
+      escapeFormula(review.title || ''),
+      escapeFormula(review.body || ''),
+      escapeFormula(review.author || ''),
+      escapeFormula(review.variation || ''),
+      review.helpfulCount || 0,
+      escapeFormula(review.country || ''),
+      review.isVerified ? '○' : '',
+      review.isVine ? '○' : '',
+      review.hasImage ? '○' : '',
+      review.pageUrl || '',
+      escapeFormula(review.collectedAt || '')
+    ]);
+  } else {
+    // 楽天用ヘッダー（22項目）
+    headers = [
+      'レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文',
+      '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先',
+      '購入回数', '参考になった数', 'ショップからの返信', 'ショップ名', 'レビュー掲載URL', '収集日時',
+      '販路', '国'
+    ];
+    dataValues = reviews.map(review => [
+      escapeFormula(review.reviewDate || ''),
+      escapeFormula(review.productId || ''),
+      escapeFormula(review.productName || ''),
+      review.productUrl || '',
+      review.rating || '',
+      escapeFormula(review.title || ''),
+      escapeFormula(review.body || ''),
+      escapeFormula(review.author || ''),
+      escapeFormula(review.age || ''),
+      escapeFormula(review.gender || ''),
+      escapeFormula(review.orderDate || ''),
+      escapeFormula(review.variation || ''),
+      escapeFormula(review.usage || ''),
+      escapeFormula(review.recipient || ''),
+      escapeFormula(review.purchaseCount || ''),
+      review.helpfulCount || 0,
+      escapeFormula(review.shopReply || ''),
+      escapeFormula(review.shopName || ''),
+      review.pageUrl || '',
+      escapeFormula(review.collectedAt || ''),
+      '楽天',
+      escapeFormula(review.country || '日本')
+    ]);
+  }
 
   // ヘッダー + データを結合
   const allValues = [headers, ...dataValues];
@@ -1199,24 +1247,9 @@ async function handleDownloadCSV() {
 }
 
 /**
- * レビューデータをCSV形式に変換（15項目: 楽天・Amazon共通項目のみ）
+ * レビューデータをCSV形式に変換（販路別ヘッダー）
  */
 function convertToCSV(reviews) {
-  const headers = [
-    'レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文',
-    '投稿者', 'バリエーション', '参考になった数', 'ショップ名', 'レビュー掲載URL', '収集日時',
-    '販路', '国'
-  ];
-
-  const rows = reviews.map(review => [
-    review.reviewDate || '', review.productId || '', review.productName || '',
-    review.productUrl || '', review.rating || '', review.title || '', review.body || '',
-    review.author || '', review.variation || '', review.helpfulCount || 0,
-    review.shopName || '', review.pageUrl || '', review.collectedAt || '',
-    review.source === 'amazon' ? 'Amazon' : '楽天',  // 販路
-    review.country || (review.source === 'amazon' ? '' : '日本')  // 国
-  ]);
-
   const escapeCSV = (value) => {
     if (value === null || value === undefined) return '';
     const str = String(value);
@@ -1225,6 +1258,45 @@ function convertToCSV(reviews) {
     }
     return str;
   };
+
+  // 販路を判定（最初のレビューのsourceから判断）
+  const source = reviews[0]?.source || 'rakuten';
+
+  let headers;
+  let rows;
+
+  if (source === 'amazon') {
+    // Amazon用（16項目）
+    headers = [
+      'レビュー日', 'ASIN', '商品名', '商品URL', '評価', 'タイトル', '本文',
+      '投稿者', 'バリエーション', '参考になった数', '国', '認証購入', 'Vineレビュー',
+      '画像あり', 'レビュー掲載URL', '収集日時'
+    ];
+    rows = reviews.map(review => [
+      review.reviewDate || '', review.productId || '', review.productName || '',
+      review.productUrl || '', review.rating || '', review.title || '', review.body || '',
+      review.author || '', review.variation || '', review.helpfulCount || 0,
+      review.country || '', review.isVerified ? '○' : '', review.isVine ? '○' : '',
+      review.hasImage ? '○' : '', review.pageUrl || '', review.collectedAt || ''
+    ]);
+  } else {
+    // 楽天用（22項目）
+    headers = [
+      'レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文',
+      '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先',
+      '購入回数', '参考になった数', 'ショップからの返信', 'ショップ名', 'レビュー掲載URL', '収集日時',
+      '販路', '国'
+    ];
+    rows = reviews.map(review => [
+      review.reviewDate || '', review.productId || '', review.productName || '',
+      review.productUrl || '', review.rating || '', review.title || '', review.body || '',
+      review.author || '', review.age || '', review.gender || '', review.orderDate || '',
+      review.variation || '', review.usage || '', review.recipient || '',
+      review.purchaseCount || '', review.helpfulCount || 0, review.shopReply || '',
+      review.shopName || '', review.pageUrl || '', review.collectedAt || '',
+      '楽天', review.country || '日本'
+    ]);
+  }
 
   return [
     headers.map(escapeCSV).join(','),
@@ -1450,18 +1522,19 @@ async function startQueueCollection() {
   // 収集中フラグを立てる
   await chrome.storage.local.set({ isQueueCollecting: true, collectingItems: [] });
 
-  // 収集用ウィンドウを新規作成（大きいサイズ、最小化しない）
+  // 収集用ウィンドウを新規作成（大きいサイズ、フォーカスあり）
+  // Amazonボット対策: アクティブウィンドウで操作することで検出を回避
   try {
     const window = await chrome.windows.create({
       url: 'about:blank',
       width: 1280,
       height: 800,
-      focused: false
+      focused: true  // ボット対策: フォーカスを当てる
     });
     collectionWindowId = window.id;
 
     // 最小化しない（最小化するとページ読み込みが正常に動作しない場合がある）
-    // await chrome.windows.update(collectionWindowId, { state: 'minimized' });
+    // ボット対策: ウィンドウをアクティブな状態に保つ
 
     // about:blankタブは後で閉じる
     if (window.tabs && window.tabs[0]) {
@@ -1589,6 +1662,16 @@ async function processNextInQueue() {
 
   // アクティブタブとして追跡
   activeCollectionTabs.add(tab.id);
+
+  // ボット対策: タブをアクティブにし、ウィンドウをフォーカス
+  try {
+    await chrome.tabs.update(tab.id, { active: true });
+    if (collectionWindowId) {
+      await chrome.windows.update(collectionWindowId, { focused: true });
+    }
+  } catch (e) {
+    console.log('[processNextInQueue] タブ/ウィンドウのアクティブ化エラー:', e);
+  }
 
   // キュー固有のスプレッドシートURLがあれば保存
   if (nextItem.spreadsheetUrl) {
