@@ -629,9 +629,6 @@
     let title = '';
     let helpfulCount = 0;
     let variation = '';
-    let isVerified = false;
-    let isVine = false;
-    let hasImage = false;
     let country = '日本'; // デフォルトは日本
 
     // 評価を取得
@@ -701,24 +698,6 @@
       }
     }
 
-    // 検証済み購入を確認
-    const verifiedElem = elem.querySelector(AMAZON_SELECTORS.verified);
-    if (verifiedElem) {
-      isVerified = true;
-    }
-
-    // Vineレビューを確認
-    const vineElem = elem.querySelector(AMAZON_SELECTORS.vine);
-    if (vineElem && vineElem.textContent.includes('Vine')) {
-      isVine = true;
-    }
-
-    // 画像があるか確認
-    const imageElem = elem.querySelector(AMAZON_SELECTORS.image);
-    if (imageElem) {
-      hasImage = true;
-    }
-
     // レビューがない場合はスキップ
     if (!body && !title) {
       return null;
@@ -729,7 +708,7 @@
       return null;
     }
 
-    // 楽天と同じ20項目構造を維持（+source, +country で22項目）
+    // 楽天・Amazon共通の15項目
     return {
       collectedAt: new Date().toISOString(),
       productId: asin,
@@ -739,24 +718,13 @@
       title: title,
       body: body,
       author: author,
-      age: '', // Amazonにはない
-      gender: '', // Amazonにはない
       reviewDate: reviewDate,
-      orderDate: '', // Amazonにはない
       variation: variation,
-      usage: '', // Amazonにはない
-      recipient: '', // Amazonにはない
-      purchaseCount: '', // Amazonにはない
       helpfulCount: helpfulCount,
-      shopReply: '', // Amazonにはない
       shopName: 'Amazon',
       pageUrl: window.location.href,
-      // Amazon固有の追加項目
       source: 'amazon',
-      country: country,
-      isVerified: isVerified,
-      isVine: isVine,
-      hasImage: hasImage
+      country: country
     };
   }
 

@@ -990,11 +990,10 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 
   const encodedSheetName = encodeURIComponent(actualSheetName);
   const sheetId = await getSheetId(token, spreadsheetId, actualSheetName);
 
-  // ヘッダー（22項目: 販路と国を追加）
+  // ヘッダー（15項目: 楽天・Amazon共通項目のみ）
   const headers = [
     'レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文',
-    '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先',
-    '購入回数', '参考になった数', 'ショップからの返信', 'ショップ名', 'レビュー掲載URL', '収集日時',
+    '投稿者', 'バリエーション', '参考になった数', 'ショップ名', 'レビュー掲載URL', '収集日時',
     '販路', '国'
   ];
 
@@ -1008,7 +1007,7 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 
     return str;
   };
 
-  // データを行形式に変換（22項目）
+  // データを行形式に変換（15項目）
   const dataValues = reviews.map(review => [
     escapeFormula(review.reviewDate || ''),
     escapeFormula(review.productId || ''),
@@ -1018,15 +1017,8 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 
     escapeFormula(review.title || ''),
     escapeFormula(review.body || ''),
     escapeFormula(review.author || ''),
-    escapeFormula(review.age || ''),
-    escapeFormula(review.gender || ''),
-    escapeFormula(review.orderDate || ''),
     escapeFormula(review.variation || ''),
-    escapeFormula(review.usage || ''),
-    escapeFormula(review.recipient || ''),
-    escapeFormula(review.purchaseCount || ''),
     review.helpfulCount || 0,
-    escapeFormula(review.shopReply || ''),
     escapeFormula(review.shopName || ''),
     review.pageUrl || '',  // URLは後でformatUrlColumnsでリンク化
     escapeFormula(review.collectedAt || ''),
@@ -1207,22 +1199,19 @@ async function handleDownloadCSV() {
 }
 
 /**
- * レビューデータをCSV形式に変換（22項目: 販路と国を追加）
+ * レビューデータをCSV形式に変換（15項目: 楽天・Amazon共通項目のみ）
  */
 function convertToCSV(reviews) {
   const headers = [
     'レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文',
-    '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先',
-    '購入回数', '参考になった数', 'ショップからの返信', 'ショップ名', 'レビュー掲載URL', '収集日時',
+    '投稿者', 'バリエーション', '参考になった数', 'ショップ名', 'レビュー掲載URL', '収集日時',
     '販路', '国'
   ];
 
   const rows = reviews.map(review => [
     review.reviewDate || '', review.productId || '', review.productName || '',
     review.productUrl || '', review.rating || '', review.title || '', review.body || '',
-    review.author || '', review.age || '', review.gender || '', review.orderDate || '',
-    review.variation || '', review.usage || '', review.recipient || '',
-    review.purchaseCount || '', review.helpfulCount || 0, review.shopReply || '',
+    review.author || '', review.variation || '', review.helpfulCount || 0,
     review.shopName || '', review.pageUrl || '', review.collectedAt || '',
     review.source === 'amazon' ? 'Amazon' : '楽天',  // 販路
     review.country || (review.source === 'amazon' ? '' : '日本')  // 国

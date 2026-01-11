@@ -513,19 +513,12 @@
 
     let rating = 0;
     let reviewDate = '';
-    let orderDate = ''; // 注文日
     let author = '匿名';
     let body = '';
     let title = '';
     let helpfulCount = 0;
     let variation = ''; // バリエーション（サイズ、カラーなど）
-    let age = ''; // 年代
-    let gender = ''; // 性別
-    let usage = ''; // 用途（実用品・普段使い、プレゼント等）
-    let recipient = ''; // 贈り先（自分用、家族へ等）
-    let purchaseCount = ''; // 購入回数（はじめて、リピート等）
     let shopName = ''; // ショップ名
-    let shopReply = ''; // ショップからの返信
 
     // 新構造の場合: CSS module クラス名で要素を探す（楽天の現在の構造）
     const ratingElem = elem.querySelector('[class*="number-wrapper"]');
@@ -566,19 +559,9 @@
         body = bodyElem.textContent.trim();
       }
 
-      // 注文日を取得（テキストから抽出）
-      const orderDateMatch = text.match(/注文日[：:]\s*(\d{4}\/\d{1,2}\/\d{1,2})/);
-      if (orderDateMatch) {
-        orderDate = orderDateMatch[1];
-      }
-
       // レビュー投稿日を取得
       const reviewDateMatch = text.match(/(\d{4}\/\d{1,2}\/\d{1,2})/);
-      if (reviewDateMatch && !orderDate) {
-        // 注文日ではない日付をレビュー日として取得
-        reviewDate = reviewDateMatch[1];
-      } else if (reviewDateMatch && orderDate !== reviewDateMatch[1]) {
-        // 注文日とは別の日付がある場合
+      if (reviewDateMatch) {
         reviewDate = reviewDateMatch[1];
       }
 
@@ -629,56 +612,6 @@
         }
       }
 
-      // 年代を取得（10代、20代、30代、40代、50代、60代、70代以上など）
-      const ageMatch = text.match(/(10代|20代|30代|40代|50代|60代|70代以上|70代)/);
-      if (ageMatch) {
-        age = ageMatch[1];
-      }
-
-      // 性別を取得
-      const genderMatch = text.match(/(男性|女性)/);
-      if (genderMatch) {
-        gender = genderMatch[1];
-      }
-
-      // 用途を取得
-      const usagePatterns = [
-        '実用品・普段使い', '趣味', '仕事', 'プレゼント', 'イベント',
-        'ビジネス', 'スポーツ', 'アウトドア', '旅行', '通勤',
-        '普段使い', '日常使い', '実用', 'ギフト'
-      ];
-      for (const pattern of usagePatterns) {
-        if (text.includes(pattern)) {
-          usage = pattern;
-          break;
-        }
-      }
-
-      // 贈り先を取得
-      const recipientPatterns = [
-        '自分用', '家族へ', '親戚へ', '友人へ', '知人へ',
-        '仕事関係へ', '子供へ', '男性へ', '女性へ', '恋人へ',
-        '配偶者へ', '子どもへ', '親へ', '祖父母へ'
-      ];
-      for (const pattern of recipientPatterns) {
-        if (text.includes(pattern)) {
-          recipient = pattern;
-          break;
-        }
-      }
-
-      // 購入回数を取得
-      if (text.includes('はじめて')) {
-        purchaseCount = 'はじめて';
-      } else if (text.includes('リピート')) {
-        purchaseCount = 'リピート';
-      } else {
-        const countMatch = text.match(/(\d+)回目/);
-        if (countMatch) {
-          purchaseCount = countMatch[0];
-        }
-      }
-
       // 参考になった数を取得（新構造）
       // 「参考になった X人」「参考になった（X人）」などのパターン
       const helpfulPatterns = [
@@ -692,19 +625,6 @@
         if (helpfulMatch) {
           helpfulCount = parseInt(helpfulMatch[1], 10);
           break;
-        }
-      }
-
-      // ショップからの返信を取得（新構造）
-      // 「ショップからのコメント」の後に続くテキストを抽出
-      const shopReplyMatch = text.match(/ショップからのコメント[：:\s]*(.+?)(?=(?:参考になった|不適切レビュー|$))/s);
-      if (shopReplyMatch) {
-        shopReply = shopReplyMatch[1].trim();
-        // 改行や余分な空白を整理
-        shopReply = shopReply.replace(/\s+/g, ' ').trim();
-        // 長すぎる場合は切り詰め
-        if (shopReply.length > 500) {
-          shopReply = shopReply.substring(0, 500) + '...';
         }
       }
     } else {
@@ -787,16 +707,6 @@
           helpfulCount = parseInt(helpfulMatch[1], 10);
         }
       }
-
-      // ショップ返信（旧構造）
-      const oldShopReplyElem = elem.querySelector('.revRvwShopComment, .shop-reply, [class*="shop-comment"]');
-      if (oldShopReplyElem) {
-        shopReply = oldShopReplyElem.textContent.trim();
-        shopReply = shopReply.replace(/^ショップからのコメント[：:\s]*/i, '');
-        if (shopReply.length > 500) {
-          shopReply = shopReply.substring(0, 500) + '...';
-        }
-      }
     }
 
     // レビューがない場合はスキップ
@@ -818,18 +728,12 @@
       title: title,
       body: body,
       author: author,
-      age: age,
-      gender: gender,
       reviewDate: reviewDate,
-      orderDate: orderDate,
       variation: variation,
-      usage: usage,
-      recipient: recipient,
-      purchaseCount: purchaseCount,
       helpfulCount: helpfulCount,
-      shopReply: shopReply,
       shopName: shopName,
-      pageUrl: window.location.href
+      pageUrl: window.location.href,
+      country: '日本'  // 楽天は日本のみ
     };
   }
 
