@@ -1743,25 +1743,33 @@ async function stopQueueCollection() {
  * キューの次の商品を処理
  */
 async function processNextInQueue() {
-  // 同時収集数は固定値3
-  const maxConcurrent = 3;
-
-  // 現在のアクティブタブ数をチェック
-  if (activeCollectionTabs.size >= maxConcurrent) {
-    log(`同時収集数上限（${maxConcurrent}）に達しています`, 'info');
-    return;
-  }
-
   const result = await chrome.storage.local.get(['queue', 'collectingItems']);
   const queue = result.queue || [];
   const collectingItems = result.collectingItems || [];
 
   if (queue.length === 0) {
-    // キューが空の場合は何もしない（完了ログはhandleCollectionCompleteで出す）
     return;
   }
 
-  const nextItem = queue.shift();
+  // 次の商品がAmazonかどうかで同時収集数を決定
+  const nextItem = queue[0]; // まだshiftしない
+  const isAmazonNext = nextItem?.url?.includes('amazon.co.jp');
+
+  // 同時収集数: Amazonは1件、楽天は3件
+  const maxConcurrent = isAmazonNext ? 1 : 3;
+
+  // 現在のアクティブタブ数をチェック
+  if (activeCollectionTabs.size >= maxConcurrent) {
+    if (isAmazonNext) {
+      // Amazonは1件ずつなのでログは出さない（頻繁に表示されるため）
+    } else {
+      log(`同時収集数上限（${maxConcurrent}）に達しています`, 'info');
+    }
+    return;
+  }
+
+  // キューから取り出し（上で queue[0] で確認済み）
+  queue.shift(); // nextItemは上で取得済み
 
   // デバッグログ
   console.log('[processNextInQueue] nextItem:', JSON.stringify(nextItem, null, 2));

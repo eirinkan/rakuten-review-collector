@@ -8,12 +8,11 @@
 
   // ===== ボット対策: 定数 =====
   const MAX_PAGES_PER_SESSION = 25;      // 1セッションあたりの最大ページ数
-  const MICRO_BREAK_INTERVAL = 10;       // マイクロブレイクの間隔（ページ数）
-  const MICRO_BREAK_MIN_MS = 5000;       // マイクロブレイク最小時間（5秒）
-  const MICRO_BREAK_MAX_MS = 15000;      // マイクロブレイク最大時間（15秒）
-  const PAGE_WAIT_MIN_MS = 3000;         // ページ遷移前の最小待機時間（3秒）
-  const PAGE_WAIT_MAX_MS = 12000;        // ページ遷移前の最大待機時間（12秒）
+  const MICRO_BREAK_PROBABILITY = 0.05;  // 各ページで休憩する確率（5%）
+  const PAGE_WAIT_MEAN_MS = 1500;        // ページ遷移前の平均待機時間（1.5秒、指数分布）
+  const PAGE_WAIT_MAX_MS = 8000;         // ページ遷移前の最大待機時間（8秒）
   const ACTIVE_TAB_CHECK_INTERVAL = 2000; // アクティブタブチェック間隔（2秒）
+  const READING_SPEED_PER_100CHARS = 400; // 100文字あたりの読み時間（ms）
 
   // ===== ボット対策: マウス・スクロール関連関数 =====
 
@@ -618,6 +617,14 @@
       collectedReviewKeys = new Set(storedState.collectedReviewKeys);
     }
 
+    // ===== ボット対策: ページ読み込み後の「見渡し」動作 =====
+    await initialPageScan();
+    if (shouldStop) {
+      isCollecting = false;
+      startCollectionLock = false;
+      return;
+    }
+
     // レビュー総数を取得
     const expectedTotal = getTotalReviewCount();
     if (expectedTotal > 0) {
@@ -676,6 +683,10 @@
    * 現在のページからレビューを収集
    */
   async function collectCurrentPage() {
+    // ===== ボット対策: 各レビューを「読む」動作をシミュレート =====
+    await simulateReadingReviews();
+    if (shouldStop) return false;
+
     let reviews = extractReviews();
     const currentPage = getCurrentPageNumber();
 
@@ -772,16 +783,12 @@
         return false;
       }
 
-      // ===== ボット対策: マイクロブレイク（10ページごと） =====
-      if (sessionPageCount > 0 && sessionPageCount % MICRO_BREAK_INTERVAL === 0) {
-        const breakTime = MICRO_BREAK_MIN_MS + Math.random() * (MICRO_BREAK_MAX_MS - MICRO_BREAK_MIN_MS);
-        log(`${sessionPageCount}ページ到達。${Math.round(breakTime / 1000)}秒休憩します...`);
-        await sleep(breakTime);
+      // ===== ボット対策: ランダムなマイクロブレイク（確率ベース） =====
+      await maybeHaveBreak();
 
-        // 休憩後もアクティブタブチェック
-        if (!await waitForActiveTab()) {
-          return false;
-        }
+      // 休憩後もアクティブタブチェック
+      if (!await waitForActiveTab()) {
+        return false;
       }
 
       // ===== ボット対策: レート制限チェック =====
@@ -807,13 +814,12 @@
         return false;
       }
 
-      // ===== ボット対策: ページ遷移前の長い待機（30-60秒） =====
-      const baseWait = PAGE_WAIT_MIN_MS + Math.random() * (PAGE_WAIT_MAX_MS - PAGE_WAIT_MIN_MS);
-      // ±25%のランダム化を追加
-      const variance = baseWait * 0.25 * (Math.random() * 2 - 1);
-      const waitTime = Math.max(15000, baseWait + variance); // 最低15秒
-      log(`次のページに移動する前に${Math.round(waitTime / 1000)}秒待機中...`);
-      await sleep(waitTime);
+      // ===== ボット対策: ページ遷移前の待機（指数分布、読み終わったらすぐ次へ） =====
+      // 人間は読み終わったらすぐ次のページへ移動する
+      const waitTime = Math.min(exponentialRandom(PAGE_WAIT_MEAN_MS), PAGE_WAIT_MAX_MS);
+      const finalWait = Math.max(500, waitTime); // 最低0.5秒
+      log(`次のページへ移動（${Math.round(finalWait / 1000)}秒後）...`);
+      await sleep(finalWait);
 
       // 待機後もアクティブタブチェック
       if (!await waitForActiveTab()) {
@@ -1304,6 +1310,131 @@
    */
   function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // ===== ボット対策: 人間らしい行動パターン =====
+
+  /**
+   * 指数分布でランダムな値を生成（人間の行動パターンに近い）
+   * 短い時間が多く、たまに長い時間が発生する分布
+   */
+  function exponentialRandom(mean) {
+    return -mean * Math.log(1 - Math.random());
+  }
+
+  /**
+   * ページ読み込み後の「見渡し」動作
+   * 人間はページを開いたらまず全体を見渡す
+   */
+  async function initialPageScan() {
+    // ページを開いた直後、まず画面を見渡す動作（1-3秒）
+    const scanTime = 1000 + Math.random() * 2000;
+    await sleep(scanTime);
+
+    // 軽くスクロールして全体を確認（人間は最初に全体像を把握する）
+    const quickScroll = 100 + Math.random() * 200;
+    window.scrollTo({ top: quickScroll, behavior: 'smooth' });
+    await sleep(500 + Math.random() * 500);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    await sleep(300);
+  }
+
+  /**
+   * レビュー要素にホバー動作を行う
+   */
+  async function hoverOnReview(review) {
+    const rect = review.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    // レビュー内のランダムな位置にマウスを移動
+    const targetX = rect.left + rect.width * (0.1 + Math.random() * 0.7);
+    const targetY = rect.top + rect.height * (0.2 + Math.random() * 0.5);
+
+    // 現在位置からベジェ曲線で移動
+    const startX = rect.left + Math.random() * 100;
+    const startY = rect.top - 50 + Math.random() * 100;
+    await moveMouseAlongBezier(startX, startY, targetX, targetY);
+
+    // ホバー状態を維持（人間は興味ある部分をしばらく見る）
+    await sleep(300 + Math.random() * 700);
+
+    // 画像があれば見る（30%の確率）
+    const image = review.querySelector('[data-hook="review-image-tile"]');
+    if (image && Math.random() < 0.3) {
+      const imgRect = image.getBoundingClientRect();
+      if (imgRect.width > 0 && imgRect.height > 0) {
+        await moveMouseAlongBezier(targetX, targetY, imgRect.left + 20, imgRect.top + 20);
+        await sleep(500 + Math.random() * 1000); // 画像を見る時間
+      }
+    }
+  }
+
+  /**
+   * 各レビューを「読む」動作をシミュレート
+   */
+  async function simulateReadingReviews() {
+    const reviews = document.querySelectorAll(AMAZON_SELECTORS.reviewContainer);
+
+    for (const review of reviews) {
+      if (shouldStop) return;
+
+      // レビューまでスクロール（画面中央に表示）
+      review.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      await sleep(300 + Math.random() * 200); // スクロール完了待ち
+
+      // レビューの長さに応じた読み時間を計算
+      const bodyElem = review.querySelector('[data-hook="review-body"]');
+      const bodyText = bodyElem?.textContent || '';
+      const charCount = bodyText.length;
+
+      // 100文字あたり0.3-0.5秒（人間の読書速度をシミュレート）
+      const baseReadTime = (charCount / 100) * (READING_SPEED_PER_100CHARS + Math.random() * 200);
+      const readTime = Math.min(Math.max(baseReadTime, 300), 3000); // 0.3-3秒の範囲
+
+      // 時々レビューにホバー（20%の確率）
+      if (Math.random() < 0.2) {
+        await hoverOnReview(review);
+      }
+
+      // 読む時間
+      await sleep(readTime);
+
+      // 時々スキップ（つまらないレビューは読み飛ばす: 15%）
+      if (Math.random() < 0.15) {
+        // スキップ時は早めに次へ
+        continue;
+      }
+    }
+  }
+
+  /**
+   * ランダムなマイクロブレイク（人間らしい休憩）
+   * 固定間隔ではなく、確率ベースで発生
+   */
+  async function maybeHaveBreak() {
+    // 各ページで MICRO_BREAK_PROBABILITY の確率で休憩
+    if (Math.random() < MICRO_BREAK_PROBABILITY) {
+      const breakType = Math.random();
+
+      if (breakType < 0.6) {
+        // 短い休憩（60%）: 3-10秒
+        const breakTime = 3000 + Math.random() * 7000;
+        log(`少し休憩中...（${Math.round(breakTime / 1000)}秒）`);
+        await sleep(breakTime);
+      } else if (breakType < 0.9) {
+        // 中程度の休憩（30%）: 15-45秒
+        const breakTime = 15000 + Math.random() * 30000;
+        log(`しばらく休憩中...（${Math.round(breakTime / 1000)}秒）`);
+        await sleep(breakTime);
+      } else {
+        // 長い休憩（10%）: 1-3分
+        const breakTime = 60000 + Math.random() * 120000;
+        log(`長めの休憩中...（${Math.round(breakTime / 1000)}秒）`);
+        await sleep(breakTime);
+      }
+      return true;
+    }
+    return false;
   }
 
   /**
