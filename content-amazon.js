@@ -499,12 +499,9 @@
         return false;
       }
 
-      // ランダムウェイト（8-15秒）- Amazonはボット対策が厳しいため長めに設定
-      const waitTime = getRandomWait(8000, 15000);
-      log(`${(waitTime / 1000).toFixed(1)}秒待機中...`);
-      await sleep(waitTime);
-
-      if (shouldStop) {
+      // 人間らしくスクロールして「次へ」ボタンまで移動
+      const scrolled = await scrollToNextButton();
+      if (!scrolled || shouldStop) {
         return false;
       }
 
@@ -572,6 +569,72 @@
     } else {
       console.log('[Amazonレビュー収集] 次へリンクが見つかりません');
     }
+  }
+
+  /**
+   * 要素がビューポート内にあるか確認
+   */
+  function isElementInViewport(el) {
+    const rect = el.getBoundingClientRect();
+    return (
+      rect.top >= 0 &&
+      rect.bottom <= window.innerHeight
+    );
+  }
+
+  /**
+   * 人間らしくスクロールして「次へ」ボタンまで移動
+   * - ランダムな速度でスクロール
+   * - 途中で2-4回停止（レビューを読んでいるように見せる）
+   * - 「次へ」ボタンが見えたら停止
+   */
+  async function scrollToNextButton() {
+    const nextButton = document.querySelector(AMAZON_SELECTORS.nextPage);
+    if (!nextButton) return false;
+
+    // 途中停止回数（2-4回）
+    const pauseCount = 2 + Math.floor(Math.random() * 3);
+
+    // ページの高さとスクロール位置
+    const pageHeight = document.body.scrollHeight;
+    const viewportHeight = window.innerHeight;
+    let currentScroll = window.scrollY;
+
+    // 停止ポイントを計算
+    const pausePoints = [];
+    for (let i = 1; i <= pauseCount; i++) {
+      pausePoints.push((pageHeight - viewportHeight) * (i / (pauseCount + 1)));
+    }
+
+    let pauseIndex = 0;
+
+    while (!isElementInViewport(nextButton)) {
+      if (shouldStop) return false;
+
+      // スクロール量（50-150px）
+      const scrollAmount = 50 + Math.floor(Math.random() * 100);
+      currentScroll += scrollAmount;
+
+      window.scrollTo({
+        top: currentScroll,
+        behavior: 'smooth'
+      });
+
+      // スクロール間隔（100-300ms）
+      await sleep(100 + Math.random() * 200);
+
+      // 停止ポイントに到達したら一時停止
+      if (pauseIndex < pausePoints.length && currentScroll >= pausePoints[pauseIndex]) {
+        const pauseTime = 1000 + Math.random() * 2000; // 1-3秒
+        log('ページを確認中...');
+        await sleep(pauseTime);
+        pauseIndex++;
+      }
+    }
+
+    // ボタンが見えたら少し待機してからクリック
+    await sleep(500 + Math.random() * 500);
+    return true;
   }
 
   /**
