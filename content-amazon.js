@@ -1073,25 +1073,16 @@
   }
 
   /**
-   * 「次へ」リンクをクリックしてページ遷移（人間らしく）
-   * 重要: URL直接操作はAmazonのボット対策に引っかかるため、常にリンクをクリックする
-   * AmazonのJavaScriptがセッション状態を管理しており、リンククリックでのみ正しいページに遷移可能
+   * 次のページに遷移
+   * 注: Amazonの「次へ」ボタンのhref属性は常にpageNumber=2を指しているため、
+   * element.click()では正しく遷移できない。URL直接操作を使用する。
    */
   async function clickNextPage() {
     const currentPage = getCurrentPageNumber();
     const nextPage = currentPage + 1;
 
-    // 人間として振る舞う：「次へ」ボタンを見つけてクリックするだけ
-    const nextButton = document.querySelector('li.a-last a');
+    console.log(`[Amazonレビュー収集] 次のページに遷移: ページ${currentPage} → ページ${nextPage}`);
 
-    if (nextButton) {
-      console.log(`[Amazonレビュー収集] 次へボタンをクリック: ページ${currentPage} → ページ${nextPage}`);
-      nextButton.click();  // シンプルにクリック
-      return;
-    }
-
-    // ボタンが見つからない場合のみURL操作
-    console.log('[Amazonレビュー収集] 次へボタンが見つかりません - URL直接操作');
     const url = new URL(window.location.href);
     url.searchParams.set('pageNumber', nextPage.toString());
     window.location.href = url.toString();
