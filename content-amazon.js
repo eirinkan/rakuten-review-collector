@@ -1081,53 +1081,19 @@
     const currentPage = getCurrentPageNumber();
     const nextPage = currentPage + 1;
 
-    // 「次へ」リンクを探す（複数のセレクタでフォールバック）
-    const nextSelectors = [
-      'li.a-last a',
-      '.a-pagination li.a-last a',
-      'a[href*="pageNumber"]:contains("次")',
-    ];
+    // 人間として振る舞う：「次へ」ボタンを見つけてクリックするだけ
+    const nextButton = document.querySelector('li.a-last a');
 
-    let nextLink = null;
-    for (const selector of nextSelectors) {
-      try {
-        nextLink = document.querySelector(selector);
-        if (nextLink) break;
-      } catch (e) {
-        // セレクタエラーは無視
-      }
-    }
-
-    // 「次へ」テキストを含むリンクも試す
-    if (!nextLink) {
-      const allPaginationLinks = document.querySelectorAll('.a-pagination a');
-      for (const link of allPaginationLinks) {
-        if (link.textContent.includes('次')) {
-          nextLink = link;
-          break;
-        }
-      }
-    }
-
-    if (nextLink) {
-      // 重要: リンクのhrefに含まれるページ番号は無視してクリックする
-      // Amazonのリンクは表示上は「ページ2」を指しているが、
-      // クリックするとJavaScriptで正しいページに遷移する
-      console.log(`[Amazonレビュー収集] 次へリンクをクリック: ページ${currentPage} → ページ${nextPage}（リンククリック方式）`);
-      await humanClick(nextLink);
+    if (nextButton) {
+      console.log(`[Amazonレビュー収集] 次へボタンをクリック: ページ${currentPage} → ページ${nextPage}`);
+      nextButton.click();  // シンプルにクリック
       return;
     }
 
-    // リンクが見つからない場合のみURL直接操作（最終手段）
-    console.log('[Amazonレビュー収集] 次へリンクが見つかりません - URL直接操作でページ遷移（ボット対策に注意）');
+    // ボタンが見つからない場合のみURL操作
+    console.log('[Amazonレビュー収集] 次へボタンが見つかりません - URL直接操作');
     const url = new URL(window.location.href);
     url.searchParams.set('pageNumber', nextPage.toString());
-
-    console.log(`[Amazonレビュー収集] URL直接遷移: ページ${currentPage} → ページ${nextPage}`);
-
-    // 人間らしい待機
-    await sleep(200 + Math.random() * 300);
-
     window.location.href = url.toString();
   }
 
