@@ -700,11 +700,23 @@
       }
     } else {
       chrome.storage.local.set({ expectedReviewTotal: 0 });
-      totalPages = 0;
-      if (incrementalOnly && lastCollectedDate) {
-        log(`差分収集を開始します（前回: ${lastCollectedDate}）`);
+      // 重要: ストレージから復元したtotalPagesを上書きしない
+      // （ページ2以降でgetTotalReviewCount()が0を返す場合に対応）
+      if (totalPages === 0) {
+        // 新規収集でtotalPagesが不明な場合のみログを出力
+        if (incrementalOnly && lastCollectedDate) {
+          log(`差分収集を開始します（前回: ${lastCollectedDate}）`);
+        } else {
+          log('レビュー収集を開始します');
+        }
       } else {
-        log('レビュー収集を開始します');
+        // ストレージから復元したtotalPagesを維持
+        console.log(`[Amazonレビュー収集] getTotalReviewCount()は0を返しましたが、ストレージから復元したtotalPages(${totalPages})を維持します`);
+        if (incrementalOnly && lastCollectedDate) {
+          log(`差分収集を継続します（前回: ${lastCollectedDate}、全${totalPages * 10}件程度）`);
+        } else {
+          log(`レビュー収集を継続します（全${totalPages * 10}件程度）`);
+        }
       }
     }
 
@@ -933,6 +945,8 @@
           state.collectedReviewKeys = Array.from(collectedReviewKeys);
           state.lastProcessedUrl = window.location.href;
           state.lastProcessedPage = getCurrentPageNumber();
+          // 総ページ数を保存（重要：ページ遷移後も維持するため）
+          state.totalPages = totalPages;
           // セッションページカウントも保存
           state.sessionPageCount = sessionPageCount;
           // 連続スキップカウントも保存
