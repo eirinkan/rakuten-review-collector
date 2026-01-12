@@ -576,40 +576,28 @@ async function handleSaveReviews(reviews, tabId = null, source = 'rakuten') {
     prefix = `[${currentItem.queueName}・${productId}] `;
   }
 
-  if (isScheduled) {
-    // 定期収集: スプレッドシートのみに保存（CSVには保存しない）
-    if (spreadsheetUrl) {
-      try {
-        await sendToSheets(spreadsheetUrl, reviews, syncSettings.separateSheets !== false, true, detectedSource);
+  // 定期収集・通常収集共通: まずローカルストレージに蓄積
+  const newReviews = await saveToLocalStorage(reviews, detectedSource);
+
+  if (newReviews.length === 0) {
+    return;
+  }
+
+  if (spreadsheetUrl) {
+    try {
+      // ローカルストレージから全レビューを取得（蓄積されたもの）
+      const stateResult = await chrome.storage.local.get(['collectionState']);
+      const allReviews = stateResult.collectionState?.reviews || [];
+
+      if (allReviews.length > 0) {
+        await sendToSheets(spreadsheetUrl, allReviews, syncSettings.separateSheets !== false, isScheduled, detectedSource);
         log(prefix + 'スプレッドシートに保存しました');
-      } catch (error) {
-        log(`スプレッドシートへの保存に失敗: ${error.message}`, 'error');
       }
-    } else {
-      log(prefix + '定期収集用のスプレッドシートが設定されていません', 'error');
+    } catch (error) {
+      log(`スプレッドシートへの保存に失敗: ${error.message}`, 'error');
     }
-  } else {
-    // 通常収集: ローカルストレージ（CSV用）とスプレッドシートに保存
-    const newReviews = await saveToLocalStorage(reviews, detectedSource);
-
-    if (newReviews.length === 0) {
-      return;
-    }
-
-    if (spreadsheetUrl) {
-      try {
-        // ローカルストレージから全レビューを取得
-        const stateResult = await chrome.storage.local.get(['collectionState']);
-        const allReviews = stateResult.collectionState?.reviews || [];
-
-        if (allReviews.length > 0) {
-          await sendToSheets(spreadsheetUrl, allReviews, syncSettings.separateSheets !== false, false, detectedSource);
-          log(prefix + 'スプレッドシートに保存しました');
-        }
-      } catch (error) {
-        log(`スプレッドシートへの保存に失敗: ${error.message}`, 'error');
-      }
-    }
+  } else if (isScheduled) {
+    log(prefix + '定期収集用のスプレッドシートが設定されていません', 'error');
   }
 }
 
