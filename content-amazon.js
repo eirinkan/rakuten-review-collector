@@ -609,12 +609,17 @@
       console.log('[Amazonレビュー収集] [data-hook]要素数:', document.querySelectorAll('[data-hook]').length);
     }
 
-    // 収集済みレビューキーをストレージから復元
+    // 収集済みレビューキーとtotalPagesをストレージから復元
     const storedState = await new Promise(resolve => {
       chrome.storage.local.get(['collectionState'], result => resolve(result.collectionState || {}));
     });
     if (storedState.collectedReviewKeys && Array.isArray(storedState.collectedReviewKeys)) {
       collectedReviewKeys = new Set(storedState.collectedReviewKeys);
+    }
+    // totalPagesをストレージから復元（ページ遷移後も維持するため）
+    if (storedState.totalPages && storedState.totalPages > 0) {
+      totalPages = storedState.totalPages;
+      console.log(`[Amazonレビュー収集] totalPagesをストレージから復元: ${totalPages}`);
     }
 
     // ===== ボット対策: ページ読み込み後の「見渡し」動作 =====
@@ -868,6 +873,71 @@
   }
 
   /**
+   * 「次へ」リンクを探す（複数の方法でフォールバック）
+   * @returns {HTMLElement|null} 見つかった「次へ」リンク、または null
+   */
+  function findNextPageLink() {
+    const currentPage = getCurrentPageNumber();
+    const nextPage = currentPage + 1;
+
+    // 方法1: 標準のセレクタ
+    const standardSelectors = [
+      'li.a-last a',
+      '.a-pagination li.a-last a',
+    ];
+
+    for (const selector of standardSelectors) {
+      try {
+        const link = document.querySelector(selector);
+        if (link && link.href && link.href.includes('pageNumber')) {
+          console.log(`[Amazonレビュー収集] findNextPageLink: セレクタ "${selector}" で発見`);
+          return link;
+        }
+      } catch (e) {
+        // セレクタエラーは無視
+      }
+    }
+
+    // 方法2: 「次へ」テキストを含むリンクを探す（最も確実）
+    const allLinks = document.querySelectorAll('a[href*="pageNumber"]');
+    for (const link of allLinks) {
+      const text = link.textContent || '';
+      if (text.includes('次へ') || text.includes('次') || text.includes('→')) {
+        console.log(`[Amazonレビュー収集] findNextPageLink: 「次へ」テキストで発見: "${text.trim().substring(0, 20)}"`);
+        return link;
+      }
+    }
+
+    // 方法3: 次ページ番号のリンクを探す
+    for (const link of allLinks) {
+      try {
+        const url = new URL(link.href, window.location.origin);
+        const pageNum = parseInt(url.searchParams.get('pageNumber'), 10);
+        if (pageNum === nextPage) {
+          console.log(`[Amazonレビュー収集] findNextPageLink: ページ番号${nextPage}のリンクで発見`);
+          return link;
+        }
+      } catch (e) {
+        // URL解析エラーは無視
+      }
+    }
+
+    // 方法4: ページネーション内のリンクからテキストで探す
+    const paginationLinks = document.querySelectorAll('.a-pagination a, .a-pagination li a');
+    for (const link of paginationLinks) {
+      const linkText = link.textContent.trim();
+      const linkPage = parseInt(linkText, 10);
+      if (linkPage === nextPage) {
+        console.log(`[Amazonレビュー収集] findNextPageLink: ページネーションの「${linkText}」で発見`);
+        return link;
+      }
+    }
+
+    console.log('[Amazonレビュー収集] findNextPageLink: 次へリンクが見つかりません');
+    return null;
+  }
+
+  /**
    * 次のページがあるかチェック
    * セレクタだけでなく、ページ番号と総ページ数でも判定
    */
@@ -880,37 +950,22 @@
       return true;
     }
 
-    // 総ページ数が不明な場合、セレクタで判定
-    // 最後のページかどうか確認
+    // 最後のページかどうか確認（無効化された次へボタン）
     const isLastPage = document.querySelector(AMAZON_SELECTORS.isLastPage);
     if (isLastPage) {
       console.log('[Amazonレビュー収集] hasNextPage: li.a-last.a-disabled検出 - 最後のページ');
       return false;
     }
 
-    // 「次へ」リンクが存在するか（複数のセレクタを試す）
-    const nextSelectors = [
-      'li.a-last a',                          // 標準の次へリンク
-      '.a-pagination li.a-last a',            // ページネーション内の次へ
-      'a[href*="pageNumber"]:contains("次")', // pageNumber含むリンク
-      '.a-pagination a:last-child',           // 最後のリンク
-    ];
-
-    for (const selector of nextSelectors) {
-      try {
-        const nextLink = document.querySelector(selector);
-        if (nextLink && nextLink.href && nextLink.href.includes('pageNumber')) {
-          console.log(`[Amazonレビュー収集] hasNextPage: セレクタ "${selector}" で次へリンク検出`);
-          return true;
-        }
-      } catch (e) {
-        // セレクタエラーは無視
-      }
+    // 「次へ」リンクを探す
+    const nextLink = findNextPageLink();
+    if (nextLink) {
+      return true;
     }
 
     // 総ページ数が分かっていて、まだ到達していない場合は次のページありとする
     if (totalPages > 0 && currentPage < totalPages) {
-      console.log(`[Amazonレビュー収集] hasNextPage: セレクタ見つからないが、ページ${currentPage}/${totalPages} - 次のページあり`);
+      console.log(`[Amazonレビュー収集] hasNextPage: リンク見つからないが、ページ${currentPage}/${totalPages} - 次のページあり`);
       return true;
     }
 
@@ -920,65 +975,22 @@
 
   /**
    * 「次へ」リンクをクリックしてページ遷移（人間らしく）
-   * 優先順位:
-   * 1. 「次へ」リンク（li.a-last a など）
-   * 2. ページネーション内の次ページ番号リンク（例: 現在10ページなら「11」のリンク）
-   * 3. URL直接操作（フォールバック）
+   * findNextPageLink()で見つかったリンクをクリック、見つからない場合はURL直接操作
    */
   async function clickNextPage() {
     const currentPage = getCurrentPageNumber();
     const nextPage = currentPage + 1;
 
-    // 方法1: 「次へ」リンクを複数のセレクタで探す
-    const nextSelectors = [
-      'li.a-last a',
-      '.a-pagination li.a-last a',
-      '.a-pagination a:last-child',
-    ];
+    // findNextPageLink()を使用して「次へ」リンクを探す
+    const nextLink = findNextPageLink();
 
-    for (const selector of nextSelectors) {
-      try {
-        const link = document.querySelector(selector);
-        if (link && link.href && link.href.includes('pageNumber')) {
-          console.log(`[Amazonレビュー収集] 「次へ」リンク発見（セレクタ: ${selector}）:`, link.href);
-          await humanClick(link);
-          return;
-        }
-      } catch (e) {
-        // セレクタエラーは無視
-      }
+    if (nextLink) {
+      console.log(`[Amazonレビュー収集] 次へリンクをクリック: ${nextLink.href}`);
+      await humanClick(nextLink);
+      return;
     }
 
-    // 方法2: ページネーション内の次ページ番号リンクを探す（より人間らしい）
-    // 例: 現在10ページなら「11」と書かれたリンクを探す
-    const paginationLinks = document.querySelectorAll('.a-pagination a, .a-pagination li a');
-    for (const link of paginationLinks) {
-      const linkText = link.textContent.trim();
-      const linkPage = parseInt(linkText, 10);
-      if (linkPage === nextPage && link.href && link.href.includes('pageNumber')) {
-        console.log(`[Amazonレビュー収集] ページ番号リンク発見: ${linkText} (ページ${nextPage})`);
-        await humanClick(link);
-        return;
-      }
-    }
-
-    // 方法3: pageNumberパラメータを含むリンクで次ページ番号のものを探す
-    const allLinks = document.querySelectorAll('a[href*="pageNumber"]');
-    for (const link of allLinks) {
-      try {
-        const url = new URL(link.href);
-        const pageNum = parseInt(url.searchParams.get('pageNumber'), 10);
-        if (pageNum === nextPage) {
-          console.log(`[Amazonレビュー収集] pageNumberリンク発見: ページ${nextPage}`);
-          await humanClick(link);
-          return;
-        }
-      } catch (e) {
-        // URL解析エラーは無視
-      }
-    }
-
-    // 方法4: URL直接操作（最終フォールバック）
+    // リンクが見つからない場合はURL直接操作（最終フォールバック）
     console.log('[Amazonレビュー収集] リンクが見つかりません - URL直接操作でページ遷移');
     const url = new URL(window.location.href);
     url.searchParams.set('pageNumber', nextPage.toString());
@@ -1013,25 +1025,8 @@
    * - ボタンが見つからない場合はページ下部までスクロール
    */
   async function scrollToNextButton() {
-    // 複数のセレクタを試す
-    const nextSelectors = [
-      'li.a-last a',
-      '.a-pagination li.a-last a',
-      '.a-pagination a:last-child',
-    ];
-
-    let nextButton = null;
-    for (const selector of nextSelectors) {
-      try {
-        const btn = document.querySelector(selector);
-        if (btn && btn.href && btn.href.includes('pageNumber')) {
-          nextButton = btn;
-          break;
-        }
-      } catch (e) {
-        // セレクタエラーは無視
-      }
-    }
+    // findNextPageLink()を使用して「次へ」リンクを探す
+    const nextButton = findNextPageLink();
 
     // ボタンが見つからない場合もページ下部までスクロール（人間らしい動作のため）
     const hasButton = !!nextButton;
