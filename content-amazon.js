@@ -702,7 +702,11 @@
    * レビューの一意キーを生成
    */
   function generateReviewKey(review) {
-    // 本文の先頭100文字 + 著者 + 日付でユニークキーを生成
+    // レビューIDがあればそれを使用（最も確実な一意キー）
+    if (review.reviewId) {
+      return `amazon_${review.reviewId}`;
+    }
+    // フォールバック: 本文の先頭100文字 + 著者 + 日付でユニークキーを生成
     return `${(review.body || '').substring(0, 100)}|${review.author || ''}|${review.reviewDate || ''}`;
   }
 
@@ -1195,6 +1199,9 @@
     let hasImage = false;    // 画像あり
     let country = '日本'; // デフォルトは日本
 
+    // レビューIDを取得（重複判定に使用）
+    const reviewId = elem.id || '';
+
     // 評価を取得
     const ratingElem = elem.querySelector(AMAZON_SELECTORS.rating);
     if (ratingElem) {
@@ -1327,8 +1334,9 @@
       return null;
     }
 
-    // Amazon用16項目
+    // Amazon用17項目（reviewId追加）
     return {
+      reviewId: reviewId,        // レビューID（重複判定用）
       reviewDate: reviewDate,
       productId: asin,
       productName: productName,
@@ -1355,7 +1363,10 @@
   function removeDuplicates(reviews) {
     const seen = new Set();
     return reviews.filter(review => {
-      const key = `${review.body.substring(0, 100)}${review.author}${review.reviewDate}`;
+      // レビューIDがあればそれを使用（最も確実）
+      const key = review.reviewId
+        ? `amazon_${review.reviewId}`
+        : `${review.body.substring(0, 100)}${review.author}${review.reviewDate}`;
       if (seen.has(key)) {
         return false;
       }
