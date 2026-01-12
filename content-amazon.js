@@ -262,6 +262,8 @@
   let startCollectionLock = false; // 収集開始のロック（重複防止）
   let resumeCollectionLock = false; // 収集再開のロック（重複防止）
   let sessionPageCount = 0; // セッション内のページカウント（ボット対策）
+  let consecutiveSkipPages = 0; // 連続してスキップしたページ数（無限ループ防止）
+  const MAX_CONSECUTIVE_SKIP = 3; // 連続スキップの上限
 
   // Amazonセレクター（前回のテストで確認済み）
   const AMAZON_SELECTORS = {
@@ -669,6 +671,15 @@
       totalPages = 0; // 新規収集の場合はリセット
     }
 
+    // consecutiveSkipPagesをストレージから復元（無限ループ防止カウンタ）
+    // 同じ商品の継続収集の場合のみ
+    if (storedProductId === currentProductId && typeof storedState.consecutiveSkipPages === 'number') {
+      consecutiveSkipPages = storedState.consecutiveSkipPages;
+      console.log(`[Amazonレビュー収集] consecutiveSkipPagesをストレージから復元: ${consecutiveSkipPages}`);
+    } else {
+      consecutiveSkipPages = 0; // 新規収集の場合はリセット
+    }
+
     // ===== ボット対策: ページ読み込み後の「見渡し」動作 =====
     await initialPageScan();
     if (shouldStop) {
@@ -766,12 +777,30 @@
       log(`${skippedBySession}件は既にこのセッションで収集済みのためスキップ`);
     }
 
-    // すべて収集済みの場合（Amazonのページネーションバグで同じレビューが表示されている）
-    // この場合は実質的に最後のページなので、収集完了として扱う
+    // すべて収集済みの場合
     if (reviews.length === 0) {
-      log('このページのレビューは全て収集済みです（実質的な最終ページ）');
-      return true; // trueを返して収集完了とする
+      consecutiveSkipPages++;
+      const currentPage = getCurrentPageNumber();
+
+      // 連続スキップが上限に達した場合、または最終ページに近い場合は収集完了
+      if (consecutiveSkipPages >= MAX_CONSECUTIVE_SKIP) {
+        log(`${consecutiveSkipPages}ページ連続でスキップ - 収集完了とします`);
+        return true;
+      }
+
+      // まだページが残っている場合は次のページに進む
+      if (totalPages > 0 && currentPage < totalPages) {
+        log(`このページのレビューは全て収集済みです（${currentPage}/${totalPages}ページ）- 次のページに進みます`);
+        return false; // 次のページに進む
+      }
+
+      // 最終ページの場合は収集完了
+      log('このページのレビューは全て収集済みです（最終ページ）');
+      return true;
     }
+
+    // レビューが収集できた場合、連続スキップカウンタをリセット
+    consecutiveSkipPages = 0;
 
     // 差分取得モードの場合、日付でフィルタリング
     let reachedOldReviews = false;
@@ -906,6 +935,8 @@
           state.lastProcessedPage = getCurrentPageNumber();
           // セッションページカウントも保存
           state.sessionPageCount = sessionPageCount;
+          // 連続スキップカウントも保存
+          state.consecutiveSkipPages = consecutiveSkipPages;
           console.log('[Amazonレビュー収集] 次ページ遷移前の状態保存:', JSON.stringify(state, null, 2));
           chrome.storage.local.set({ collectionState: state }, resolve);
         });
