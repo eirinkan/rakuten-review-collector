@@ -10,6 +10,10 @@ let activeCollectionTabs = new Set();
 let collectionWindowId = null;
 // タブごとのスプレッドシートURL（定期収集用）
 const tabSpreadsheetUrls = new Map();
+// タブごとの最後のresumeCollection送信時刻（重複送信防止）
+const lastResumeSentTime = new Map();
+// 重複送信防止の閾値（ミリ秒）
+const RESUME_DEBOUNCE_MS = 5000;
 
 // ===== Amazonボット対策: レート制限 =====
 const AMAZON_DAILY_LIMIT = 100;  // 1日100ページまで（警戒圏）
@@ -122,6 +126,19 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       console.log('[background] 同じまたは前のページのため再開スキップ:', { currentPage, lastPage });
       return;
     }
+
+    // 重複送信防止: 同じタブに対して5秒以内の再送信を防ぐ
+    const now = Date.now();
+    const lastSent = lastResumeSentTime.get(tabId) || 0;
+    if (now - lastSent < RESUME_DEBOUNCE_MS) {
+      console.log('[background] 重複送信防止: 前回送信から5秒未満のためスキップ:', {
+        tabId,
+        elapsed: now - lastSent,
+        threshold: RESUME_DEBOUNCE_MS
+      });
+      return;
+    }
+    lastResumeSentTime.set(tabId, now);
 
     console.log('[background] Amazonレビューページ遷移検出、収集再開メッセージを送信:', { currentPage, lastPage });
 

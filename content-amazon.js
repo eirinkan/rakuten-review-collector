@@ -1029,6 +1029,7 @@
   /**
    * 「次へ」リンクをクリックしてページ遷移（人間らしく）
    * findNextPageLink()で見つかったリンクをクリック、見つからない場合はURL直接操作
+   * 重要: リンクのページ番号が正しいかを検証し、不正な場合はURL直接操作にフォールバック
    */
   async function clickNextPage() {
     const currentPage = getCurrentPageNumber();
@@ -1038,13 +1039,27 @@
     const nextLink = findNextPageLink();
 
     if (nextLink) {
-      console.log(`[Amazonレビュー収集] 次へリンクをクリック: ${nextLink.href}`);
-      await humanClick(nextLink);
-      return;
+      // リンクのページ番号を検証（Amazonのページネーションバグ対策）
+      try {
+        const linkUrl = new URL(nextLink.href, window.location.origin);
+        const linkPageNumber = parseInt(linkUrl.searchParams.get('pageNumber'), 10);
+
+        // リンクのページ番号が正しい場合のみクリック
+        if (linkPageNumber === nextPage) {
+          console.log(`[Amazonレビュー収集] 次へリンクをクリック: ページ${currentPage} → ページ${nextPage}`);
+          await humanClick(nextLink);
+          return;
+        } else {
+          console.log(`[Amazonレビュー収集] 次へリンクのページ番号が不正: ${linkPageNumber}（期待値: ${nextPage}）- URL直接操作にフォールバック`);
+        }
+      } catch (e) {
+        console.log('[Amazonレビュー収集] リンクURL解析エラー - URL直接操作にフォールバック');
+      }
+    } else {
+      console.log('[Amazonレビュー収集] リンクが見つかりません - URL直接操作でページ遷移');
     }
 
-    // リンクが見つからない場合はURL直接操作（最終フォールバック）
-    console.log('[Amazonレビュー収集] リンクが見つかりません - URL直接操作でページ遷移');
+    // リンクが見つからない、またはページ番号が不正な場合はURL直接操作
     const url = new URL(window.location.href);
     url.searchParams.set('pageNumber', nextPage.toString());
 
