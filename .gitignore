@@ -28,4 +28,7 @@ gas/.clasp.json
 .env.local
 
 # Claude Code設定（APIトークン含む）
-.claude/
+# 注: CLAUDE.mdはプロジェクトルールなのでGit管理する
+.claude/settings*
+.claude/plans/
+.claude/secrets.md
