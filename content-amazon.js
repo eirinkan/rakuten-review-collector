@@ -613,13 +613,35 @@
     const storedState = await new Promise(resolve => {
       chrome.storage.local.get(['collectionState'], result => resolve(result.collectionState || {}));
     });
-    if (storedState.collectedReviewKeys && Array.isArray(storedState.collectedReviewKeys)) {
+
+    // 現在のページ番号を取得
+    const currentPage = getCurrentPageNumber();
+    const storedProductId = storedState.productId || storedState.currentProductId;
+
+    // 同じ商品の継続収集の場合のみ、collectedReviewKeysを復元
+    // 条件:
+    //   1. ストレージに保存された商品IDと現在の商品IDが一致
+    //   2. ページ2以降から再開する場合（ページ1は新規収集）
+    //   3. ストレージの収集済みキーが存在する
+    if (storedProductId === currentProductId &&
+        currentPage > 1 &&
+        storedState.collectedReviewKeys &&
+        Array.isArray(storedState.collectedReviewKeys)) {
       collectedReviewKeys = new Set(storedState.collectedReviewKeys);
+      console.log(`[Amazonレビュー収集] 継続収集: collectedReviewKeysを復元（${collectedReviewKeys.size}件）`);
+    } else {
+      // 新規収集または異なる商品: collectedReviewKeysをクリア
+      collectedReviewKeys = new Set();
+      console.log(`[Amazonレビュー収集] 新規収集: collectedReviewKeysをクリア（ページ${currentPage}、商品: ${currentProductId}）`);
     }
+
     // totalPagesをストレージから復元（ページ遷移後も維持するため）
-    if (storedState.totalPages && storedState.totalPages > 0) {
+    // 同じ商品の継続収集の場合のみ
+    if (storedProductId === currentProductId && storedState.totalPages && storedState.totalPages > 0) {
       totalPages = storedState.totalPages;
       console.log(`[Amazonレビュー収集] totalPagesをストレージから復元: ${totalPages}`);
+    } else {
+      totalPages = 0; // 新規収集の場合はリセット
     }
 
     // ===== ボット対策: ページ読み込み後の「見渡し」動作 =====
@@ -846,6 +868,8 @@
           state.lastCollectedDate = lastCollectedDate;
           state.source = 'amazon';
           state.queueName = currentQueueName;
+          // 商品IDを保存（継続収集の判定用）
+          state.productId = currentProductId;
           // 収集済みレビューキーを保存（次のページでも重複チェックできるように）
           state.collectedReviewKeys = Array.from(collectedReviewKeys);
           state.lastProcessedUrl = window.location.href;
@@ -1425,6 +1449,8 @@
         state.totalPages = totalPages || Math.ceil(getTotalReviewCount() / 10);
         state.isRunning = isCollecting;
         state.source = 'amazon';
+        // 商品IDを保存（継続収集の判定用）
+        state.productId = currentProductId;
         // 収集済みレビューキーを保存（ページ遷移後も維持するため）
         state.collectedReviewKeys = Array.from(collectedReviewKeys);
         // 現在のページURLとページ番号を保存
