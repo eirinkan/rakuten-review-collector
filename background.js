@@ -144,12 +144,16 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
     // 少し待ってからメッセージを送信（DOM読み込み完了を待つ）
     setTimeout(() => {
-      console.log('[background] resumeCollectionメッセージ送信...');
+      console.log('[background] resumeCollectionメッセージ送信...', {
+        queueName: state.queueName,
+        productId: state.productId
+      });
       chrome.tabs.sendMessage(tabId, {
         action: 'resumeCollection',
         incrementalOnly: state.incrementalOnly || false,
         lastCollectedDate: state.lastCollectedDate || null,
-        queueName: state.queueName || null
+        queueName: state.queueName || null,
+        productId: state.productId || null  // 商品IDも送信
       }).then((response) => {
         console.log('[background] resumeCollection応答:', response);
       }).catch((err) => {

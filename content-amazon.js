@@ -260,6 +260,7 @@
   let autoResumeExecuted = false; // 自動再開が実行済みかどうか
   let collectedReviewKeys = new Set(); // このセッションで収集済みのレビューキー
   let startCollectionLock = false; // 収集開始のロック（重複防止）
+  let resumeCollectionLock = false; // 収集再開のロック（重複防止）
   let sessionPageCount = 0; // セッション内のページカウント（ボット対策）
 
   // Amazonセレクター（前回のテストで確認済み）
@@ -367,6 +368,14 @@
         break;
 
       case 'resumeCollection':
+        // 同期的なロックチェック（最初に行う - 重複実行防止）
+        if (resumeCollectionLock) {
+          console.log('[Amazonレビュー収集] resumeCollection実行中のためスキップ');
+          sendResponse({ success: false, error: 'resumeCollection実行中' });
+          break;
+        }
+        resumeCollectionLock = true; // 即座にロック
+
         // backgroundからのページ遷移後の収集再開
         // ページ遷移後のURL（isReviewPageはスクリプトロード時点のURLで判定されるため再確認）
         const currentPathIsReview = window.location.pathname.includes('/product-reviews/');
@@ -375,17 +384,22 @@
           currentPathIsReview,
           isCollecting,
           startCollectionLock,
+          resumeCollectionLock,
           autoResumeExecuted,
           currentUrl: window.location.href.substring(0, 80),
-          currentPage: getCurrentPageNumber()
+          currentPage: getCurrentPageNumber(),
+          messageQueueName: message.queueName,
+          messageProductId: message.productId
         });
         if (!currentPathIsReview) {
           console.log('[Amazonレビュー収集] レビューページではないためスキップ');
+          resumeCollectionLock = false; // ロック解除
           sendResponse({ success: false, error: 'レビューページではありません' });
           break;
         }
         if (isCollecting) {
           console.log('[Amazonレビュー収集] 既に収集中のためスキップ (isCollecting=true)');
+          resumeCollectionLock = false; // ロック解除
           sendResponse({ success: false, error: '既に収集中' });
           break;
         }
@@ -394,11 +408,17 @@
         incrementalOnly = message.incrementalOnly || false;
         lastCollectedDate = message.lastCollectedDate || null;
         currentQueueName = message.queueName || null;
+        // productIdが送られてきた場合は復元
+        if (message.productId) {
+          currentProductId = message.productId;
+        }
         startCollectionLock = false; // ロックをリセット
         autoResumeExecuted = false; // 自動再開フラグをリセット
         const resumePage = getCurrentPageNumber();
         log(`ページ${resumePage}の収集を再開します`);
         startCollection();
+        // startCollection完了後にロック解除（非同期処理のため少し遅延）
+        setTimeout(() => { resumeCollectionLock = false; }, 1000);
         sendResponse({ success: true });
         break;
 
@@ -620,15 +640,20 @@
 
     // 同じ商品の継続収集の場合のみ、collectedReviewKeysを復元
     // 条件:
+    //   0. 既にcollectedReviewKeysにデータがある場合は復元しない（重複実行対策）
     //   1. ストレージに保存された商品IDと現在の商品IDが一致
     //   2. ページ2以降から再開する場合（ページ1は新規収集）
     //   3. ストレージの収集済みキーが存在する
-    if (storedProductId === currentProductId &&
+    if (collectedReviewKeys.size === 0 &&
+        storedProductId === currentProductId &&
         currentPage > 1 &&
         storedState.collectedReviewKeys &&
         Array.isArray(storedState.collectedReviewKeys)) {
       collectedReviewKeys = new Set(storedState.collectedReviewKeys);
       console.log(`[Amazonレビュー収集] 継続収集: collectedReviewKeysを復元（${collectedReviewKeys.size}件）`);
+    } else if (collectedReviewKeys.size > 0) {
+      // 既にキーがある場合は何もしない（重複実行で上書きしない）
+      console.log(`[Amazonレビュー収集] 既存キー維持: collectedReviewKeys（${collectedReviewKeys.size}件）`);
     } else {
       // 新規収集または異なる商品: collectedReviewKeysをクリア
       collectedReviewKeys = new Set();
