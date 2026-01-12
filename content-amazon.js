@@ -1029,48 +1029,60 @@
 
   /**
    * 「次へ」リンクをクリックしてページ遷移（人間らしく）
-   * findNextPageLink()で見つかったリンクをクリック、見つからない場合はURL直接操作
-   * 重要: リンクのページ番号が正しいかを検証し、不正な場合はURL直接操作にフォールバック
+   * 重要: URL直接操作はAmazonのボット対策に引っかかるため、常にリンクをクリックする
+   * AmazonのJavaScriptがセッション状態を管理しており、リンククリックでのみ正しいページに遷移可能
    */
   async function clickNextPage() {
     const currentPage = getCurrentPageNumber();
     const nextPage = currentPage + 1;
 
-    // findNextPageLink()を使用して「次へ」リンクを探す
-    const nextLink = findNextPageLink();
+    // 「次へ」リンクを探す（複数のセレクタでフォールバック）
+    const nextSelectors = [
+      'li.a-last a',
+      '.a-pagination li.a-last a',
+      'a[href*="pageNumber"]:contains("次")',
+    ];
 
-    if (nextLink) {
-      // リンクのページ番号を検証（Amazonのページネーションバグ対策）
+    let nextLink = null;
+    for (const selector of nextSelectors) {
       try {
-        const linkUrl = new URL(nextLink.href, window.location.origin);
-        const linkPageNumber = parseInt(linkUrl.searchParams.get('pageNumber'), 10);
-
-        // リンクのページ番号が正しい場合のみクリック
-        if (linkPageNumber === nextPage) {
-          console.log(`[Amazonレビュー収集] 次へリンクをクリック: ページ${currentPage} → ページ${nextPage}`);
-          await humanClick(nextLink);
-          return;
-        } else {
-          console.log(`[Amazonレビュー収集] 次へリンクのページ番号が不正: ${linkPageNumber}（期待値: ${nextPage}）- URL直接操作にフォールバック`);
-        }
+        nextLink = document.querySelector(selector);
+        if (nextLink) break;
       } catch (e) {
-        console.log('[Amazonレビュー収集] リンクURL解析エラー - URL直接操作にフォールバック');
+        // セレクタエラーは無視
       }
-    } else {
-      console.log('[Amazonレビュー収集] リンクが見つかりません - URL直接操作でページ遷移');
     }
 
-    // リンクが見つからない、またはページ番号が不正な場合はURL直接操作
+    // 「次へ」テキストを含むリンクも試す
+    if (!nextLink) {
+      const allPaginationLinks = document.querySelectorAll('.a-pagination a');
+      for (const link of allPaginationLinks) {
+        if (link.textContent.includes('次')) {
+          nextLink = link;
+          break;
+        }
+      }
+    }
+
+    if (nextLink) {
+      // 重要: リンクのhrefに含まれるページ番号は無視してクリックする
+      // Amazonのリンクは表示上は「ページ2」を指しているが、
+      // クリックするとJavaScriptで正しいページに遷移する
+      console.log(`[Amazonレビュー収集] 次へリンクをクリック: ページ${currentPage} → ページ${nextPage}（リンククリック方式）`);
+      await humanClick(nextLink);
+      return;
+    }
+
+    // リンクが見つからない場合のみURL直接操作（最終手段）
+    console.log('[Amazonレビュー収集] 次へリンクが見つかりません - URL直接操作でページ遷移（ボット対策に注意）');
     const url = new URL(window.location.href);
     url.searchParams.set('pageNumber', nextPage.toString());
 
     console.log(`[Amazonレビュー収集] URL直接遷移: ページ${currentPage} → ページ${nextPage}`);
-    console.log(`[Amazonレビュー収集] 遷移先URL: ${url.toString()}`);
 
-    // 人間らしい待機（クリック前の躊躇）
+    // 人間らしい待機
     await sleep(200 + Math.random() * 300);
 
-    // ページ遷移
     window.location.href = url.toString();
   }
 
