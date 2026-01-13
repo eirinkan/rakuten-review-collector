@@ -124,7 +124,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     // フィルター遷移フラグをチェック
     const filterTransitionPending = state.filterTransitionPending === true;
 
-    // フィルター遷移中の場合は無条件で再開処理を実行
+    // フィルター遷移中の場合は無条件で再開処理を実行（デバウンスをスキップ）
     if (filterTransitionPending) {
       console.log('[background] フィルター遷移を検出、収集を再開します:', {
         currentPage,
@@ -133,6 +133,21 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       // フラグをクリア
       state.filterTransitionPending = false;
       await chrome.storage.local.set({ collectionState: state });
+
+      // デバウンスをスキップして直接resumeCollectionを送信
+      setTimeout(() => {
+        console.log('[background] resumeCollectionメッセージ送信（フィルター遷移）');
+        chrome.tabs.sendMessage(tabId, {
+          action: 'resumeCollection',
+          incrementalOnly: state.incrementalOnly || false,
+          lastCollectedDate: state.lastCollectedDate || null,
+          queueName: state.queueName || null,
+          productId: state.productId || null
+        }).catch((err) => {
+          console.log('[background] resumeCollection送信エラー:', err);
+        });
+      }, 3000);
+      return; // ここでreturnしてデバウンスチェックをスキップ
     } else {
       // 通常のページ遷移チェック
 
