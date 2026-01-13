@@ -489,10 +489,21 @@
     let url = window.location.href;
     const asin = getASIN();
 
-    // 商品名を取得
-    const titleElem = document.querySelector(AMAZON_SELECTORS.productTitle);
+    // 商品名を取得（商品ページとレビューページで異なるセレクターを使用）
+    let titleElem = document.querySelector(AMAZON_SELECTORS.productTitle);
+    if (!titleElem && isReviewPage) {
+      // レビューページでは別のセレクターを試す
+      titleElem = document.querySelector(AMAZON_SELECTORS.reviewPageTitle);
+    }
     if (titleElem) {
       title = titleElem.textContent.trim();
+    }
+
+    // タイトルがまだdocument.titleのままの場合、プレフィックスを除去
+    if (title === document.title) {
+      // "Amazon.co.jp: カスタマーレビュー: 商品名" から商品名を抽出
+      title = title.replace(/^Amazon\.co\.jp[：:]\s*/i, '');
+      title = title.replace(/^カスタマーレビュー[：:]\s*/i, '');
     }
 
     // レビューページの場合は商品ページURLを構築

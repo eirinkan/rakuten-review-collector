@@ -416,23 +416,32 @@ document.addEventListener('DOMContentLoaded', () => {
   // キューアイテムのタイトルを生成（Amazon: ASIN：商品名、楽天: 商品管理番号：商品名）
   function getQueueItemTitle(item) {
     const source = item.source || detectSourceFromUrl(item.url);
-    const title = cleanTitle(item.title, source);
+    let title = cleanTitle(item.title, source);
     if (source === 'amazon') {
       const asin = extractAsinFromUrl(item.url);
-      // titleがASINと同じ場合は重複表示しない
-      if (asin && title !== asin) {
+      // titleがASINと同じ、または「商品」の場合はASINだけ表示
+      // (商品名が取得できなかった場合)
+      if (!title || title === asin || title === '商品') {
+        return asin || title || '商品';
+      }
+      // 正常な場合: ASIN：商品名
+      if (asin) {
         return `${asin}：${title}`;
       }
-      return asin || title;
+      return title;
     } else if (source === 'rakuten') {
       const itemCode = extractRakutenItemCodeFromUrl(item.url);
-      // titleが商品管理番号と同じ場合は重複表示しない
-      if (itemCode && title !== itemCode) {
+      // titleが商品管理番号と同じ、または「商品」の場合は商品管理番号だけ表示
+      if (!title || title === itemCode || title === '商品') {
+        return itemCode || title || '商品';
+      }
+      // 正常な場合: 商品管理番号：商品名
+      if (itemCode) {
         return `${itemCode}：${title}`;
       }
-      return itemCode || title;
+      return title;
     }
-    return title;
+    return title || '商品';
   }
 
   // 販路バッジのHTMLを生成
