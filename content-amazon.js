@@ -485,25 +485,49 @@
    * 商品情報を取得（キュー追加用）
    */
   function getProductInfo() {
-    let title = document.title || '';
+    let title = '';
     let url = window.location.href;
     const asin = getASIN();
 
-    // 商品名を取得（商品ページとレビューページで異なるセレクターを使用）
-    let titleElem = document.querySelector(AMAZON_SELECTORS.productTitle);
-    if (!titleElem && isReviewPage) {
-      // レビューページでは別のセレクターを試す
-      titleElem = document.querySelector(AMAZON_SELECTORS.reviewPageTitle);
-    }
-    if (titleElem) {
-      title = titleElem.textContent.trim();
+    // 商品名を取得（複数のセレクターを試行）
+    const titleSelectors = [
+      '#productTitle',                          // 商品ページの標準
+      '[data-hook="product-link"]',             // レビューページ
+      '#title',                                 // 一部の商品ページ
+      '.product-title-word-break',              // モバイル向け
+      'h1.a-size-large',                        // 汎用
+      'h1 span#productTitle',                   // 別パターン
+    ];
+
+    for (const selector of titleSelectors) {
+      const elem = document.querySelector(selector);
+      if (elem && elem.textContent.trim()) {
+        title = elem.textContent.trim();
+        console.log(`[Amazonレビュー収集] 商品名取得成功: "${title.substring(0, 50)}..." (セレクター: ${selector})`);
+        break;
+      }
     }
 
-    // タイトルがまだdocument.titleのままの場合、プレフィックスを除去
-    if (title === document.title) {
-      // "Amazon.co.jp: カスタマーレビュー: 商品名" から商品名を抽出
-      title = title.replace(/^Amazon\.co\.jp[：:]\s*/i, '');
-      title = title.replace(/^カスタマーレビュー[：:]\s*/i, '');
+    // セレクターで取得できなかった場合、document.titleから抽出
+    if (!title || title === asin) {
+      const docTitle = document.title || '';
+      // "Amazon.co.jp: 商品名" または "Amazon.co.jp: カスタマーレビュー: 商品名" から抽出
+      let extracted = docTitle;
+      extracted = extracted.replace(/^Amazon\.co\.jp[：:]\s*/i, '');
+      extracted = extracted.replace(/^カスタマーレビュー[：:]\s*/i, '');
+      extracted = extracted.trim();
+
+      // 抽出した結果がASINでなければ使用
+      if (extracted && extracted !== asin && extracted.length > 0) {
+        title = extracted;
+        console.log(`[Amazonレビュー収集] 商品名をdocument.titleから抽出: "${title.substring(0, 50)}..."`);
+      }
+    }
+
+    // それでも取得できなかった場合は空文字（ASINのみ表示になる）
+    if (!title || title === asin) {
+      console.log(`[Amazonレビュー収集] 商品名を取得できませんでした（ASIN: ${asin}）`);
+      title = '';
     }
 
     // レビューページの場合は商品ページURLを構築
@@ -515,7 +539,7 @@
       url: url,
       title: title.substring(0, 100),
       addedAt: new Date().toISOString(),
-      source: 'amazon' // 販路を追加
+      source: 'amazon'
     };
   }
 
