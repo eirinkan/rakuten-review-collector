@@ -1921,12 +1921,14 @@ async function processNextInQueue() {
           lastCollectedDate = productLastCollected[productId] || null;
         }
 
+        const productIdForMessage = extractProductIdFromUrl(nextItem.url);
         console.log('[キュー処理] startCollectionメッセージ送信');
         chrome.tabs.sendMessage(tab.id, {
           action: 'startCollection',
           incrementalOnly: nextItem.incrementalOnly || false,
           lastCollectedDate: lastCollectedDate,
-          queueName: nextItem.queueName || null
+          queueName: nextItem.queueName || nextItem.title || productIdForMessage,
+          productId: productIdForMessage
         }).catch(() => {});
       }, 2000);
     }
@@ -1990,6 +1992,7 @@ async function startSingleCollection(productInfo, tabId) {
 
   // 共通のcollectionStateもリセット（レビュー蓄積を防ぐ）
   // queueName, productIdも設定（フィルター遷移後の再開に必要）
+  // 重要: processNextInQueueと同様の形式に統一
   await chrome.storage.local.set({
     collectionState: {
       isRunning: true,
@@ -1997,9 +2000,14 @@ async function startSingleCollection(productInfo, tabId) {
       pageCount: 0,
       totalPages: 0,
       reviews: [],
+      collectedReviewKeys: [],       // 明示的にクリア
+      consecutiveSkipPages: 0,       // 明示的にクリア
+      sessionPageCount: 0,           // 明示的にクリア
+      lastProcessedPage: 0,          // 明示的にクリア
       source: productInfo.source || (productInfo.url.includes('amazon') ? 'amazon' : 'rakuten'),
       queueName: queueName,
-      productId: productId
+      productId: productId,
+      startedFromQueue: false        // 拡張ウィンドウからの開始
     }
   });
 
