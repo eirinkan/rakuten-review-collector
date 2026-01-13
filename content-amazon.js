@@ -1082,8 +1082,13 @@
 
   /**
    * 次のページに遷移
-   * 注: Amazonの「次へ」ボタンのhref属性は常にpageNumber=2を指しているため、
-   * element.click()では正しく遷移できない。URL直接操作を使用する。
+   * 重要: Amazonはキャッシュ制御にセッション情報を使用しているため、
+   * URL直接操作（pageNumberパラメータのみ変更）では正しいページが表示されない。
+   * 「次へ」ボタンを実際にクリックすることで、Amazonの内部ルーティングが正しく動作する。
+   *
+   * 検証結果（2026年1月）：
+   * - URL直接操作 → ページ1のキャッシュが表示される（NG）
+   * - element.click() → 正しくページ2に遷移（OK）
    */
   async function clickNextPage() {
     const currentPage = getCurrentPageNumber();
@@ -1091,6 +1096,30 @@
 
     console.log(`[Amazonレビュー収集] 次のページに遷移: ページ${currentPage} → ページ${nextPage}`);
 
+    // 「次へ」ボタンを探す
+    const nextLink = findNextPageLink();
+
+    if (nextLink) {
+      console.log(`[Amazonレビュー収集] 「次へ」ボタンをクリックします: ${nextLink.href}`);
+      nextLink.click();
+      return;
+    }
+
+    // フォールバック: 「次へ」ボタンが見つからない場合はhref属性から遷移を試みる
+    console.log('[Amazonレビュー収集] 「次へ」ボタンが見つからないため、ページネーションリンクを探します');
+    const paginationLink = document.querySelector('li.a-last a');
+    if (paginationLink) {
+      const href = paginationLink.getAttribute('href');
+      if (href) {
+        const url = new URL(href, window.location.origin);
+        console.log(`[Amazonレビュー収集] ページネーションリンクで遷移: ${url.toString()}`);
+        window.location.href = url.toString();
+        return;
+      }
+    }
+
+    // 最終フォールバック: URL直接操作（動作しない可能性がある）
+    console.log('[Amazonレビュー収集] フォールバック: URL直接操作');
     const url = new URL(window.location.href);
     url.searchParams.set('pageNumber', nextPage.toString());
     window.location.href = url.toString();

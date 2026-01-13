@@ -124,24 +124,22 @@
 - 合成イベント（dispatchEvent）のような複雑な処理は避けろ
 - 難しく考えすぎるな。人間として振る舞え。
 
-### 「次へ」ボタンの例外（検証済み）
+### 「次へ」ボタンのページ遷移（検証済み）
 
-**Amazonの「次へ」リンクは壊れている。** href属性が常に`pageNumber=2`を指しているため、クリックしても正しいページに遷移しない。
+**Amazonはセッション/キャッシュ制御を使用している。** URL直接操作（pageNumberパラメータのみ変更）では、キャッシュされたページ1が表示されてしまう。
 
-**検証結果（2026年1月）：**
-- `element.click()` → pageNumber=2に遷移（NG）
-- 物理クリック（マウス操作） → pageNumber=2に遷移（NG）
-- URL直接操作 → 正しいページに遷移（OK）
+**検証結果（2026年1月・Claude in Chromeで検証）：**
+- `element.click()` → 正しくページ2に遷移（OK）
+- URL直接操作（pageNumber変更のみ） → ページ1のキャッシュが表示（NG）
 
-**対処法：** 「次へ」ボタンのページ遷移は、URL直接操作（`window.location.href`でページ番号を計算して設定）を使う。これは「人間らしくない」が、Amazonのバグを回避するための唯一の方法。
+**対処法：** 「次へ」ボタンは`element.click()`で実際にクリックする。これが最も人間らしく、かつ正しく動作する方法。
 
 ```javascript
 // 「次へ」ボタンの正しい実装
-const currentPage = getCurrentPageNumber();
-const nextPage = currentPage + 1;
-const url = new URL(window.location.href);
-url.searchParams.set('pageNumber', nextPage.toString());
-window.location.href = url.toString();
+const nextLink = findNextPageLink();
+if (nextLink) {
+  nextLink.click();  // 実際にクリック
+}
 ```
 
 ### 基本原則
@@ -211,3 +209,35 @@ const nextSelectors = [
 - [ ] レート制限は守られているか
 - [ ] 同時実行は1件に制限されているか
 - [ ] セレクタのフォールバックはあるか
+
+## スクレイピング検証ルール（必須）
+
+**Amazon収集・楽天収集のロジックを検証する際は、Claude in Chromeを使用すること。**
+
+### なぜClaude in Chromeか
+
+1. **ログイン状態のブラウザを使用可能**
+   - Amazonのボット対策を回避
+   - 実際のユーザー環境に近い
+
+2. **バックグラウンド動作**
+   - タブをアクティブにしなくても動作
+   - ユーザーが他の作業を続けられる
+
+3. **実際の拡張機能と同じ環境**
+   - DOM構造を直接確認
+   - JavaScriptを実行してロジックをテスト
+
+### 検証手順
+
+1. Claude in Chromeを起動（既に起動中の場合はそのまま使用）
+2. Amazonレビューページに移動
+3. JavaScriptツールでDOMを操作・確認
+4. 問題を特定してから修正を実装
+5. 修正後、再度Claude in Chromeで検証
+
+### 禁止事項
+
+- Puppeteerなどのヘッドレスブラウザで検証しない（ボット対策で検出される）
+- 実際の拡張機能で試行錯誤しない（デバッグサイクルが遅い）
+- ユーザーに「確認してください」と丸投げしない
