@@ -121,6 +121,13 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     const currentPage = parseInt(urlObj.searchParams.get('pageNumber') || '1', 10);
     const lastPage = state.lastProcessedPage || 0;
 
+    // キュー処理から開始された場合、ページ1ではグローバルリスナーは介入しない
+    // （キュー処理側の tabs.onUpdated リスナーが startCollection を送信するため）
+    if (state.startedFromQueue && currentPage === 1) {
+      console.log('[background] キュー処理からの開始（ページ1）のため、グローバルリスナーはスキップ');
+      return;
+    }
+
     // 同じページなら重複実行しない
     if (currentPage <= lastPage) {
       console.log('[background] 同じまたは前のページのため再開スキップ:', { currentPage, lastPage });
@@ -1873,6 +1880,7 @@ async function processNextInQueue() {
 
   // 共通のcollectionStateもリセット（レビュー蓄積を防ぐ）
   // queueNameも含めて自動再開時に正しく復元できるようにする
+  // 重要: すべての状態を明示的に初期化（以前の収集の状態が残らないようにする）
   await chrome.storage.local.set({
     collectionState: {
       isRunning: true,
@@ -1880,9 +1888,15 @@ async function processNextInQueue() {
       pageCount: 0,
       totalPages: 0,
       reviews: [],
+      collectedReviewKeys: [],       // 明示的にクリア（以前の収集のキーを引き継がない）
+      consecutiveSkipPages: 0,       // 明示的にクリア
+      sessionPageCount: 0,           // 明示的にクリア
+      lastProcessedPage: 0,          // 明示的にクリア
+      productId: extractProductIdFromUrl(nextItem.url), // 商品IDも設定
       queueName: nextItem.queueName || null,
       incrementalOnly: nextItem.incrementalOnly || false,
-      source: isAmazonUrl ? 'amazon' : 'rakuten' // 販路を設定（自動再開に必要）
+      source: isAmazonUrl ? 'amazon' : 'rakuten', // 販路を設定（自動再開に必要）
+      startedFromQueue: true         // キュー処理からの開始フラグ（競合防止用）
     }
   });
 

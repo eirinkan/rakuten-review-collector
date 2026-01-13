@@ -414,7 +414,8 @@
         if (message.productId) {
           currentProductId = message.productId;
         }
-        startCollectionLock = false; // ロックをリセット
+        // startCollectionLock はリセットしない（startCollection内で管理）
+        // isCollecting で既に収集中かをチェックしているため、ロックリセットは不要
         autoResumeExecuted = false; // 自動再開フラグをリセット
         const resumePage = getCurrentPageNumber();
         log(`ページ${resumePage}の収集を再開します`);
@@ -558,12 +559,19 @@
    * 収集を開始
    */
   async function startCollection() {
-    // 同期的なロックチェック（重複実行防止）
-    if (startCollectionLock || isCollecting) {
-      console.log('[Amazonレビュー収集] 既に収集中または開始処理中のためスキップ');
+    // 重複実行防止（複数の条件で個別にチェック）
+    if (isCollecting) {
+      console.log('[Amazonレビュー収集] 既に収集中です（isCollecting=true）- スキップ');
       return;
     }
-    startCollectionLock = true; // 即座にロック
+
+    if (startCollectionLock) {
+      console.log('[Amazonレビュー収集] ロック中です（startCollectionLock=true）- スキップ');
+      return;
+    }
+
+    // 即座に両方のフラグをロック（競合防止）
+    startCollectionLock = true;
 
     // ===== ボット対策: レート制限チェック =====
     const rateLimit = await checkRateLimit();
