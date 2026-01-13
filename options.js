@@ -385,15 +385,30 @@ document.addEventListener('DOMContentLoaded', () => {
     return '';
   }
 
-  // キューアイテムのタイトルを生成（Amazon: ASIN：商品名、楽天: 商品名）
+  // 楽天のURLから商品管理番号を抽出
+  function extractRakutenItemCodeFromUrl(url) {
+    if (!url) return '';
+    // item.rakuten.co.jp/shop-name/item-code/ パターン
+    const itemMatch = url.match(/item\.rakuten\.co\.jp\/[^\/]+\/([^\/\?]+)/);
+    if (itemMatch) return itemMatch[1];
+    // review.rakuten.co.jp/item/shop-id/item-code/ パターン
+    const reviewMatch = url.match(/review\.rakuten\.co\.jp\/item\/\d+\/([^\/\?]+)/);
+    if (reviewMatch) return reviewMatch[1];
+    return '';
+  }
+
+  // キューアイテムのタイトルを生成（Amazon: ASIN：商品名、楽天: 商品管理番号：商品名）
   function getQueueItemTitle(item) {
     const source = item.source || detectSourceFromUrl(item.url);
+    const title = item.title || '商品';
     if (source === 'amazon') {
       const asin = extractAsinFromUrl(item.url);
-      const title = item.title || '商品';
       return asin ? `${asin}：${title}` : title;
+    } else if (source === 'rakuten') {
+      const itemCode = extractRakutenItemCodeFromUrl(item.url);
+      return itemCode ? `${itemCode}：${title}` : title;
     }
-    return item.title || '商品';
+    return title;
   }
 
   // 販路バッジのHTMLを生成
