@@ -23,7 +23,7 @@
     { value: 'four_star', label: '★4' },
     { value: 'five_star', label: '★5' }
   ];
-  const MAX_PAGES_PER_FILTER = 10; // 各フィルターで最大10ページ（Amazonの制限）
+  const MAX_PAGES_PER_FILTER = 999999; // 制限なし（Amazonの実際の制限を検証するため）
 
   // ===== ボット対策: マウス・スクロール関連関数 =====
 
@@ -280,6 +280,7 @@
   let useStarFilter = true; // 星評価フィルターを使用するか
   let currentStarFilterIndex = 0; // 現在のフィルターインデックス（0-4）
   let pagesCollectedInCurrentFilter = 0; // 現在のフィルターで収集済みのページ数
+  let filterPageCounts = {}; // 各フィルターのページ数を記録（検証用）
 
   // Amazonセレクター（前回のテストで確認済み）
   const AMAZON_SELECTORS = {
@@ -716,6 +717,7 @@
       useStarFilter = true;
       currentStarFilterIndex = 0;
       pagesCollectedInCurrentFilter = 0;
+      filterPageCounts = {}; // ページ数カウントもリセット
       console.log('[Amazonレビュー収集] 新規収集: 星評価フィルターを初期化');
     }
 
@@ -960,11 +962,13 @@
       if (!canGoNext || (useStarFilter && pagesCollectedInCurrentFilter >= MAX_PAGES_PER_FILTER)) {
         if (useStarFilter) {
           const currentFilter = getCurrentStarFilter();
-          if (pagesCollectedInCurrentFilter >= MAX_PAGES_PER_FILTER) {
-            log(`${currentFilter?.label || ''}フィルターの収集完了（${MAX_PAGES_PER_FILTER}ページ）`);
-          } else {
-            log(`${currentFilter?.label || ''}フィルターの最後のページに到達（${pagesCollectedInCurrentFilter}ページ）`);
-          }
+
+          // ページ数を記録（検証用）
+          filterPageCounts[currentFilter?.label || '不明'] = pagesCollectedInCurrentFilter;
+
+          // Amazonの実際のページ制限を報告
+          log(`【ページ制限検証】${currentFilter?.label || ''}フィルター: ${pagesCollectedInCurrentFilter}ページで終了（Amazonの制限）`);
+          console.log(`[ページ制限検証] ${currentFilter?.label || ''}: ${pagesCollectedInCurrentFilter}ページ`);
 
           // 次のフィルターに切り替え
           if (switchToNextStarFilter()) {
@@ -972,12 +976,20 @@
             await navigateToFilteredPage(currentStarFilterIndex);
             return true; // ページ遷移中
           } else {
-            // 全フィルター完了
+            // 全フィルター完了 - サマリーを表示
             log('全ての星評価フィルター（★1〜★5）での収集が完了しました');
+            log('【ページ制限検証サマリー】');
+            let totalPages = 0;
+            for (const [filter, pages] of Object.entries(filterPageCounts)) {
+              log(`  ${filter}: ${pages}ページ`);
+              totalPages += pages;
+            }
+            log(`  合計: ${totalPages}ページ`);
+            console.log('[ページ制限検証] サマリー:', filterPageCounts);
             return false;
           }
         } else {
-          log('最後のページに到達しました');
+          log(`最後のページに到達しました（${sessionPageCount}ページ収集）`);
           return false;
         }
       }
@@ -1888,21 +1900,8 @@
    * ボット対策: タブがアクティブになるまで待機
    */
   async function waitForActiveTab() {
-    if (await isTabActive()) {
-      return true;
-    }
-
-    log('タブがアクティブではありません。アクティブにしてください。', 'error');
-
-    while (!shouldStop) {
-      await sleep(ACTIVE_TAB_CHECK_INTERVAL);
-      if (await isTabActive()) {
-        log('タブがアクティブになりました。収集を再開します。');
-        return true;
-      }
-    }
-
-    return false;
+    // アクティブタブチェックを無効化（バックグラウンドでも動作するように）
+    return true;
   }
 
   /**
