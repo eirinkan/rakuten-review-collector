@@ -333,6 +333,10 @@
             incrementalOnly = message.incrementalOnly || false;
             lastCollectedDate = message.lastCollectedDate || null;
             currentQueueName = message.queueName || null;
+            // productIdが送られてきた場合は設定
+            if (message.productId) {
+              currentProductId = message.productId;
+            }
 
             const asin = getASIN();
             let prefix = '';
@@ -1289,6 +1293,9 @@
         state.useStarFilter = useStarFilter;
         state.currentStarFilterIndex = filterIndex;
         state.pagesCollectedInCurrentFilter = 0;
+        // フィルター遷移フラグを設定（background.jsで検出するため）
+        state.filterTransitionPending = true;
+        state.lastProcessedPage = 0; // ページ番号リセット（新しいフィルターでページ1から開始）
         console.log(`[Amazonレビュー収集] フィルター遷移前の状態保存: filterIndex=${filterIndex}`);
         chrome.storage.local.set({ collectionState: state }, resolve);
       });

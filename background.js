@@ -116,22 +116,38 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
   // 収集中でAmazonの場合のみ処理
   if (state && state.isRunning && state.source === 'amazon') {
-    // URLからページ番号を取得
+    // URLからページ番号とフィルターを取得
     const urlObj = new URL(url);
     const currentPage = parseInt(urlObj.searchParams.get('pageNumber') || '1', 10);
     const lastPage = state.lastProcessedPage || 0;
 
-    // キュー処理から開始された場合、ページ1ではグローバルリスナーは介入しない
-    // （キュー処理側の tabs.onUpdated リスナーが startCollection を送信するため）
-    if (state.startedFromQueue && currentPage === 1) {
-      console.log('[background] キュー処理からの開始（ページ1）のため、グローバルリスナーはスキップ');
-      return;
-    }
+    // フィルター遷移フラグをチェック
+    const filterTransitionPending = state.filterTransitionPending === true;
 
-    // 同じページなら重複実行しない
-    if (currentPage <= lastPage) {
-      console.log('[background] 同じまたは前のページのため再開スキップ:', { currentPage, lastPage });
-      return;
+    // フィルター遷移中の場合は無条件で再開処理を実行
+    if (filterTransitionPending) {
+      console.log('[background] フィルター遷移を検出、収集を再開します:', {
+        currentPage,
+        filterIndex: state.currentStarFilterIndex
+      });
+      // フラグをクリア
+      state.filterTransitionPending = false;
+      await chrome.storage.local.set({ collectionState: state });
+    } else {
+      // 通常のページ遷移チェック
+
+      // キュー処理から開始された場合、ページ1ではグローバルリスナーは介入しない
+      // （キュー処理側の tabs.onUpdated リスナーが startCollection を送信するため）
+      if (state.startedFromQueue && currentPage === 1) {
+        console.log('[background] キュー処理からの開始（ページ1）のため、グローバルリスナーはスキップ');
+        return;
+      }
+
+      // 同じページなら重複実行しない
+      if (currentPage <= lastPage) {
+        console.log('[background] 同じまたは前のページのため再開スキップ:', { currentPage, lastPage });
+        return;
+      }
     }
 
     // 重複送信防止: 同じタブに対して5秒以内の再送信を防ぐ
@@ -1815,7 +1831,6 @@ async function processNextInQueue() {
   // 定期収集の場合は[キュー名・商品ID]形式
   const productId = extractProductIdFromUrl(nextItem.url);
   const queuePrefix = nextItem.queueName ? `[${nextItem.queueName}・${productId}]` : '';
-  log(`${queuePrefix ? queuePrefix + ' ' : ''}収集中: ${nextItem.title || nextItem.url}`);
   console.log('[processNextInQueue] 処理URL:', nextItem.url, 'isAmazon:', nextItem.url.includes('amazon.co.jp'));
 
   // 収集用ウィンドウにタブを作成
@@ -1987,25 +2002,35 @@ async function startSingleCollection(productInfo, tabId) {
     }
   });
 
+  const productId = extractProductIdFromUrl(productInfo.url);
+  const queueName = productInfo.title || productId;
+
   // 共通のcollectionStateもリセット（レビュー蓄積を防ぐ）
+  // queueName, productIdも設定（フィルター遷移後の再開に必要）
   await chrome.storage.local.set({
     collectionState: {
       isRunning: true,
       reviewCount: 0,
       pageCount: 0,
       totalPages: 0,
-      reviews: []
+      reviews: [],
+      source: productInfo.source || (productInfo.url.includes('amazon') ? 'amazon' : 'rakuten'),
+      queueName: queueName,
+      productId: productId
     }
   });
 
   // UIを更新
   forwardToAll({ action: 'queueUpdated' });
 
-  const productId = extractProductIdFromUrl(productInfo.url);
   log(`[${productId}] 収集を開始しました`);
 
-  // content.jsに収集開始を指示
-  chrome.tabs.sendMessage(tabId, { action: 'startCollection' }).catch((error) => {
+  // content.jsに収集開始を指示（queueName, productIdも送信）
+  chrome.tabs.sendMessage(tabId, {
+    action: 'startCollection',
+    queueName: queueName,
+    productId: productId
+  }).catch((error) => {
     log(`収集開始に失敗: ${error.message}`, 'error');
   });
 }

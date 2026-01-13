@@ -369,6 +369,33 @@ document.addEventListener('DOMContentLoaded', () => {
     return 'unknown';
   }
 
+  // AmazonのURLからASINを抽出
+  function extractAsinFromUrl(url) {
+    if (!url) return '';
+    // /dp/ASIN, /product-reviews/ASIN, /gp/product/ASIN パターン
+    const patterns = [
+      /\/dp\/([A-Z0-9]{10})/i,
+      /\/product-reviews\/([A-Z0-9]{10})/i,
+      /\/gp\/product\/([A-Z0-9]{10})/i
+    ];
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match) return match[1].toUpperCase();
+    }
+    return '';
+  }
+
+  // キューアイテムのタイトルを生成（Amazon: ASIN：商品名、楽天: 商品名）
+  function getQueueItemTitle(item) {
+    const source = item.source || detectSourceFromUrl(item.url);
+    if (source === 'amazon') {
+      const asin = extractAsinFromUrl(item.url);
+      const title = item.title || '商品';
+      return asin ? `${asin}：${title}` : title;
+    }
+    return item.title || '商品';
+  }
+
   // 販路バッジのHTMLを生成
   function getSourceBadgeHtml(source) {
     if (source === 'amazon') {
@@ -395,13 +422,14 @@ document.addEventListener('DOMContentLoaded', () => {
       // 収集中アイテムを先頭に表示
       const collectingHtml = collectingItems.map(item => {
         const source = item.source || detectSourceFromUrl(item.url);
+        const displayTitle = getQueueItemTitle(item);
         return `
         <div class="queue-item collecting">
           <div class="queue-item-info">
             <div class="queue-item-title">
               <span class="collecting-badge">収集中</span>
               ${getSourceBadgeHtml(source)}
-              ${escapeHtml(item.title || '商品')}
+              ${escapeHtml(displayTitle)}
             </div>
             <div class="queue-item-url">${escapeHtml(item.url)}</div>
           </div>
@@ -411,10 +439,11 @@ document.addEventListener('DOMContentLoaded', () => {
       // 待機中アイテム
       const waitingHtml = queue.map((item, index) => {
         const source = item.source || detectSourceFromUrl(item.url);
+        const displayTitle = getQueueItemTitle(item);
         return `
         <div class="queue-item">
           <div class="queue-item-info">
-            <div class="queue-item-title">${getSourceBadgeHtml(source)}${escapeHtml(item.title || '商品')}</div>
+            <div class="queue-item-title">${getSourceBadgeHtml(source)}${escapeHtml(displayTitle)}</div>
             <div class="queue-item-url">${escapeHtml(item.url)}</div>
           </div>
           <button class="queue-item-remove" data-index="${index}">×</button>
