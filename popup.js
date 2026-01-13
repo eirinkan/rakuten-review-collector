@@ -373,7 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // content scriptが応答しない場合はURLから情報を取得
         const productInfo = {
           url: tab.url,
-          title: tab.title || 'Unknown',
+          title: extractTitleFromTabTitle(tab.title, isAmazonPage),
           addedAt: new Date().toISOString(),
           source: isAmazonPage ? 'amazon' : 'rakuten'
         };
@@ -382,9 +382,29 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (response.success) {
-        addProductToQueue(response.productInfo);
+        const productInfo = response.productInfo;
+        // titleが空の場合、tab.titleからフォールバック
+        if (!productInfo.title || productInfo.title.trim() === '') {
+          productInfo.title = extractTitleFromTabTitle(tab.title, isAmazonPage);
+        }
+        addProductToQueue(productInfo);
       }
     });
+  }
+
+  // タブタイトルから商品名を抽出
+  function extractTitleFromTabTitle(tabTitle, isAmazon) {
+    if (!tabTitle) return 'Unknown';
+    let title = tabTitle;
+    if (isAmazon) {
+      // 「Amazon.co.jp: 商品名」「Amazon.co.jp：商品名」から商品名を抽出
+      title = title.replace(/^Amazon\.co\.jp[：:]\s*/i, '');
+      // 「カスタマーレビュー: 商品名」を除去
+      title = title.replace(/^カスタマーレビュー[：:]\s*/i, '');
+      // 末尾の「 : カテゴリ名」を除去
+      title = title.replace(/\s*:\s*[^:]+$/, '');
+    }
+    return title.trim() || 'Unknown';
   }
 
   function addProductToQueue(productInfo) {

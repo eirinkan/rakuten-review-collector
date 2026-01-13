@@ -400,7 +400,15 @@
           sendResponse({ success: false, error: 'resumeCollection実行中' });
           break;
         }
-        resumeCollectionLock = true; // 即座にロック
+        // isCollectingもここでチェック（startCollection内のセットより先にチェック）
+        if (isCollecting) {
+          console.log('[Amazonレビュー収集] 既に収集中のためスキップ (isCollecting=true - 早期チェック)');
+          sendResponse({ success: false, error: '既に収集中' });
+          break;
+        }
+        // 即座に両方のフラグをロック（競合防止）
+        resumeCollectionLock = true;
+        isCollecting = true; // ここで即座にセット（startCollection内より先）
 
         // backgroundからのページ遷移後の収集再開
         // ページ遷移後のURL（isReviewPageはスクリプトロード時点のURLで判定されるため再確認）
@@ -419,14 +427,9 @@
         });
         if (!currentPathIsReview) {
           console.log('[Amazonレビュー収集] レビューページではないためスキップ');
-          resumeCollectionLock = false; // ロック解除
+          resumeCollectionLock = false;
+          isCollecting = false; // フラグも戻す
           sendResponse({ success: false, error: 'レビューページではありません' });
-          break;
-        }
-        if (isCollecting) {
-          console.log('[Amazonレビュー収集] 既に収集中のためスキップ (isCollecting=true)');
-          resumeCollectionLock = false; // ロック解除
-          sendResponse({ success: false, error: '既に収集中' });
           break;
         }
         // 収集を再開
@@ -438,14 +441,12 @@
         if (message.productId) {
           currentProductId = message.productId;
         }
-        // startCollectionLock はリセットしない（startCollection内で管理）
-        // isCollecting で既に収集中かをチェックしているため、ロックリセットは不要
         autoResumeExecuted = false; // 自動再開フラグをリセット
         const resumePage = getCurrentPageNumber();
         log(`ページ${resumePage}の収集を再開します`);
         startCollection();
-        // startCollection完了後にロック解除（非同期処理のため少し遅延）
-        setTimeout(() => { resumeCollectionLock = false; }, 1000);
+        // startCollection完了後にロック解除（非同期処理のため長めに）
+        setTimeout(() => { resumeCollectionLock = false; }, 5000);
         sendResponse({ success: true });
         break;
 
