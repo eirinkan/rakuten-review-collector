@@ -351,13 +351,16 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.local.get(['collectionState', 'isQueueCollecting', 'collectingItems'], (result) => {
       const state = result.collectionState || {};
       const isQueueCollecting = result.isQueueCollecting || false;
+      const collectingItems = result.collectingItems || [];
 
       const hasData = (state.reviewCount || 0) > 0;
       downloadBtn.disabled = !hasData;
       clearDataBtn.disabled = !hasData;
 
       // 収集中かどうかでボタンを切り替え
-      updateQueueButtons(isQueueCollecting);
+      // isQueueCollectingフラグまたはcollectingItemsがあれば収集中
+      const isCollecting = isQueueCollecting || collectingItems.length > 0;
+      updateQueueButtons(isCollecting);
     });
   }
 
@@ -1143,6 +1146,7 @@ document.addEventListener('DOMContentLoaded', () => {
         break;
       case 'queueUpdated':
         loadQueue();
+        loadState(); // ボタン状態も更新
         break;
       case 'log':
         addLog(msg.text, msg.type);
