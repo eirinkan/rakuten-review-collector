@@ -14,6 +14,17 @@
   const ACTIVE_TAB_CHECK_INTERVAL = 2000; // アクティブタブチェック間隔（2秒）
   const READING_SPEED_PER_100CHARS = 400; // 100文字あたりの読み時間（ms）
 
+  // ===== 星評価フィルター: 定数 =====
+  // 低評価から順に収集（問題点を優先）
+  const STAR_FILTERS = [
+    { value: 'one_star', label: '★1' },
+    { value: 'two_star', label: '★2' },
+    { value: 'three_star', label: '★3' },
+    { value: 'four_star', label: '★4' },
+    { value: 'five_star', label: '★5' }
+  ];
+  const MAX_PAGES_PER_FILTER = 10; // 各フィルターで最大10ページ（Amazonの制限）
+
   // ===== ボット対策: マウス・スクロール関連関数 =====
 
   /**
@@ -264,6 +275,11 @@
   let sessionPageCount = 0; // セッション内のページカウント（ボット対策）
   let consecutiveSkipPages = 0; // 連続してスキップしたページ数（無限ループ防止）
   const MAX_CONSECUTIVE_SKIP = 3; // 連続スキップの上限
+
+  // 星評価フィルター状態
+  let useStarFilter = true; // 星評価フィルターを使用するか
+  let currentStarFilterIndex = 0; // 現在のフィルターインデックス（0-4）
+  let pagesCollectedInCurrentFilter = 0; // 現在のフィルターで収集済みのページ数
 
   // Amazonセレクター（前回のテストで確認済み）
   const AMAZON_SELECTORS = {
@@ -688,6 +704,30 @@
       consecutiveSkipPages = 0; // 新規収集の場合はリセット
     }
 
+    // 星評価フィルター状態をストレージから復元
+    // 同じ商品の継続収集の場合のみ
+    if (storedProductId === currentProductId && typeof storedState.currentStarFilterIndex === 'number') {
+      useStarFilter = storedState.useStarFilter !== false; // デフォルトtrue
+      currentStarFilterIndex = storedState.currentStarFilterIndex;
+      pagesCollectedInCurrentFilter = storedState.pagesCollectedInCurrentFilter || 0;
+      console.log(`[Amazonレビュー収集] 星評価フィルター状態を復元: index=${currentStarFilterIndex}, pages=${pagesCollectedInCurrentFilter}`);
+    } else {
+      // 新規収集の場合はリセット
+      useStarFilter = true;
+      currentStarFilterIndex = 0;
+      pagesCollectedInCurrentFilter = 0;
+      console.log('[Amazonレビュー収集] 新規収集: 星評価フィルターを初期化');
+    }
+
+    // 新規収集で星評価フィルターが有効な場合、最初のフィルターを適用
+    // （ページ1かつフィルターが適用されていない場合のみ）
+    if (useStarFilter && currentPage === 1 && !window.location.href.includes('filterByStar')) {
+      const firstFilter = STAR_FILTERS[currentStarFilterIndex];
+      log(`星評価フィルター収集を開始: ${firstFilter.label}から（最大500件）`);
+      await navigateToFilteredPage(currentStarFilterIndex);
+      return; // ページ遷移するので、以降の処理は遷移後に行う
+    }
+
     // ===== ボット対策: ページ読み込み後の「見渡し」動作 =====
     await initialPageScan();
     if (shouldStop) {
@@ -909,9 +949,37 @@
       // 「次へ」リンクの存在確認
       const canGoNext = hasNextPage();
 
-      if (!canGoNext) {
-        log('最後のページに到達しました');
-        return false;
+      // 星評価フィルター: 現在のフィルターでのページ数をインクリメント
+      if (useStarFilter) {
+        pagesCollectedInCurrentFilter++;
+        const currentFilter = getCurrentStarFilter();
+        console.log(`[Amazonレビュー収集] フィルター ${currentFilter?.label || '不明'}: ${pagesCollectedInCurrentFilter}/${MAX_PAGES_PER_FILTER}ページ収集`);
+      }
+
+      // 10ページ到達または最終ページの場合、次のフィルターに切り替え
+      if (!canGoNext || (useStarFilter && pagesCollectedInCurrentFilter >= MAX_PAGES_PER_FILTER)) {
+        if (useStarFilter) {
+          const currentFilter = getCurrentStarFilter();
+          if (pagesCollectedInCurrentFilter >= MAX_PAGES_PER_FILTER) {
+            log(`${currentFilter?.label || ''}フィルターの収集完了（${MAX_PAGES_PER_FILTER}ページ）`);
+          } else {
+            log(`${currentFilter?.label || ''}フィルターの最後のページに到達（${pagesCollectedInCurrentFilter}ページ）`);
+          }
+
+          // 次のフィルターに切り替え
+          if (switchToNextStarFilter()) {
+            // 次のフィルターページに遷移
+            await navigateToFilteredPage(currentStarFilterIndex);
+            return true; // ページ遷移中
+          } else {
+            // 全フィルター完了
+            log('全ての星評価フィルター（★1〜★5）での収集が完了しました');
+            return false;
+          }
+        } else {
+          log('最後のページに到達しました');
+          return false;
+        }
       }
 
       // 人間らしくスクロールして「次へ」ボタンまで移動
@@ -959,6 +1027,10 @@
           state.sessionPageCount = sessionPageCount;
           // 連続スキップカウントも保存
           state.consecutiveSkipPages = consecutiveSkipPages;
+          // 星評価フィルター状態を保存
+          state.useStarFilter = useStarFilter;
+          state.currentStarFilterIndex = currentStarFilterIndex;
+          state.pagesCollectedInCurrentFilter = pagesCollectedInCurrentFilter;
           console.log('[Amazonレビュー収集] 次ページ遷移前の状態保存:', JSON.stringify(state, null, 2));
           chrome.storage.local.set({ collectionState: state }, resolve);
         });
@@ -1123,6 +1195,101 @@
     const url = new URL(window.location.href);
     url.searchParams.set('pageNumber', nextPage.toString());
     window.location.href = url.toString();
+  }
+
+  // ===== 星評価フィルター関連関数 =====
+
+  /**
+   * 現在の星評価フィルター情報を取得
+   */
+  function getCurrentStarFilter() {
+    if (!useStarFilter || currentStarFilterIndex >= STAR_FILTERS.length) {
+      return null;
+    }
+    return STAR_FILTERS[currentStarFilterIndex];
+  }
+
+  /**
+   * 星評価フィルターを適用したURLを生成
+   * @param {string} baseUrl - 基本URL
+   * @param {string} filterValue - フィルター値（例: 'one_star'）
+   * @returns {string} フィルター適用後のURL
+   */
+  function buildFilteredUrl(baseUrl, filterValue) {
+    const url = new URL(baseUrl);
+    // 星評価フィルター
+    url.searchParams.set('filterByStar', filterValue);
+    // 認証済み購入のみ
+    url.searchParams.set('reviewerType', 'avp_only_reviews');
+    // トップレビュー順（役に立った順）
+    url.searchParams.set('sortBy', 'helpful');
+    // ページ1から開始
+    url.searchParams.set('pageNumber', '1');
+    return url.toString();
+  }
+
+  /**
+   * 次の星評価フィルターに切り替え
+   * @returns {boolean} 切り替え成功したか（まだフィルターが残っているか）
+   */
+  function switchToNextStarFilter() {
+    currentStarFilterIndex++;
+    pagesCollectedInCurrentFilter = 0;
+
+    if (currentStarFilterIndex >= STAR_FILTERS.length) {
+      log('全ての星評価フィルターでの収集が完了しました');
+      return false;
+    }
+
+    const nextFilter = STAR_FILTERS[currentStarFilterIndex];
+    log(`次のフィルターに切り替え: ${nextFilter.label}`);
+    return true;
+  }
+
+  /**
+   * 星評価フィルターを適用してページに遷移
+   * @param {number} filterIndex - フィルターインデックス（0-4）
+   */
+  async function navigateToFilteredPage(filterIndex) {
+    if (filterIndex >= STAR_FILTERS.length) {
+      return false;
+    }
+
+    const filter = STAR_FILTERS[filterIndex];
+    const asin = getASIN();
+    const baseUrl = `https://www.amazon.co.jp/product-reviews/${asin}`;
+    const filteredUrl = buildFilteredUrl(baseUrl, filter.value);
+
+    log(`${filter.label}フィルターを適用してページに遷移します`);
+
+    // 状態を保存してから遷移
+    await new Promise((resolve) => {
+      chrome.storage.local.get(['collectionState'], (result) => {
+        const state = result.collectionState || {};
+        state.isRunning = true;
+        state.incrementalOnly = incrementalOnly;
+        state.lastCollectedDate = lastCollectedDate;
+        state.source = 'amazon';
+        state.queueName = currentQueueName;
+        state.productId = currentProductId;
+        state.collectedReviewKeys = Array.from(collectedReviewKeys);
+        // 星評価フィルター状態を保存
+        state.useStarFilter = useStarFilter;
+        state.currentStarFilterIndex = filterIndex;
+        state.pagesCollectedInCurrentFilter = 0;
+        console.log(`[Amazonレビュー収集] フィルター遷移前の状態保存: filterIndex=${filterIndex}`);
+        chrome.storage.local.set({ collectionState: state }, resolve);
+      });
+    });
+
+    // 状態をリセット
+    isCollecting = false;
+    startCollectionLock = false;
+    autoResumeExecuted = false;
+
+    // ページ遷移
+    window.location.href = filteredUrl;
+    return true;
   }
 
   /**
