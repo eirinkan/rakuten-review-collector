@@ -171,16 +171,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       activeCollectionTabs.add(tabId);
     }
 
-    // ボット対策: タブをアクティブにし、ウィンドウをフォーカス
-    try {
-      await chrome.tabs.update(tabId, { active: true });
-      const tabInfo = await chrome.tabs.get(tabId);
-      if (tabInfo.windowId) {
-        await chrome.windows.update(tabInfo.windowId, { focused: true });
-      }
-    } catch (e) {
-      console.log('[background] タブ/ウィンドウのアクティブ化エラー:', e);
-    }
+    // タブのアクティブ化は無効化（バックグラウンドで動作させるため）
+    // ボット対策よりもユーザビリティを優先
 
     // 少し待ってからメッセージを送信（DOM読み込み完了を待つ）
     setTimeout(() => {
@@ -1837,23 +1829,22 @@ async function processNextInQueue() {
   let tab;
   const isAmazonUrl = nextItem.url.includes('amazon.co.jp');
 
-  // 直接URLにアクセス（トップページリダイレクトはchrome.tabs.updateもブロックされるため廃止）
-  // active: trueにしないとページが正しく読み込まれない場合がある
+  // 直接URLにアクセス（バックグラウンドで動作させるためactive: false）
   if (collectionWindowId) {
     try {
       tab = await chrome.tabs.create({
         url: nextItem.url,
         windowId: collectionWindowId,
-        active: true
+        active: false
       });
     } catch (e) {
       // ウィンドウが閉じられている場合は通常のタブで開く
       console.error('収集用ウィンドウにタブ作成失敗:', e);
-      tab = await chrome.tabs.create({ url: nextItem.url, active: true });
+      tab = await chrome.tabs.create({ url: nextItem.url, active: false });
     }
   } else {
     // フォールバック: 通常のタブ
-    tab = await chrome.tabs.create({ url: nextItem.url, active: true });
+    tab = await chrome.tabs.create({ url: nextItem.url, active: false });
   }
 
   // tabIdを収集中アイテムに設定
@@ -1863,15 +1854,7 @@ async function processNextInQueue() {
   // アクティブタブとして追跡
   activeCollectionTabs.add(tab.id);
 
-  // ボット対策: タブをアクティブにし、ウィンドウをフォーカス
-  try {
-    await chrome.tabs.update(tab.id, { active: true });
-    if (collectionWindowId) {
-      await chrome.windows.update(collectionWindowId, { focused: true });
-    }
-  } catch (e) {
-    console.log('[processNextInQueue] タブ/ウィンドウのアクティブ化エラー:', e);
-  }
+  // タブのアクティブ化は無効化（バックグラウンドで動作させるため）
 
   // キュー固有のスプレッドシートURLがあれば保存
   if (nextItem.spreadsheetUrl) {
