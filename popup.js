@@ -72,11 +72,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const addRankingBtn = document.getElementById('addRankingBtn');
   const rankingCountInput = document.getElementById('rankingCount');
 
-  // Amazonレート制限表示
-  const amazonRateLimitEl = document.getElementById('amazonRateLimit');
-  const amazonRemainingCountEl = document.getElementById('amazonRemainingCount');
-  const amazonRateBarFillEl = document.getElementById('amazonRateBarFill');
-
   // ログインボタン
   if (loginBtn) {
     loginBtn.addEventListener('click', handleLogin);
@@ -243,11 +238,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // 対応ページの判定
     const isSupportedPage = isRakutenPage || isAmazonPage;
     const isRankingPage = isRakutenRankingPage || isAmazonRankingPage;
-
-    // Amazonページの場合、レート制限情報を表示
-    if (isAmazonPage || isAmazonRankingPage) {
-      updateAmazonRateLimit();
-    }
 
     if (isRakutenRankingPage) {
       // 楽天ランキングページの場合
@@ -539,43 +529,5 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
       rankingMessage.className = 'message';
     }, 3000);
-  }
-
-  /**
-   * Amazonレート制限情報を更新
-   */
-  function updateAmazonRateLimit() {
-    chrome.runtime.sendMessage({ action: 'getAmazonRateLimitInfo' }, (response) => {
-      if (chrome.runtime.lastError || !response) {
-        return;
-      }
-
-      const { count, remaining, limit } = response;
-      const usedPercent = (count / limit) * 100;
-      const remainingPercent = (remaining / limit) * 100;
-
-      // 要素を表示
-      if (amazonRateLimitEl) {
-        amazonRateLimitEl.style.display = 'block';
-
-        // 状態に応じてクラスを変更
-        amazonRateLimitEl.classList.remove('warning', 'danger');
-        if (remaining <= 10) {
-          amazonRateLimitEl.classList.add('danger');
-        } else if (remaining <= 30) {
-          amazonRateLimitEl.classList.add('warning');
-        }
-      }
-
-      // 残り件数を更新
-      if (amazonRemainingCountEl) {
-        amazonRemainingCountEl.textContent = remaining;
-      }
-
-      // プログレスバーを更新（残りの割合）
-      if (amazonRateBarFillEl) {
-        amazonRateBarFillEl.style.width = `${remainingPercent}%`;
-      }
-    });
   }
 });
