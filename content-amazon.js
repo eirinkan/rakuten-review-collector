@@ -1484,10 +1484,17 @@
     const ratingElem = elem.querySelector(AMAZON_SELECTORS.rating);
     if (ratingElem) {
       const ratingText = ratingElem.textContent || '';
-      // 「5つ星のうち4.0」から数値を抽出
-      const ratingMatch = ratingText.match(/(\d+(?:\.\d+)?)/);
+      // 「5つ星のうち4.0」から評価値（最後の数値）を抽出
+      // 注意: 最初の「5」ではなく、「うち」の後の数値を取得する
+      const ratingMatch = ratingText.match(/(?:のうち|of\s*)(\d+(?:\.\d+)?)/);
       if (ratingMatch) {
         rating = Math.round(parseFloat(ratingMatch[1]));
+      } else {
+        // フォールバック: 全ての数値を取得して最後のものを使用
+        const allNumbers = ratingText.match(/\d+(?:\.\d+)?/g);
+        if (allNumbers && allNumbers.length > 0) {
+          rating = Math.round(parseFloat(allNumbers[allNumbers.length - 1]));
+        }
       }
     }
 

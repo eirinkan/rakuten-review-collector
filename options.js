@@ -403,10 +403,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const title = item.title || '商品';
     if (source === 'amazon') {
       const asin = extractAsinFromUrl(item.url);
-      return asin ? `${asin}：${title}` : title;
+      // titleがASINと同じ場合は重複表示しない
+      if (asin && title !== asin) {
+        return `${asin}：${title}`;
+      }
+      return asin || title;
     } else if (source === 'rakuten') {
       const itemCode = extractRakutenItemCodeFromUrl(item.url);
-      return itemCode ? `${itemCode}：${title}` : title;
+      // titleが商品管理番号と同じ場合は重複表示しない
+      if (itemCode && title !== itemCode) {
+        return `${itemCode}：${title}`;
+      }
+      return itemCode || title;
     }
     return title;
   }
