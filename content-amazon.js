@@ -758,13 +758,23 @@
 
     // レビュー総数を取得
     const expectedTotal = getTotalReviewCount();
+
+    // 星フィルター情報を取得（ログ表示用）
+    const currentFilter = useStarFilter && currentStarFilterIndex < STAR_FILTERS.length
+      ? STAR_FILTERS[currentStarFilterIndex].label
+      : null;
+
     if (expectedTotal > 0) {
       chrome.storage.local.set({ expectedReviewTotal: expectedTotal });
       totalPages = Math.ceil(expectedTotal / 10); // Amazonは1ページ10件
-      if (incrementalOnly && lastCollectedDate) {
+
+      // 星フィルター適用時は詳細ログ
+      if (currentFilter) {
+        log(`${currentFilter}レビュー収集開始（${expectedTotal.toLocaleString()}件、${totalPages}ページ）`);
+      } else if (incrementalOnly && lastCollectedDate) {
         log(`差分収集を開始します（前回: ${lastCollectedDate}、全${expectedTotal.toLocaleString()}件中新着のみ）`);
       } else {
-        log(`レビュー収集を開始します（全${expectedTotal.toLocaleString()}件）`);
+        log(`レビュー収集を開始します（全${expectedTotal.toLocaleString()}件、${totalPages}ページ）`);
       }
     } else {
       chrome.storage.local.set({ expectedReviewTotal: 0 });
@@ -772,7 +782,9 @@
       // （ページ2以降でgetTotalReviewCount()が0を返す場合に対応）
       if (totalPages === 0) {
         // 新規収集でtotalPagesが不明な場合のみログを出力
-        if (incrementalOnly && lastCollectedDate) {
+        if (currentFilter) {
+          log(`${currentFilter}レビュー収集開始`);
+        } else if (incrementalOnly && lastCollectedDate) {
           log(`差分収集を開始します（前回: ${lastCollectedDate}）`);
         } else {
           log('レビュー収集を開始します');
@@ -780,7 +792,9 @@
       } else {
         // ストレージから復元したtotalPagesを維持
         console.log(`[Amazonレビュー収集] getTotalReviewCount()は0を返しましたが、ストレージから復元したtotalPages(${totalPages})を維持します`);
-        if (incrementalOnly && lastCollectedDate) {
+        if (currentFilter) {
+          log(`${currentFilter}レビュー収集継続（${totalPages}ページ）`);
+        } else if (incrementalOnly && lastCollectedDate) {
           log(`差分収集を継続します（前回: ${lastCollectedDate}、全${totalPages * 10}件程度）`);
         } else {
           log(`レビュー収集を継続します（全${totalPages * 10}件程度）`);
@@ -1728,17 +1742,54 @@
 
   /**
    * レビュー総数を取得
+   * フィルター適用時も対応
    */
   function getTotalReviewCount() {
+    // 1. 標準セレクターで取得を試みる
     const totalElem = document.querySelector(AMAZON_SELECTORS.totalReviews);
     if (totalElem) {
       const text = totalElem.textContent || '';
-      // 「1,234件のグローバルレーティング」から数値を抽出
+      // 「1,234件のグローバルレーティング」「1,234件中」から数値を抽出
       const match = text.match(/([\d,]+)\s*件/);
       if (match) {
-        return parseInt(match[1].replace(/,/g, ''), 10);
+        const count = parseInt(match[1].replace(/,/g, ''), 10);
+        console.log(`[Amazonレビュー収集] getTotalReviewCount: ${count}件（セレクター: totalReviews）`);
+        return count;
       }
     }
+
+    // 2. フィルター適用時の別要素を試す
+    // 「1-10件目 (全50件)」のようなテキストを含む要素
+    const filterInfoElems = document.querySelectorAll('[data-hook*="filter"], .a-size-base');
+    for (const elem of filterInfoElems) {
+      const text = elem.textContent || '';
+      // 「全XX件」「XX件中」パターン
+      const match = text.match(/(?:全|合計)?[\s]*([\d,]+)\s*件/);
+      if (match) {
+        const count = parseInt(match[1].replace(/,/g, ''), 10);
+        if (count > 0) {
+          console.log(`[Amazonレビュー収集] getTotalReviewCount: ${count}件（フォールバック）`);
+          return count;
+        }
+      }
+    }
+
+    // 3. ページネーションから推測
+    const paginationElems = document.querySelectorAll('.a-pagination li:not(.a-disabled) a');
+    let maxPage = 0;
+    for (const elem of paginationElems) {
+      const pageNum = parseInt(elem.textContent, 10);
+      if (!isNaN(pageNum) && pageNum > maxPage) {
+        maxPage = pageNum;
+      }
+    }
+    if (maxPage > 0) {
+      const estimatedCount = maxPage * 10; // 1ページ10件として推測
+      console.log(`[Amazonレビュー収集] getTotalReviewCount: ${estimatedCount}件（ページネーションから推測）`);
+      return estimatedCount;
+    }
+
+    console.log('[Amazonレビュー収集] getTotalReviewCount: 件数を取得できませんでした');
     return 0;
   }
 
