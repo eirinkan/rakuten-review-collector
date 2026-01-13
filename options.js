@@ -397,10 +397,23 @@ document.addEventListener('DOMContentLoaded', () => {
     return '';
   }
 
+  // タイトルから不要なプレフィックスを除去
+  function cleanTitle(title, source) {
+    if (!title) return '商品';
+    let cleaned = title;
+    if (source === 'amazon') {
+      // 「Amazon.co.jp：」「Amazon.co.jp:」を除去
+      cleaned = cleaned.replace(/^Amazon\.co\.jp[：:]\s*/i, '');
+      // 「カスタマーレビュー：」「カスタマーレビュー:」を除去
+      cleaned = cleaned.replace(/^カスタマーレビュー[：:]\s*/i, '');
+    }
+    return cleaned.trim() || '商品';
+  }
+
   // キューアイテムのタイトルを生成（Amazon: ASIN：商品名、楽天: 商品管理番号：商品名）
   function getQueueItemTitle(item) {
     const source = item.source || detectSourceFromUrl(item.url);
-    const title = item.title || '商品';
+    const title = cleanTitle(item.title, source);
     if (source === 'amazon') {
       const asin = extractAsinFromUrl(item.url);
       // titleがASINと同じ場合は重複表示しない
