@@ -2146,6 +2146,22 @@
       background: linear-gradient(135deg, #ff9900 0%, #e68a00 100%);
       color: #000;
     }
+
+    /* 統計情報（目立たない表示） */
+    .stats-section {
+      margin-top: 24px;
+      padding: 12px 16px;
+      text-align: center;
+      opacity: 0.5;
+      font-size: 11px;
+    }
+    .stats-label {
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+    .stats-value {
+      color: var(--text-secondary);
+    }
   </style>
 </head>
 <body>
@@ -2510,6 +2526,14 @@
 
           <h3>バージョン情報</h3>
           <p>レビュー収集 v1.6.0</p>
+        </div>
+      </div>
+
+      <!-- 統計情報（目立たない表示） -->
+      <div id="statsSection" class="stats-section">
+        <div class="stats-label">本日の収集ページ数</div>
+        <div class="stats-value">
+          <span id="amazonPageCount">0</span> ページ
         </div>
       </div>
     </div><!-- /settings-view -->

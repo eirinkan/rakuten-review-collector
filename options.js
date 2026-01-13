@@ -1898,4 +1898,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ===== 統計情報の表示 =====
+  function updateStats() {
+    chrome.runtime.sendMessage({ action: 'getAmazonRateLimitInfo' }, (response) => {
+      if (chrome.runtime.lastError || !response) return;
+      const countEl = document.getElementById('amazonPageCount');
+      if (countEl) {
+        countEl.textContent = response.count || 0;
+      }
+    });
+  }
+  updateStats();
+
 });
