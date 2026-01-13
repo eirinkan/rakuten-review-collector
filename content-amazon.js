@@ -1296,6 +1296,7 @@
         // フィルター遷移フラグを設定（background.jsで検出するため）
         state.filterTransitionPending = true;
         state.lastProcessedPage = 0; // ページ番号リセット（新しいフィルターでページ1から開始）
+        state.totalPages = 0; // 総ページ数リセット（新しいフィルターで再取得）
         console.log(`[Amazonレビュー収集] フィルター遷移前の状態保存: filterIndex=${filterIndex}`);
         chrome.storage.local.set({ collectionState: state }, resolve);
       });
@@ -1305,6 +1306,7 @@
     isCollecting = false;
     startCollectionLock = false;
     autoResumeExecuted = false;
+    totalPages = 0; // フィルター切り替え時に総ページ数をリセット
 
     // ページ遷移
     window.location.href = filteredUrl;
