@@ -1773,11 +1773,20 @@
     const totalElem = document.querySelector(AMAZON_SELECTORS.totalReviews);
     if (totalElem) {
       const text = totalElem.textContent || '';
-      // 「1,234件のグローバルレーティング」「1,234件中」から数値を抽出
-      const match = text.match(/([\d,]+)\s*件/);
-      if (match) {
-        const count = parseInt(match[1].replace(/,/g, ''), 10);
-        console.log(`[Amazonレビュー収集] getTotalReviewCount: ${count}件（セレクター: totalReviews）`);
+
+      // パターン1: 「1,234件のグローバルレーティング」「1,234件中」
+      const matchKen = text.match(/([\d,]+)\s*件/);
+      if (matchKen) {
+        const count = parseInt(matchKen[1].replace(/,/g, ''), 10);
+        console.log(`[Amazonレビュー収集] getTotalReviewCount: ${count}件（セレクター: totalReviews - 件パターン）`);
+        return count;
+      }
+
+      // パターン2: 「1,164一致するカスタマーレビュー」（フィルター適用時）
+      const matchItchi = text.match(/([\d,]+)\s*一致/);
+      if (matchItchi) {
+        const count = parseInt(matchItchi[1].replace(/,/g, ''), 10);
+        console.log(`[Amazonレビュー収集] getTotalReviewCount: ${count}件（セレクター: totalReviews - 一致パターン）`);
         return count;
       }
     }
@@ -1788,11 +1797,20 @@
     for (const elem of filterInfoElems) {
       const text = elem.textContent || '';
       // 「全XX件」「XX件中」パターン
-      const match = text.match(/(?:全|合計)?[\s]*([\d,]+)\s*件/);
-      if (match) {
-        const count = parseInt(match[1].replace(/,/g, ''), 10);
+      const matchKen = text.match(/(?:全|合計)?[\s]*([\d,]+)\s*件/);
+      if (matchKen) {
+        const count = parseInt(matchKen[1].replace(/,/g, ''), 10);
         if (count > 0) {
-          console.log(`[Amazonレビュー収集] getTotalReviewCount: ${count}件（フォールバック）`);
+          console.log(`[Amazonレビュー収集] getTotalReviewCount: ${count}件（フォールバック - 件パターン）`);
+          return count;
+        }
+      }
+      // 「1,164一致」パターン
+      const matchItchi = text.match(/([\d,]+)\s*一致/);
+      if (matchItchi) {
+        const count = parseInt(matchItchi[1].replace(/,/g, ''), 10);
+        if (count > 0) {
+          console.log(`[Amazonレビュー収集] getTotalReviewCount: ${count}件（フォールバック - 一致パターン）`);
           return count;
         }
       }
