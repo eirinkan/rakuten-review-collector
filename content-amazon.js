@@ -1961,12 +1961,8 @@
    * ログをポップアップに送信
    */
   function log(text, type = '') {
-    let productPrefix = '';
-    if (currentQueueName && currentProductId) {
-      productPrefix = `[${currentQueueName}・${currentProductId}] `;
-    } else if (currentProductId) {
-      productPrefix = `[${currentProductId}] `;
-    }
+    // プレフィックスはASINのみ（シンプルに）
+    const productPrefix = currentProductId ? `[${currentProductId}] ` : '';
     const currentPage = getCurrentPageNumber();
     const pagePrefix = totalPages > 0 ? `[${currentPage}/${totalPages}] ` : '';
     const fullText = productPrefix + pagePrefix + text;
