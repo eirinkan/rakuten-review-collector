@@ -400,18 +400,16 @@
           sendResponse({ success: false, error: 'resumeCollection実行中' });
           break;
         }
-        // isCollectingもここでチェック（startCollection内のセットより先にチェック）
-        if (isCollecting) {
-          console.log('[Amazonレビュー収集] 既に収集中のためスキップ (isCollecting=true - 早期チェック)');
+        // isCollectingとstartCollectionLockもチェック
+        if (isCollecting || startCollectionLock) {
+          console.log('[Amazonレビュー収集] 既に収集中のためスキップ', { isCollecting, startCollectionLock });
           sendResponse({ success: false, error: '既に収集中' });
           break;
         }
-        // 即座に両方のフラグをロック（競合防止）
+        // resumeCollectionLockだけをセット（isCollectingはstartCollection内でセット）
         resumeCollectionLock = true;
-        isCollecting = true; // ここで即座にセット（startCollection内より先）
 
         // backgroundからのページ遷移後の収集再開
-        // ページ遷移後のURL（isReviewPageはスクリプトロード時点のURLで判定されるため再確認）
         const currentPathIsReview = window.location.pathname.includes('/product-reviews/');
         console.log('[Amazonレビュー収集] resumeCollectionメッセージ受信', {
           isReviewPage,
@@ -419,16 +417,12 @@
           isCollecting,
           startCollectionLock,
           resumeCollectionLock,
-          autoResumeExecuted,
           currentUrl: window.location.href.substring(0, 80),
-          currentPage: getCurrentPageNumber(),
-          messageQueueName: message.queueName,
-          messageProductId: message.productId
+          currentPage: getCurrentPageNumber()
         });
         if (!currentPathIsReview) {
           console.log('[Amazonレビュー収集] レビューページではないためスキップ');
           resumeCollectionLock = false;
-          isCollecting = false; // フラグも戻す
           sendResponse({ success: false, error: 'レビューページではありません' });
           break;
         }
@@ -437,16 +431,15 @@
         incrementalOnly = message.incrementalOnly || false;
         lastCollectedDate = message.lastCollectedDate || null;
         currentQueueName = message.queueName || null;
-        // productIdが送られてきた場合は復元
         if (message.productId) {
           currentProductId = message.productId;
         }
-        autoResumeExecuted = false; // 自動再開フラグをリセット
+        autoResumeExecuted = false;
         const resumePage = getCurrentPageNumber();
         log(`ページ${resumePage}の収集を再開します`);
         startCollection();
         // startCollection完了後にロック解除（非同期処理のため長めに）
-        setTimeout(() => { resumeCollectionLock = false; }, 5000);
+        setTimeout(() => { resumeCollectionLock = false; }, 10000);
         sendResponse({ success: true });
         break;
 
@@ -913,6 +906,15 @@
         return false; // 次のページに進む
       }
 
+      // totalPagesが0の場合（フィルター遷移直後など）、「次へ」リンクで判断
+      if (totalPages === 0) {
+        const nextLink = findNextPageLink();
+        if (nextLink) {
+          log(`このページのレビューは全て収集済みです（ページ${currentPage}）- 次のページに進みます`);
+          return false; // 次のページに進む
+        }
+      }
+
       // 最終ページの場合は収集完了
       log('このページのレビューは全て収集済みです（最終ページ）');
       return true;
@@ -1350,6 +1352,7 @@
         state.filterTransitionPending = true;
         state.lastProcessedPage = 0; // ページ番号リセット（新しいフィルターでページ1から開始）
         state.totalPages = 0; // 総ページ数リセット（新しいフィルターで再取得）
+        state.consecutiveSkipPages = 0; // 連続スキップカウンタをリセット（重要！）
         console.log(`[Amazonレビュー収集] フィルター遷移前の状態保存: filterIndex=${filterIndex}`);
         chrome.storage.local.set({ collectionState: state }, resolve);
       });
@@ -1360,6 +1363,7 @@
     startCollectionLock = false;
     autoResumeExecuted = false;
     totalPages = 0; // フィルター切り替え時に総ページ数をリセット
+    consecutiveSkipPages = 0; // 連続スキップカウンタをリセット
 
     // ページ遷移
     window.location.href = filteredUrl;
