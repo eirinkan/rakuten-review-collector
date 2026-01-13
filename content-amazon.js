@@ -339,13 +339,11 @@
             }
 
             const asin = getASIN();
-            let prefix = '';
-            if (currentQueueName && asin) {
-              prefix = `[${currentQueueName}・${asin}] `;
-            } else if (asin) {
-              prefix = `[${asin}] `;
+            // currentProductIdを設定（ログ出力で使用）
+            if (asin) {
+              currentProductId = asin;
             }
-            log(prefix + 'レビューページに移動します');
+            log('レビューページに移動します');
 
             // 収集状態を設定してからクリックで遷移
             chrome.storage.local.get(['collectionState'], (result) => {
@@ -362,6 +360,11 @@
               state.lastCollectedDate = lastCollectedDate;
               state.queueName = currentQueueName;
               state.source = 'amazon'; // 販路を追加
+              // 重要: startedFromQueueを明示的に保存（レビューページ遷移時に使用）
+              // processNextInQueueから開始された場合はtrueが設定されている
+              if (state.startedFromQueue === undefined) {
+                state.startedFromQueue = false;
+              }
               chrome.storage.local.set({ collectionState: state }, async () => {
                 // クリックでページ遷移（人間らしいマウス移動＋クリック）
                 await humanClick(reviewLink);

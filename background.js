@@ -136,10 +136,32 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     } else {
       // 通常のページ遷移チェック
 
-      // キュー処理から開始された場合、ページ1ではグローバルリスナーは介入しない
-      // （キュー処理側の tabs.onUpdated リスナーが startCollection を送信するため）
-      if (state.startedFromQueue && currentPage === 1) {
-        console.log('[background] キュー処理からの開始（ページ1）のため、グローバルリスナーはスキップ');
+      // キュー処理から開始された場合の特別処理
+      // 商品ページ→レビューページ遷移時、キューのリスナーは既に削除されているため
+      // グローバルリスナーがstartCollectionを送信する必要がある
+      if (state.startedFromQueue) {
+        console.log('[background] キュー処理からの開始 - startCollectionを送信');
+        // フラグをクリア（次回のフィルター遷移等では通常処理を行う）
+        state.startedFromQueue = false;
+        await chrome.storage.local.set({ collectionState: state });
+
+        // 重複送信防止
+        const now = Date.now();
+        lastResumeSentTime.set(tabId, now);
+
+        // startCollectionを送信（resumeCollectionではなく）
+        setTimeout(() => {
+          console.log('[background] startCollectionメッセージ送信（キュー開始）');
+          chrome.tabs.sendMessage(tabId, {
+            action: 'startCollection',
+            incrementalOnly: state.incrementalOnly || false,
+            lastCollectedDate: state.lastCollectedDate || null,
+            queueName: state.queueName || null,
+            productId: state.productId || null
+          }).catch((err) => {
+            console.log('[background] startCollection送信エラー:', err);
+          });
+        }, 3000);
         return;
       }
 
