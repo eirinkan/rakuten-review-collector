@@ -7,7 +7,7 @@
   'use strict';
 
   // ===== ボット対策: 定数 =====
-  const MAX_PAGES_PER_SESSION = 25;      // 1セッションあたりの最大ページ数
+  const MAX_PAGES_PER_SESSION = 999999;  // 1セッションあたりの最大ページ数（実質無制限）
   const MICRO_BREAK_PROBABILITY = 0.05;  // 各ページで休憩する確率（5%）
   const PAGE_WAIT_MEAN_MS = 1500;        // ページ遷移前の平均待機時間（1.5秒、指数分布）
   const PAGE_WAIT_MAX_MS = 8000;         // ページ遷移前の最大待機時間（8秒）
@@ -1740,13 +1740,11 @@
 
   /**
    * ボット対策: レート制限をチェック
+   * 注: 制限を解除（常にOKを返す）
    */
   async function checkRateLimit() {
-    return new Promise(resolve => {
-      chrome.runtime.sendMessage({ action: 'checkAmazonRateLimit' }, response => {
-        resolve(response || { allowed: false, remaining: 0 });
-      });
-    });
+    // 制限解除: 常に許可を返す
+    return { allowed: true, remaining: 999999 };
   }
 
   /**
