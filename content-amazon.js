@@ -652,6 +652,18 @@
 
     currentProductId = getASIN();
 
+    // 商品名を取得してbackground.jsに通知（キュー表示の更新用）
+    const productInfo = getProductInfo();
+    if (productInfo.title && productInfo.title !== currentProductId) {
+      chrome.runtime.sendMessage({
+        action: 'updateProductTitle',
+        productId: currentProductId,
+        title: productInfo.title,
+        url: productInfo.url
+      });
+      console.log(`[Amazonレビュー収集] 商品名をbackgroundに通知: "${productInfo.title.substring(0, 50)}..."`);
+    }
+
     // 詳細なデバッグ情報を出力
     console.log('[Amazonレビュー収集] ===== 収集開始 =====');
     console.log('[Amazonレビュー収集] URL:', window.location.href);

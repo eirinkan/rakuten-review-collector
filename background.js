@@ -556,6 +556,71 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       forwardToAll(message);
       break;
 
+    case 'updateProductTitle':
+      // 収集開始時に商品名を更新（ASINのみだった場合）
+      (async () => {
+        try {
+          const { productId, title, url } = message;
+          if (!productId || !title) {
+            sendResponse({ success: false, error: 'productId and title are required' });
+            return;
+          }
+
+          console.log(`[Background] updateProductTitle: ${productId} → "${title.substring(0, 50)}..."`);
+
+          // キューの更新
+          const { queue = [] } = await chrome.storage.local.get('queue');
+          let queueUpdated = false;
+
+          for (const item of queue) {
+            if (item.productId === productId || item.id === productId) {
+              // タイトルがASINのみ、または空の場合に更新
+              const isAsinOnly = !item.title || item.title === productId || /^[A-Z0-9]{10}$/.test(item.title);
+              if (isAsinOnly) {
+                item.title = title;
+                if (url) item.url = url;
+                queueUpdated = true;
+                console.log(`[Background] キュー更新成功: "${title.substring(0, 50)}..."`);
+              }
+              break;
+            }
+          }
+
+          if (queueUpdated) {
+            await chrome.storage.local.set({ queue });
+            forwardToAll({ action: 'queueUpdated' });
+          }
+
+          // collectingItemsも更新
+          const { collectingItems = [] } = await chrome.storage.local.get('collectingItems');
+          let collectingUpdated = false;
+
+          for (const item of collectingItems) {
+            if (item.productId === productId || item.id === productId) {
+              const isAsinOnly = !item.title || item.title === productId || /^[A-Z0-9]{10}$/.test(item.title);
+              if (isAsinOnly) {
+                item.title = title;
+                if (url) item.url = url;
+                collectingUpdated = true;
+                console.log(`[Background] collectingItems更新成功: "${title.substring(0, 50)}..."`);
+              }
+              break;
+            }
+          }
+
+          if (collectingUpdated) {
+            await chrome.storage.local.set({ collectingItems });
+            forwardToAll({ action: 'collectingItemsUpdated', collectingItems });
+          }
+
+          sendResponse({ success: true, queueUpdated, collectingUpdated });
+        } catch (error) {
+          console.error('[Background] updateProductTitle error:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      return true;
+
     case 'openOptions':
       chrome.runtime.openOptionsPage();
       sendResponse({ success: true });
