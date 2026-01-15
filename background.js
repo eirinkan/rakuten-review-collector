@@ -568,16 +568,42 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
           console.log(`[Background] updateProductTitle: ${productId} → "${title.substring(0, 50)}..."`);
 
+          // URLからproductIdを抽出するヘルパー関数
+          const extractProductIdFromItemUrl = (itemUrl) => {
+            if (!itemUrl) return null;
+            // Amazon ASIN
+            const amazonMatch = itemUrl.match(/(?:\/dp\/|\/gp\/product\/|\/product-reviews\/)([A-Z0-9]{10})/i);
+            if (amazonMatch) return amazonMatch[1];
+            // 楽天商品コード
+            const rakutenMatch = itemUrl.match(/item\.rakuten\.co\.jp\/[^\/]+\/([^\/\?]+)/);
+            if (rakutenMatch) return rakutenMatch[1];
+            return null;
+          };
+
+          // アイテムがproductIdと一致するか判定（複数の方法で比較）
+          const isMatchingItem = (item, targetProductId) => {
+            // 直接比較
+            if (item.productId === targetProductId) return true;
+            if (item.id === targetProductId) return true;
+            // titleがASINの場合（旧形式対応）
+            if (item.title === targetProductId) return true;
+            // URLから抽出して比較（フォールバック）
+            const urlProductId = extractProductIdFromItemUrl(item.url);
+            if (urlProductId === targetProductId) return true;
+            return false;
+          };
+
           // キューの更新
           const { queue = [] } = await chrome.storage.local.get('queue');
           let queueUpdated = false;
 
           for (const item of queue) {
-            if (item.productId === productId || item.id === productId) {
+            if (isMatchingItem(item, productId)) {
               // タイトルがASINのみ、または空の場合に更新
               const isAsinOnly = !item.title || item.title === productId || /^[A-Z0-9]{10}$/.test(item.title);
               if (isAsinOnly) {
                 item.title = title;
+                item.productId = productId; // productIdも設定（なかった場合のため）
                 if (url) item.url = url;
                 queueUpdated = true;
                 console.log(`[Background] キュー更新成功: "${title.substring(0, 50)}..."`);
@@ -596,10 +622,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           let collectingUpdated = false;
 
           for (const item of collectingItems) {
-            if (item.productId === productId || item.id === productId) {
+            if (isMatchingItem(item, productId)) {
               const isAsinOnly = !item.title || item.title === productId || /^[A-Z0-9]{10}$/.test(item.title);
               if (isAsinOnly) {
                 item.title = title;
+                item.productId = productId; // productIdも設定（なかった場合のため）
                 if (url) item.url = url;
                 collectingUpdated = true;
                 console.log(`[Background] collectingItems更新成功: "${title.substring(0, 50)}..."`);
@@ -610,7 +637,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
           if (collectingUpdated) {
             await chrome.storage.local.set({ collectingItems });
-            forwardToAll({ action: 'collectingItemsUpdated', collectingItems });
+            forwardToAll({ action: 'queueUpdated' }); // UIを更新
           }
 
           sendResponse({ success: true, queueUpdated, collectingUpdated });

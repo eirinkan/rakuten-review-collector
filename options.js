@@ -1090,15 +1090,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Amazonの場合
+        let productId = null;
         const amazonAsinMatch = url.match(/(?:\/dp\/|\/gp\/product\/|\/product-reviews\/)([A-Z0-9]{10})/i);
         if (amazonAsinMatch) {
           productTitle = amazonAsinMatch[1];
+          productId = amazonAsinMatch[1]; // ASINをproductIdとして設定
           source = 'amazon';
         }
 
+        // 楽天の商品コードを抽出
+        if (source === 'rakuten') {
+          const rakutenMatch = url.match(/item\.rakuten\.co\.jp\/[^\/]+\/([^\/\?]+)/);
+          if (rakutenMatch) {
+            productId = rakutenMatch[1];
+          }
+        }
+
         queue.push({
+          id: Date.now().toString() + '_' + addedCount, // 一意のID
           url: url,
           title: productTitle.substring(0, 100),
+          productId: productId, // 商品識別子（Amazon: ASIN, 楽天: 商品コード）
           source: source,
           addedAt: new Date().toISOString()
         });
