@@ -604,7 +604,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               if (isAsinOnly) {
                 item.title = title;
                 item.productId = productId; // productIdも設定（なかった場合のため）
-                if (url) item.url = url;
+                // 注意: URLは変更しない（既に正しく設定されているため）
                 queueUpdated = true;
                 console.log(`[Background] キュー更新成功: "${title.substring(0, 50)}..."`);
               }
@@ -627,7 +627,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               if (isAsinOnly) {
                 item.title = title;
                 item.productId = productId; // productIdも設定（なかった場合のため）
-                if (url) item.url = url;
+                // 注意: URLは変更しない（既に正しく設定されているため）
                 collectingUpdated = true;
                 console.log(`[Background] collectingItems更新成功: "${title.substring(0, 50)}..."`);
               }

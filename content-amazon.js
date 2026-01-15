@@ -658,8 +658,8 @@
       chrome.runtime.sendMessage({
         action: 'updateProductTitle',
         productId: currentProductId,
-        title: productInfo.title,
-        url: productInfo.url
+        title: productInfo.title
+        // 注意: URLは送信しない（キューに既に正しいURLが設定されているため）
       });
       console.log(`[Amazonレビュー収集] 商品名をbackgroundに通知: "${productInfo.title.substring(0, 50)}..."`);
     }
