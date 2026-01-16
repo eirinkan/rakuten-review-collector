@@ -1847,8 +1847,11 @@ async function startQueueCollection() {
     });
     collectionWindowId = window.id;
 
-    // 最小化しない（最小化するとページ読み込みが正常に動作しない場合がある）
-    // ボット対策: ウィンドウをアクティブな状態に保つ
+    // ウィンドウ作成後に自動最小化（検証済み: 最小化状態でも収集は正常動作）
+    // ユーザーの作業を邪魔しないよう、バックグラウンドで収集
+    setTimeout(() => {
+      chrome.windows.update(collectionWindowId, { state: 'minimized' }).catch(() => {});
+    }, 500);
 
     // about:blankタブは後で閉じる
     if (window.tabs && window.tabs[0]) {
