@@ -1645,6 +1645,12 @@
       }
     }
 
+    // 日本以外のレビューはスキップ（海外レビューは収集対象外）
+    if (country !== '日本') {
+      console.log(`[Amazonレビュー収集] 海外レビューをスキップ: ${country}`);
+      return null;
+    }
+
     // バリエーションを取得
     const variationElem = elem.querySelector(AMAZON_SELECTORS.variation);
     if (variationElem) {
