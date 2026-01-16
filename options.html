@@ -781,6 +781,11 @@
       pointer-events: auto;
     }
 
+    /* オーバーレイ表示時は下のinputのボーダーを非表示（角丸部分の赤線対策） */
+    .spreadsheet-input-wrapper:has(.spreadsheet-title-overlay.show) input {
+      border-color: transparent;
+    }
+
     .spreadsheet-title-overlay:hover {
       border-color: var(--primary);
       background: #f8f9fa;
@@ -2487,6 +2492,58 @@
             </li>
           </ul>
 
+          <h3>Amazonレビュー収集の特徴</h3>
+          <ul>
+            <li><strong>星評価フィルター（自動）:</strong>
+              <br>★1→★2→★3→★4→★5の順で収集し、<strong>最大500件</strong>まで取得
+              <br>低評価レビューを優先的に収集します
+            </li>
+            <li><strong>認証済み購入のみ:</strong>
+              <br>Amazonの「認証済み購入」レビューのみ収集（偽レビュー対策）
+            </li>
+            <li><strong>ボット対策:</strong>
+              <br>・ランダムな待機時間（1.5〜8秒）
+              <br>・人間らしいスクロール・クリック動作
+              <br>・1日のページ数制限（100ページ/日）
+            </li>
+            <li><strong>同時収集数:</strong> Amazonは1商品ずつ収集（ボット対策のため）</li>
+            <li><strong>Amazon固有データ:</strong> 国（日本、アメリカなど）、Vineレビュー判定</li>
+          </ul>
+
+          <h3>楽天 vs Amazon の違い</h3>
+          <table>
+            <tr>
+              <th>項目</th>
+              <th>楽天</th>
+              <th>Amazon</th>
+            </tr>
+            <tr>
+              <td>同時収集数</td>
+              <td>最大3件</td>
+              <td>1件のみ</td>
+            </tr>
+            <tr>
+              <td>ランキング一括追加</td>
+              <td>○</td>
+              <td>×</td>
+            </tr>
+            <tr>
+              <td>星評価フィルター</td>
+              <td>×</td>
+              <td>○（自動）</td>
+            </tr>
+            <tr>
+              <td>1日の制限</td>
+              <td>なし</td>
+              <td>100ページ</td>
+            </tr>
+            <tr>
+              <td>収集できる最大件数</td>
+              <td>全件</td>
+              <td>最大500件</td>
+            </tr>
+          </table>
+
           <h3>収集の仕組み</h3>
           <ul>
             <li>キュー収集時は最大<strong>3商品を同時に並列処理</strong></li>
@@ -2523,6 +2580,15 @@
               <br>→ 楽天の新しいページ構造に対応していない可能性。拡張機能の更新を確認
             </li>
           </ul>
+
+          <h3>アップデート手順</h3>
+          <ol>
+            <li>拡張機能フォルダの場所を確認（初回インストール時に選んだフォルダ）</li>
+            <li>フォルダの<strong>【中身を全て削除】</strong>（フォルダ自体は残す）</li>
+            <li>新しいZIPの中身をそのフォルダに展開</li>
+            <li>chrome://extensions で 🔄 ボタンをクリック</li>
+            <li>完了（設定・キューは自動引継ぎ）</li>
+          </ol>
 
           <h3>バージョン情報</h3>
           <p>レビュー収集 v1.6.0</p>
