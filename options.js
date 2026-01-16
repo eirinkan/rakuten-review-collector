@@ -1915,6 +1915,9 @@ document.addEventListener('DOMContentLoaded', () => {
               link.classList.remove('disabled');
             }
 
+            // ヘッダーのスプレッドシートボタン状態を更新
+            updateSpreadsheetBtnState();
+
             // メインのタイトル表示も更新
             if (spreadsheetTitleEl) {
               fetchAndShowSpreadsheetTitle(url, spreadsheetTitleEl, spreadsheetUrlInput);
@@ -1963,6 +1966,9 @@ document.addEventListener('DOMContentLoaded', () => {
               link.href = url;
               link.classList.remove('disabled');
             }
+
+            // ヘッダーのスプレッドシートボタン状態を更新
+            updateSpreadsheetBtnState();
 
             // メインのタイトル表示も更新
             if (amazonSpreadsheetTitleEl) {
