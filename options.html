@@ -1555,6 +1555,11 @@
       background: rgba(220, 53, 69, 0.1);
     }
 
+    .dropdown-icon-btn.add-to-queue-btn:hover {
+      color: var(--success);
+      background: rgba(40, 167, 69, 0.1);
+    }
+
     /* 画面切り替え用 */
     .view-container {
       display: none;
@@ -2252,7 +2257,7 @@
     </div>
 
     <!-- 定期収集 Card -->
-    <div class="card" style="position: relative; z-index: 10;">
+    <div class="card">
       <div class="queue-header">
         <h2>定期（β版）</h2>
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -2273,7 +2278,7 @@
     </div>
 
     <!-- Log Card -->
-    <div id="logCard" class="card" style="display: none; position: relative; z-index: 1;">
+    <div id="logCard" class="card" style="display: none;">
       <div class="log-header">
         <h2>ログ</h2>
         <div class="log-actions">

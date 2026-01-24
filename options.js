@@ -1240,6 +1240,9 @@ document.addEventListener('DOMContentLoaded', () => {
           <span class="saved-queue-count">${queue.items.length}件</span>
         </div>
         <div class="saved-queue-actions">
+          <button class="dropdown-icon-btn add-to-queue-btn" data-id="${queue.id}" title="キューに追加">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          </button>
           <button class="dropdown-icon-btn edit-queue-btn" data-id="${queue.id}" title="名前を変更">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
           </button>
@@ -1251,6 +1254,16 @@ document.addEventListener('DOMContentLoaded', () => {
     `).join('');
 
     // イベントリスナー
+    // キューに追加ボタン
+    savedQueuesDropdownList.querySelectorAll('.add-to-queue-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const queueId = e.currentTarget.dataset.id;
+        loadSavedQueue(queueId);
+        savedQueuesDropdown.style.display = 'none';
+      });
+    });
+    // クリックでもキューに追加
     savedQueuesDropdownList.querySelectorAll('.saved-queue-info').forEach(el => {
       el.addEventListener('click', (e) => {
         loadSavedQueue(e.currentTarget.dataset.id);
@@ -1260,13 +1273,17 @@ document.addEventListener('DOMContentLoaded', () => {
     savedQueuesDropdownList.querySelectorAll('.edit-queue-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        editSavedQueueName(e.target.dataset.id);
+        // SVG要素がクリックされた場合もボタンのdata-idを取得
+        const queueId = e.currentTarget.dataset.id;
+        editSavedQueueName(queueId);
       });
     });
     savedQueuesDropdownList.querySelectorAll('.delete-queue-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        deleteSavedQueue(e.target.dataset.id);
+        // SVG要素がクリックされた場合もボタンのdata-idを取得
+        const queueId = e.currentTarget.dataset.id;
+        deleteSavedQueue(queueId);
       });
     });
   }
