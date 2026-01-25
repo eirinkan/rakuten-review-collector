@@ -741,28 +741,101 @@ async function handleSaveReviews(reviews, tabId = null, source = 'rakuten') {
     prefix = `[${currentItem.queueName}・${productId}] `;
   }
 
-  // 定期収集・通常収集共通: まずローカルストレージに蓄積
+  // 定期収集・通常収集共通: ローカルストレージに蓄積のみ
+  // スプレッドシートへの書き込みは商品収集完了時にバッチ処理で行う
   const newReviews = await saveToLocalStorage(reviews, detectedSource);
 
   if (newReviews.length === 0) {
     return;
   }
 
-  if (spreadsheetUrl) {
-    try {
-      // ローカルストレージから全レビューを取得（蓄積されたもの）
-      const stateResult = await chrome.storage.local.get(['collectionState']);
-      const allReviews = stateResult.collectionState?.reviews || [];
-
-      if (allReviews.length > 0) {
-        await sendToSheets(spreadsheetUrl, allReviews, syncSettings.separateSheets !== false, isScheduled, detectedSource);
-        log(prefix + 'スプレッドシートに保存しました');
-      }
-    } catch (error) {
-      log(`スプレッドシートへの保存に失敗: ${error.message}`, 'error');
+  // スプレッドシートURLを収集中アイテムに保存（完了時に使用）
+  if (spreadsheetUrl && currentItem) {
+    currentItem.spreadsheetUrl = spreadsheetUrl;
+    const collectingResult = await chrome.storage.local.get(['collectingItems']);
+    const collectingItems = collectingResult.collectingItems || [];
+    const index = collectingItems.findIndex(item => item.tabId === tabId);
+    if (index >= 0) {
+      collectingItems[index] = currentItem;
+      await chrome.storage.local.set({ collectingItems });
     }
-  } else if (isScheduled) {
+  }
+
+  // スプレッドシート未設定の警告（定期収集の場合のみ）
+  if (!spreadsheetUrl && isScheduled) {
     log(prefix + '定期収集用のスプレッドシートが設定されていません', 'error');
+  }
+}
+
+/**
+ * スプレッドシートへの保存（商品収集完了時にバッチ処理）
+ * @param {Object} completedItem - 完了した収集アイテム
+ * @param {string} logPrefix - ログ出力用のプレフィックス
+ */
+async function saveReviewsToSpreadsheet(completedItem, logPrefix) {
+  // 定期収集かどうかを判定
+  const isScheduled = !!(completedItem?.queueName);
+
+  // URLから販路と商品IDを判定
+  const isAmazon = completedItem?.url?.includes('amazon.co.jp');
+  const productId = extractProductIdFromUrl(completedItem?.url || '');
+
+  // スプレッドシートURLを取得
+  let spreadsheetUrl = completedItem?.spreadsheetUrl || null;
+
+  // URLが収集アイテムにない場合は設定から取得
+  if (!spreadsheetUrl && !isScheduled) {
+    const syncSettings = await chrome.storage.sync.get(['spreadsheetUrl', 'amazonSpreadsheetUrl']);
+    spreadsheetUrl = isAmazon ? syncSettings.amazonSpreadsheetUrl : syncSettings.spreadsheetUrl;
+  }
+
+  if (!spreadsheetUrl) {
+    if (isScheduled) {
+      log(logPrefix + ' 定期収集用のスプレッドシートが設定されていません', 'error');
+    }
+    return;
+  }
+
+  try {
+    // ローカルストレージから全レビューを取得
+    const stateResult = await chrome.storage.local.get(['collectionState']);
+    const allReviews = stateResult.collectionState?.reviews || [];
+
+    if (allReviews.length === 0) {
+      return;
+    }
+
+    // この商品のレビューのみフィルタリング
+    // 複数商品を並列収集している場合に他の商品のデータを含めないため
+    const productReviews = productId
+      ? allReviews.filter(r => r.productId === productId)
+      : allReviews;
+
+    if (productReviews.length === 0) {
+      return;
+    }
+
+    // 販路を判定
+    const source = productReviews[0]?.source || (isAmazon ? 'amazon' : 'rakuten');
+
+    // 設定を取得
+    const syncSettings = await chrome.storage.sync.get(['separateSheets']);
+
+    // スプレッドシートに保存（この商品のレビューのみ）
+    await sendToSheets(spreadsheetUrl, productReviews, syncSettings.separateSheets !== false, isScheduled, source);
+    log(logPrefix + ` スプレッドシートに保存しました（${productReviews.length}件）`, 'success');
+
+    // 保存済みのレビューをローカルストレージから削除
+    // 並列収集時に他の商品のレビューは残す
+    const remainingReviews = productId
+      ? allReviews.filter(r => r.productId !== productId)
+      : [];
+
+    const state = stateResult.collectionState || {};
+    state.reviews = remainingReviews;
+    await chrome.storage.local.set({ collectionState: state });
+  } catch (error) {
+    log(`${logPrefix} スプレッドシートへの保存に失敗: ${error.message}`, 'error');
   }
 }
 
@@ -1692,6 +1765,9 @@ async function handleCollectionComplete(tabId) {
       const productLastCollected = lcResult.productLastCollected || {};
       productLastCollected[productId] = new Date().toISOString().split('T')[0]; // YYYY-MM-DD形式
       await chrome.storage.local.set({ productLastCollected });
+
+      // スプレッドシートへの保存（バッチ処理：商品収集完了時に一括書き込み）
+      await saveReviewsToSpreadsheet(completedItem, logPrefix);
     }
 
     // キュー収集の場合のみタブを閉じる（単一収集ではユーザーがページに留まる）
