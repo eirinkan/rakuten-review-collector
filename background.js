@@ -2179,48 +2179,40 @@ async function processNextInQueue() {
   const queuePrefix = nextItem.queueName ? `[${nextItem.queueName}・${productId}]` : '';
   console.log('[processNextInQueue] 処理URL:', nextItem.url, 'isAmazon:', nextItem.url.includes('amazon.co.jp'));
 
-  // 収集用タブを再利用または作成
+  // 毎回新しいタブで開く（タブ再利用は無効化）
+  // 理由: タブ再利用時のURL変更とcontent script初期化のタイミング問題を回避
   let tab;
   const isAmazonUrl = nextItem.url.includes('amazon.co.jp');
 
-  // 既存のタブを再利用できるか確認
-  let reuseTab = false;
+  // 前のタブがあれば閉じる
   if (lastUsedTabId) {
     try {
-      const existingTab = await chrome.tabs.get(lastUsedTabId);
-      if (existingTab) {
-        // 既存タブで次のURLに移動
-        await chrome.tabs.update(lastUsedTabId, { url: nextItem.url });
-        tab = existingTab;
-        tab.id = lastUsedTabId;
-        reuseTab = true;
-        console.log('[processNextInQueue] 既存タブを再利用:', lastUsedTabId);
-      }
+      await chrome.tabs.remove(lastUsedTabId);
+      console.log('[processNextInQueue] 前のタブを閉じました:', lastUsedTabId);
     } catch (e) {
-      // タブが存在しない場合は新規作成
-      console.log('[processNextInQueue] 既存タブが見つからないため新規作成');
-      lastUsedTabId = null;
+      // タブが既に閉じられている場合は無視
     }
+    lastUsedTabId = null;
   }
 
-  // 再利用できなかった場合は新規タブを作成
-  if (!reuseTab) {
-    if (collectionWindowId) {
-      try {
-        tab = await chrome.tabs.create({
-          url: nextItem.url,
-          windowId: collectionWindowId,
-          active: false
-        });
-      } catch (e) {
-        // ウィンドウが閉じられている場合は通常のタブで開く
-        console.error('収集用ウィンドウにタブ作成失敗:', e);
-        tab = await chrome.tabs.create({ url: nextItem.url, active: false });
-      }
-    } else {
-      // フォールバック: 通常のタブ
+  // 新規タブを作成
+  if (collectionWindowId) {
+    try {
+      tab = await chrome.tabs.create({
+        url: nextItem.url,
+        windowId: collectionWindowId,
+        active: false
+      });
+      console.log('[processNextInQueue] 新規タブを作成:', tab.id);
+    } catch (e) {
+      // ウィンドウが閉じられている場合は通常のタブで開く
+      console.error('収集用ウィンドウにタブ作成失敗:', e);
       tab = await chrome.tabs.create({ url: nextItem.url, active: false });
     }
+  } else {
+    // フォールバック: 通常のタブ
+    tab = await chrome.tabs.create({ url: nextItem.url, active: false });
+    console.log('[processNextInQueue] 新規タブを作成（通常）:', tab.id);
   }
 
   // tabIdを収集中アイテムに設定
