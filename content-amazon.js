@@ -1932,10 +1932,18 @@
   }
 
   /**
-   * スリープ
+   * スリープ（バックグラウンドタブ対応版）
+   * macOS/ChromeではバックグラウンドタブのsetTimeoutが大幅にthrottleされるため、
+   * 長い待機を短縮して対応
    */
   function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    // 100ms以下は即座に解決（throttle対策）
+    if (ms <= 100) {
+      return Promise.resolve();
+    }
+    // 長い待機は最大500msに制限（バックグラウンドでも動作するように）
+    const actualMs = Math.min(ms, 500);
+    return new Promise(resolve => setTimeout(resolve, actualMs));
   }
 
   // ===== ボット対策: 人間らしい行動パターン =====
