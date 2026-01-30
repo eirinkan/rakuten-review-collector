@@ -2158,16 +2158,11 @@
       }
     }
 
-    // ページ読み込み完了を待って自動再開をチェック
-    // バックグラウンドタブでは setTimeout がスロットリングされるため、即座に実行する
-    // DOM読み込みは waitForReviews 関数で待機するため、ここで待つ必要はない
-    if (document.readyState === 'complete') {
-      // 既に読み込み完了している場合は即座にチェック
-      checkAndResumeCollection();
-    } else {
-      // まだ読み込み中の場合は、loadイベントで即座に実行
-      window.addEventListener('load', checkAndResumeCollection, { once: true });
-    }
+    // スクリプト読み込み時点で即座にチェック
+    // バックグラウンドタブでは load イベントのコールバックもスロットリングされるため、
+    // イベントを待たずに即座に実行する
+    // DOM読み込みは startCollection 内の waitForReviews 関数で待機するため問題なし
+    checkAndResumeCollection();
   } else {
     console.log('[Amazonレビュー収集] レビューページではない:', window.location.href);
   }
