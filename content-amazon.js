@@ -2163,6 +2163,49 @@
     // イベントを待たずに即座に実行する
     // DOM読み込みは startCollection 内の waitForReviews 関数で待機するため問題なし
     checkAndResumeCollection();
+
+    // ===== URL変更監視（SPA対応） =====
+    // Amazonは「次へ」クリック時にページをリロードせず、コンテンツを動的に更新することがある
+    // その場合、content scriptが再読み込みされないため、URL変更を監視して収集を再開する
+    let lastUrl = window.location.href;
+    let urlCheckInterval = null;
+
+    function startUrlMonitoring() {
+      if (urlCheckInterval) return; // 既に監視中
+
+      urlCheckInterval = setInterval(() => {
+        const currentUrl = window.location.href;
+        if (currentUrl !== lastUrl) {
+          console.log('[Amazonレビュー収集] URL変更を検出:', {
+            from: lastUrl,
+            to: currentUrl
+          });
+          lastUrl = currentUrl;
+
+          // URLがレビューページかどうか確認
+          const isStillReviewPage = currentUrl.includes('/product-reviews/') ||
+                                     currentUrl.includes('/reviews/') ||
+                                     currentUrl.includes('reviewerType=');
+
+          if (isStillReviewPage) {
+            console.log('[Amazonレビュー収集] レビューページへのURL変更、自動再開をチェックします');
+            // フラグをリセットして再開を許可
+            isCollecting = false;
+            startCollectionLock = false;
+            autoResumeExecuted = false;
+            // 少し待ってからチェック（DOMが更新されるのを待つ）
+            setTimeout(() => {
+              checkAndResumeCollection();
+            }, 500);
+          }
+        }
+      }, 500); // 500msごとにURL変更をチェック
+
+      console.log('[Amazonレビュー収集] URL変更監視を開始しました');
+    }
+
+    // URL監視を開始
+    startUrlMonitoring();
   } else {
     console.log('[Amazonレビュー収集] レビューページではない:', window.location.href);
   }
