@@ -1768,10 +1768,20 @@ async function handleCollectionComplete(tabId) {
     return true; // 検証できない場合は成功扱い
   };
 
-  // アクティブタブから削除
+  // アクティブタブとスプレッドシートURL、収集中リストの処理
   if (tabId) {
-    activeCollectionTabs.delete(tabId);
-    tabSpreadsheetUrls.delete(tabId);
+    // キュー収集の場合はタブを再利用するため、activeCollectionTabsから削除しない
+    if (isQueueCollecting) {
+      // タブIDを保存（次の商品で再利用）
+      lastUsedTabId = tabId;
+      // スプレッドシートURLはクリア（次の商品用に新しく設定される）
+      tabSpreadsheetUrls.delete(tabId);
+    } else {
+      // 単一収集の場合は通常通り削除
+      activeCollectionTabs.delete(tabId);
+      tabSpreadsheetUrls.delete(tabId);
+    }
+
     // タブごとの状態をクリーンアップ
     const stateKey = `collectionState_${tabId}`;
     await chrome.storage.local.remove(stateKey);
@@ -1799,13 +1809,6 @@ async function handleCollectionComplete(tabId) {
 
       // スプレッドシートへの保存（バッチ処理：商品収集完了時に一括書き込み）
       await saveReviewsToSpreadsheet(completedItem, logPrefix);
-    }
-
-    // キュー収集の場合、タブを閉じずに再利用するためにIDを保存
-    // タブを閉じるのは全収集完了時のみ
-    if (isQueueCollecting) {
-      // タブIDを保存（次の商品で再利用）
-      lastUsedTabId = tabId;
     }
   }
 
