@@ -1953,16 +1953,16 @@
    * 人間はページを開いたらまず全体を見渡す
    */
   async function initialPageScan() {
-    // ページを開いた直後、まず画面を見渡す動作（1-3秒）
-    const scanTime = 1000 + Math.random() * 2000;
-    await sleep(scanTime);
+    // バックグラウンドタブ対応: 軽量化バージョン
+    // 短い待機のみ
+    await sleep(300 + Math.random() * 300);
 
-    // 軽くスクロールして全体を確認（人間は最初に全体像を把握する）
-    const quickScroll = 100 + Math.random() * 200;
-    window.scrollTo({ top: quickScroll, behavior: 'smooth' });
-    await sleep(500 + Math.random() * 500);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    await sleep(300);
+    // 軽くスクロールして全体を確認
+    const quickScroll = 100 + Math.random() * 100;
+    window.scrollTo({ top: quickScroll, behavior: 'auto' });
+    await sleep(200);
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    await sleep(100);
   }
 
   /**
@@ -1999,67 +1999,31 @@
    * 各レビューを「読む」動作をシミュレート
    */
   async function simulateReadingReviews() {
+    // バックグラウンドタブではsetTimeoutがthrottleされるため、軽量化バージョンを使用
     const reviews = document.querySelectorAll(AMAZON_SELECTORS.reviewContainer);
 
-    for (const review of reviews) {
-      if (shouldStop) return;
+    // ページ全体を一度スクロールするだけ（個別レビューへのスクロールは省略）
+    if (reviews.length > 0) {
+      // 最初のレビューを表示
+      reviews[0].scrollIntoView({ behavior: 'auto', block: 'start' });
+      await sleep(200);
 
-      // レビューまでスクロール（画面中央に表示）
-      review.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      await sleep(300 + Math.random() * 200); // スクロール完了待ち
-
-      // レビューの長さに応じた読み時間を計算
-      const bodyElem = review.querySelector('[data-hook="review-body"]');
-      const bodyText = bodyElem?.textContent || '';
-      const charCount = bodyText.length;
-
-      // 100文字あたり0.3-0.5秒（人間の読書速度をシミュレート）
-      const baseReadTime = (charCount / 100) * (READING_SPEED_PER_100CHARS + Math.random() * 200);
-      const readTime = Math.min(Math.max(baseReadTime, 300), 3000); // 0.3-3秒の範囲
-
-      // 時々レビューにホバー（20%の確率）
-      if (Math.random() < 0.2) {
-        await hoverOnReview(review);
-      }
-
-      // 読む時間
-      await sleep(readTime);
-
-      // 時々スキップ（つまらないレビューは読み飛ばす: 15%）
-      if (Math.random() < 0.15) {
-        // スキップ時は早めに次へ
-        continue;
-      }
+      // 最後のレビューまでスクロール
+      reviews[reviews.length - 1].scrollIntoView({ behavior: 'auto', block: 'end' });
+      await sleep(300);
     }
+
+    // 全体で短い待機のみ（バックグラウンドタブ対応）
+    await sleep(500 + Math.random() * 500);
   }
 
   /**
    * ランダムなマイクロブレイク（人間らしい休憩）
-   * 固定間隔ではなく、確率ベースで発生
+   * バックグラウンドタブ対応: 無効化（setTimeoutがthrottleされるため）
    */
   async function maybeHaveBreak() {
-    // 各ページで MICRO_BREAK_PROBABILITY の確率で休憩
-    if (Math.random() < MICRO_BREAK_PROBABILITY) {
-      const breakType = Math.random();
-
-      if (breakType < 0.6) {
-        // 短い休憩（60%）: 3-10秒
-        const breakTime = 3000 + Math.random() * 7000;
-        log(`少し休憩中...（${Math.round(breakTime / 1000)}秒）`);
-        await sleep(breakTime);
-      } else if (breakType < 0.9) {
-        // 中程度の休憩（30%）: 15-45秒
-        const breakTime = 15000 + Math.random() * 30000;
-        log(`しばらく休憩中...（${Math.round(breakTime / 1000)}秒）`);
-        await sleep(breakTime);
-      } else {
-        // 長い休憩（10%）: 1-3分
-        const breakTime = 60000 + Math.random() * 120000;
-        log(`長めの休憩中...（${Math.round(breakTime / 1000)}秒）`);
-        await sleep(breakTime);
-      }
-      return true;
-    }
+    // バックグラウンドタブでのthrottle問題を回避するため、休憩機能を無効化
+    // 代わりにページ遷移時の短い待機で対応
     return false;
   }
 
