@@ -223,37 +223,46 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 /**
  * タブにメッセージを送信（リトライ機能付き）
  * バックグラウンドタブでは content script の初期化が遅れる可能性があるため、
- * 失敗した場合は最大5回までリトライする
+ * 失敗した場合は最大10回までリトライする
+ *
+ * 重要: setTimeoutはバックグラウンドタブで最小1秒にスロットリングされるため、
+ * setIntervalベースで500msごとにポーリングしてリトライする
+ *
  * @param {number} tabId - タブID
  * @param {Object} message - 送信するメッセージ
  * @param {string} description - ログ出力用の説明
- * @param {number} retryCount - 現在のリトライ回数（内部使用）
  */
-async function sendMessageWithRetry(tabId, message, description = '', retryCount = 0) {
-  const MAX_RETRIES = 5;
-  const INITIAL_DELAY = 1000;  // 最初の送信は1秒後
-  const RETRY_DELAY = 2000;    // リトライは2秒間隔
+function sendMessageWithRetry(tabId, message, description = '') {
+  const MAX_RETRIES = 10;
+  const POLL_INTERVAL = 500;  // 500msごとにポーリング
+  let retryCount = 0;
+  let initialDelayDone = false;
 
-  // 最初の送信は少し待機（content scriptの初期化を待つ）
-  const delay = retryCount === 0 ? INITIAL_DELAY : RETRY_DELAY;
+  // setIntervalベースでリトライ（バックグラウンドタブ対策）
+  const intervalId = setInterval(async () => {
+    // 最初の1回目は少し待機（content scriptの初期化を待つ）
+    // 2回目以降（500ms後）から実際に送信開始
+    if (!initialDelayDone) {
+      initialDelayDone = true;
+      return; // 最初の500msは待機
+    }
 
-  setTimeout(async () => {
     try {
-      console.log(`[background] ${description}メッセージ送信（試行${retryCount + 1}/${MAX_RETRIES + 1}）`);
+      console.log(`[background] ${description}メッセージ送信（試行${retryCount + 1}/${MAX_RETRIES}）`);
       const response = await chrome.tabs.sendMessage(tabId, message);
       console.log(`[background] ${description}応答:`, response);
+      clearInterval(intervalId); // 成功したらインターバルを停止
     } catch (err) {
       console.log(`[background] ${description}送信エラー（試行${retryCount + 1}）:`, err.message);
+      retryCount++;
 
-      // content scriptがまだ準備できていない場合はリトライ
-      if (retryCount < MAX_RETRIES) {
-        console.log(`[background] ${description}リトライします（${retryCount + 2}/${MAX_RETRIES + 1}）`);
-        sendMessageWithRetry(tabId, message, description, retryCount + 1);
-      } else {
+      // 最大リトライ回数に達したら停止
+      if (retryCount >= MAX_RETRIES) {
         console.log(`[background] ${description}最大リトライ回数に達しました`);
+        clearInterval(intervalId);
       }
     }
-  }, delay);
+  }, POLL_INTERVAL);
 }
 
 /**
@@ -1895,10 +1904,18 @@ async function handleCollectionComplete(tabId) {
   // キューに次の商品がある場合、次を処理
   if (queue.length > 0 && isQueueCollecting) {
     log('次の商品の収集を開始します...');
-    console.log('[handleCollectionComplete] 次のキュー処理を3秒後に開始');
-    setTimeout(() => {
-      processNextInQueue();
-    }, 3000);
+    console.log('[handleCollectionComplete] 次のキュー処理を開始（setIntervalベース）');
+    // バックグラウンドタブ対策: setTimeoutの代わりにsetIntervalで500msごとにポーリング
+    // 3秒（6回×500ms）待機してからprocessNextInQueueを呼び出す
+    let waitCount = 0;
+    const waitInterval = setInterval(() => {
+      waitCount++;
+      if (waitCount >= 6) { // 6回×500ms = 3秒
+        clearInterval(waitInterval);
+        console.log('[handleCollectionComplete] processNextInQueue呼び出し');
+        processNextInQueue();
+      }
+    }, 500);
   } else if (activeCollectionTabs.size === 0 && isQueueCollecting) {
     console.log('[handleCollectionComplete] すべてのキュー収集が完了');
     // すべて完了（キュー収集中の場合）
@@ -2259,7 +2276,10 @@ async function processNextInQueue() {
       startCollectionSent = true;
       chrome.tabs.onUpdated.removeListener(listener);
 
-      setTimeout(async () => {
+      // バックグラウンドタブ対策: setTimeoutの代わりにsetIntervalベースのリトライを使用
+      // バックグラウンドタブではsetTimeoutが最小1秒にスロットリングされるため、
+      // setIntervalで500msごとにポーリングして、準備ができたらメッセージを送信
+      (async () => {
         // 差分取得の設定を取得
         let lastCollectedDate = null;
         if (nextItem.incrementalOnly) {
@@ -2270,15 +2290,17 @@ async function processNextInQueue() {
         }
 
         const productIdForMessage = extractProductIdFromUrl(nextItem.url);
-        console.log('[キュー処理] startCollectionメッセージ送信');
-        chrome.tabs.sendMessage(tab.id, {
+
+        // sendMessageWithRetryを使用してメッセージ送信（リトライ機能付き）
+        console.log('[キュー処理] startCollectionメッセージ送信（sendMessageWithRetry使用）');
+        sendMessageWithRetry(tab.id, {
           action: 'startCollection',
           incrementalOnly: nextItem.incrementalOnly || false,
           lastCollectedDate: lastCollectedDate,
           queueName: nextItem.queueName || nextItem.title || productIdForMessage,
           productId: productIdForMessage
-        }).catch(() => {});
-      }, 2000);
+        }, 'startCollection（キュー処理）');
+      })();
     }
   });
 }
@@ -2622,10 +2644,15 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     const stateKey = `collectionState_${tabId}`;
     chrome.storage.local.remove(stateKey);
 
-    // キューに次がある場合は処理を続行
-    setTimeout(() => {
-      processNextInQueue();
-    }, 1000);
+    // キューに次がある場合は処理を続行（setIntervalベースで1秒後）
+    let waitCount = 0;
+    const waitInterval = setInterval(() => {
+      waitCount++;
+      if (waitCount >= 2) { // 2回×500ms = 1秒
+        clearInterval(waitInterval);
+        processNextInQueue();
+      }
+    }, 500);
   }
 });
 
