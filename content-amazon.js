@@ -1264,7 +1264,23 @@
         const newUrl = window.location.href;
         // URLが変わっている & まだ同じスクリプトインスタンス（SPAナビゲーション）の場合
         if (newUrl !== currentUrl) {
-          console.log('[Amazonレビュー収集] SPA遷移を検出、収集を継続します');
+          console.log('[Amazonレビュー収集] SPA遷移を検出');
+
+          // ページ番号を検証
+          const actualPage = getCurrentPageNumber();
+          if (actualPage !== nextPage) {
+            console.log(`[Amazonレビュー収集] ページ番号の不一致を検出: 期待=${nextPage}, 実際=${actualPage}`);
+            console.log('[Amazonレビュー収集] URL直接操作でリトライします');
+
+            // URL直接操作でリトライ（キャッシュ対策としてタイムスタンプを追加）
+            const retryUrl = new URL(currentUrl);
+            retryUrl.searchParams.set('pageNumber', nextPage.toString());
+            retryUrl.searchParams.set('_t', Date.now().toString()); // キャッシュバスター
+            window.location.href = retryUrl.toString();
+            return;
+          }
+
+          console.log('[Amazonレビュー収集] ページ番号OK、収集を継続します');
           // DOMが更新されるのを待つ
           await new Promise(resolve => setTimeout(resolve, 1000));
           // 収集を再開
