@@ -14,6 +14,8 @@ const tabSpreadsheetUrls = new Map();
 const lastResumeSentTime = new Map();
 // 重複送信防止の閾値（ミリ秒）
 const RESUME_DEBOUNCE_MS = 5000;
+// 最後に使用したタブID（キュー収集でタブを再利用するため）
+let lastUsedTabId = null;
 
 // ===== Amazonボット対策: レート制限 =====
 const AMAZON_DAILY_LIMIT = 100;  // 1日100ページまで（警戒圏）
@@ -1799,13 +1801,11 @@ async function handleCollectionComplete(tabId) {
       await saveReviewsToSpreadsheet(completedItem, logPrefix);
     }
 
-    // キュー収集の場合のみタブを閉じる（単一収集ではユーザーがページに留まる）
+    // キュー収集の場合、タブを閉じずに再利用するためにIDを保存
+    // タブを閉じるのは全収集完了時のみ
     if (isQueueCollecting) {
-      try {
-        await chrome.tabs.remove(tabId);
-      } catch (e) {
-        // タブが既に閉じられている場合は無視
-      }
+      // タブIDを保存（次の商品で再利用）
+      lastUsedTabId = tabId;
     }
   }
 
@@ -1832,6 +1832,16 @@ async function handleCollectionComplete(tabId) {
   } else if (activeCollectionTabs.size === 0 && isQueueCollecting) {
     // すべて完了（キュー収集中の場合）
     await chrome.storage.local.set({ isQueueCollecting: false, collectingItems: [] });
+
+    // 再利用したタブを閉じる
+    if (lastUsedTabId) {
+      try {
+        await chrome.tabs.remove(lastUsedTabId);
+      } catch (e) {
+        // タブが既に閉じられている場合は無視
+      }
+      lastUsedTabId = null;
+    }
 
     // 収集用ウィンドウを閉じる
     if (collectionWindowId) {
@@ -2063,26 +2073,48 @@ async function processNextInQueue() {
   const queuePrefix = nextItem.queueName ? `[${nextItem.queueName}・${productId}]` : '';
   console.log('[processNextInQueue] 処理URL:', nextItem.url, 'isAmazon:', nextItem.url.includes('amazon.co.jp'));
 
-  // 収集用ウィンドウにタブを作成
+  // 収集用タブを再利用または作成
   let tab;
   const isAmazonUrl = nextItem.url.includes('amazon.co.jp');
 
-  // 直接URLにアクセス（バックグラウンドで動作させるためactive: false）
-  if (collectionWindowId) {
+  // 既存のタブを再利用できるか確認
+  let reuseTab = false;
+  if (lastUsedTabId) {
     try {
-      tab = await chrome.tabs.create({
-        url: nextItem.url,
-        windowId: collectionWindowId,
-        active: false
-      });
+      const existingTab = await chrome.tabs.get(lastUsedTabId);
+      if (existingTab) {
+        // 既存タブで次のURLに移動
+        await chrome.tabs.update(lastUsedTabId, { url: nextItem.url });
+        tab = existingTab;
+        tab.id = lastUsedTabId;
+        reuseTab = true;
+        console.log('[processNextInQueue] 既存タブを再利用:', lastUsedTabId);
+      }
     } catch (e) {
-      // ウィンドウが閉じられている場合は通常のタブで開く
-      console.error('収集用ウィンドウにタブ作成失敗:', e);
+      // タブが存在しない場合は新規作成
+      console.log('[processNextInQueue] 既存タブが見つからないため新規作成');
+      lastUsedTabId = null;
+    }
+  }
+
+  // 再利用できなかった場合は新規タブを作成
+  if (!reuseTab) {
+    if (collectionWindowId) {
+      try {
+        tab = await chrome.tabs.create({
+          url: nextItem.url,
+          windowId: collectionWindowId,
+          active: false
+        });
+      } catch (e) {
+        // ウィンドウが閉じられている場合は通常のタブで開く
+        console.error('収集用ウィンドウにタブ作成失敗:', e);
+        tab = await chrome.tabs.create({ url: nextItem.url, active: false });
+      }
+    } else {
+      // フォールバック: 通常のタブ
       tab = await chrome.tabs.create({ url: nextItem.url, active: false });
     }
-  } else {
-    // フォールバック: 通常のタブ
-    tab = await chrome.tabs.create({ url: nextItem.url, active: false });
   }
 
   // tabIdを収集中アイテムに設定
