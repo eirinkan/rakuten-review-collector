@@ -1121,12 +1121,11 @@
 
       log('次のページに移動します');
 
-      // 次のページ遷移のために状態をリセット（同一オリジン遷移でスクリプトが再注入されない場合に対応）
-      isCollecting = false;
-      startCollectionLock = false;
-      autoResumeExecuted = false;
-
       // クリックでページ遷移（人間らしいマウス移動＋クリック）
+      // 注意: isCollecting は true のままにしておく
+      // ページ遷移後に content script が再読み込みされる場合は、新しいスクリプトで isCollecting = false から開始
+      // SPA的な遷移の場合は、URL変更監視がisCollecting=trueを見てスキップし、
+      // collectReviews()が次のページで再度呼ばれる
       await clickNextPage();
       return true; // ページ遷移中
     }
@@ -1248,6 +1247,7 @@
   async function clickNextPage() {
     const currentPage = getCurrentPageNumber();
     const nextPage = currentPage + 1;
+    const currentUrl = window.location.href;
 
     console.log(`[Amazonレビュー収集] 次のページに遷移: ページ${currentPage} → ページ${nextPage}`);
 
@@ -1257,6 +1257,22 @@
     if (nextLink) {
       console.log(`[Amazonレビュー収集] 「次へ」ボタンをクリックします: ${nextLink.href}`);
       nextLink.click();
+
+      // SPA遷移を検出して収集を再開する
+      // クリック後、URLが変わってもページリロードされない場合（SPA的遷移）に対応
+      setTimeout(async () => {
+        const newUrl = window.location.href;
+        // URLが変わっている & まだ同じスクリプトインスタンス（SPAナビゲーション）の場合
+        if (newUrl !== currentUrl) {
+          console.log('[Amazonレビュー収集] SPA遷移を検出、収集を継続します');
+          // DOMが更新されるのを待つ
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          // 収集を再開
+          isCollecting = false;
+          startCollectionLock = false;
+          startCollection();
+        }
+      }, 1500);
       return;
     }
 
@@ -2167,20 +2183,33 @@
     // ===== URL変更監視（SPA対応） =====
     // Amazonは「次へ」クリック時にページをリロードせず、コンテンツを動的に更新することがある
     // その場合、content scriptが再読み込みされないため、URL変更を監視して収集を再開する
+    //
+    // 注意: この監視は「ページリロードなしのSPA遷移」を検出するためのもの
+    // 通常のページ遷移では content script が再読み込みされるため、この監視は不要
+    // しかし、Amazonの一部のページ遷移はSPA的に行われるため、バックアップとして機能する
     let lastUrl = window.location.href;
     let urlCheckInterval = null;
+    let urlChangeHandling = false; // URL変更処理中フラグ
 
     function startUrlMonitoring() {
       if (urlCheckInterval) return; // 既に監視中
 
       urlCheckInterval = setInterval(() => {
         const currentUrl = window.location.href;
-        if (currentUrl !== lastUrl) {
+        if (currentUrl !== lastUrl && !urlChangeHandling) {
           console.log('[Amazonレビュー収集] URL変更を検出:', {
             from: lastUrl,
-            to: currentUrl
+            to: currentUrl,
+            isCollecting: isCollecting
           });
           lastUrl = currentUrl;
+
+          // 既に収集中の場合は、URL変更監視からの再開は行わない
+          // （収集ロジック内でページ遷移を処理しているため）
+          if (isCollecting) {
+            console.log('[Amazonレビュー収集] 収集中のため、URL変更監視からの再開はスキップ');
+            return;
+          }
 
           // URLがレビューページかどうか確認
           const isStillReviewPage = currentUrl.includes('/product-reviews/') ||
@@ -2189,14 +2218,17 @@
 
           if (isStillReviewPage) {
             console.log('[Amazonレビュー収集] レビューページへのURL変更、自動再開をチェックします');
+            urlChangeHandling = true;
+
             // フラグをリセットして再開を許可
-            isCollecting = false;
             startCollectionLock = false;
             autoResumeExecuted = false;
-            // 少し待ってからチェック（DOMが更新されるのを待つ）
+
+            // DOMが完全に更新されるまで待機（1.5秒）
             setTimeout(() => {
+              urlChangeHandling = false;
               checkAndResumeCollection();
-            }, 500);
+            }, 1500);
           }
         }
       }, 500); // 500msごとにURL変更をチェック
