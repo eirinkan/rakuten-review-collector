@@ -313,6 +313,33 @@
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     switch (message.action) {
       case 'startCollection':
+        // 新しい商品からの開始かどうかを判定
+        // productIdが異なる場合は新しい商品なので、すべてのロックをリセット
+        const incomingProductId = message.productId || getASIN();
+        const isNewProduct = incomingProductId && currentProductId && incomingProductId !== currentProductId;
+
+        console.log('[Amazonレビュー収集] startCollection受信:', {
+          incomingProductId,
+          currentProductId,
+          isNewProduct,
+          isCollecting,
+          startCollectionLock,
+          resumeCollectionLock
+        });
+
+        // 新しい商品の場合はすべてのロックをリセット
+        if (isNewProduct) {
+          console.log('[Amazonレビュー収集] 新しい商品を検出、ロックをリセット');
+          isCollecting = false;
+          startCollectionLock = false;
+          resumeCollectionLock = false;
+          shouldStop = false;
+          autoResumeExecuted = false;
+          collectedReviewKeys.clear();
+          consecutiveSkipPages = 0;
+          sessionPageCount = 0;
+        }
+
         // 既に収集中の場合
         if (isCollecting) {
           if (message.force) {
@@ -324,6 +351,13 @@
             sendResponse({ success: false, error: '既に収集中' });
             break;
           }
+        }
+
+        // ロックが残っている場合もリセット（新しいstartCollectionが来たということは、新しい収集のはず）
+        if (startCollectionLock || resumeCollectionLock) {
+          console.log('[Amazonレビュー収集] ロックが残っているためリセット');
+          startCollectionLock = false;
+          resumeCollectionLock = false;
         }
 
         if (isProductPage) {
@@ -394,6 +428,32 @@
         break;
 
       case 'resumeCollection':
+        // 新しい商品からの再開かどうかを判定
+        const resumeProductId = message.productId || getASIN();
+        const isNewProductForResume = resumeProductId && currentProductId && resumeProductId !== currentProductId;
+
+        console.log('[Amazonレビュー収集] resumeCollection受信（初期チェック）:', {
+          resumeProductId,
+          currentProductId,
+          isNewProductForResume,
+          isCollecting,
+          startCollectionLock,
+          resumeCollectionLock
+        });
+
+        // 新しい商品の場合はすべてのロックをリセット
+        if (isNewProductForResume) {
+          console.log('[Amazonレビュー収集] resumeCollection: 新しい商品を検出、ロックをリセット');
+          isCollecting = false;
+          startCollectionLock = false;
+          resumeCollectionLock = false;
+          shouldStop = false;
+          autoResumeExecuted = false;
+          collectedReviewKeys.clear();
+          consecutiveSkipPages = 0;
+          sessionPageCount = 0;
+        }
+
         // 同期的なロックチェック（最初に行う - 重複実行防止）
         if (resumeCollectionLock) {
           console.log('[Amazonレビュー収集] resumeCollection実行中のためスキップ');
