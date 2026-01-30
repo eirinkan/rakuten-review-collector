@@ -536,14 +536,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case 'collectionComplete':
-      handleCollectionComplete(sender.tab?.id);
-      sendResponse({ success: true });
-      break;
+      // 非同期関数を正しく処理（awaitして完了を待つ）
+      handleCollectionComplete(sender.tab?.id)
+        .then(() => {
+          console.log('[collectionComplete] 処理完了');
+          sendResponse({ success: true });
+        })
+        .catch(error => {
+          console.error('[collectionComplete] エラー:', error);
+          sendResponse({ success: false, error: error.message });
+        });
+      return true; // 非同期レスポンスを示す
 
     case 'collectionStopped':
-      handleCollectionStopped(sender.tab?.id);
-      sendResponse({ success: true });
-      break;
+      handleCollectionStopped(sender.tab?.id)
+        .then(() => sendResponse({ success: true }))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
 
     case 'startQueueCollection':
       startQueueCollection()
@@ -1734,16 +1743,17 @@ function formatDate(date) {
 async function handleCollectionComplete(tabId) {
   console.log('[handleCollectionComplete] 開始 tabId:', tabId);
 
-  // 収集中アイテムと収集状態を取得
-  const initialResult = await chrome.storage.local.get(['collectingItems', 'isQueueCollecting', 'expectedReviewTotal', 'collectionState']);
-  const isQueueCollecting = initialResult.isQueueCollecting || false;
-  const expectedTotal = initialResult.expectedReviewTotal || 0;
-  const currentState = initialResult.collectionState || {};
-  const actualCount = currentState.reviewCount || 0;
-  const collectingItems = initialResult.collectingItems || [];
+  try {
+    // 収集中アイテムと収集状態を取得
+    const initialResult = await chrome.storage.local.get(['collectingItems', 'isQueueCollecting', 'expectedReviewTotal', 'collectionState']);
+    const isQueueCollecting = initialResult.isQueueCollecting || false;
+    const expectedTotal = initialResult.expectedReviewTotal || 0;
+    const currentState = initialResult.collectionState || {};
+    const actualCount = currentState.reviewCount || 0;
+    const collectingItems = initialResult.collectingItems || [];
 
-  console.log('[handleCollectionComplete] isQueueCollecting:', isQueueCollecting);
-  console.log('[handleCollectionComplete] collectingItems:', JSON.stringify(collectingItems));
+    console.log('[handleCollectionComplete] isQueueCollecting:', isQueueCollecting);
+    console.log('[handleCollectionComplete] collectingItems:', JSON.stringify(collectingItems));
 
   // 収集中アイテムから商品情報を取得（ログ出力用）
   let completedItem = null;
@@ -1930,6 +1940,13 @@ async function handleCollectionComplete(tabId) {
 
     const reviewCount = state.reviewCount || 0;
     showNotification('楽天レビュー収集', `収集が完了しました（${reviewCount}件のレビュー）`);
+  }
+
+  } catch (error) {
+    // handleCollectionComplete内の全エラーをキャッチ
+    console.error('[handleCollectionComplete] 致命的エラー:', error);
+    log(`収集完了処理でエラーが発生しました: ${error.message}`, 'error');
+    throw error; // 呼び出し元に再スロー
   }
 }
 
@@ -2614,17 +2631,33 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 
 // 収集用ウィンドウが閉じられた時のクリーンアップ
 chrome.windows.onRemoved.addListener((windowId) => {
-  if (windowId === collectionWindowId) {
+  // collectionWindowIdが明示的に設定されていて、かつそのウィンドウが閉じられた場合のみ処理
+  // 注意: タブ再利用時やClaude in Chrome使用時はcollectionWindowIdが未設定(null)なので、
+  // この条件に入らないようにする
+  if (collectionWindowId && windowId === collectionWindowId) {
+    console.log('[windows.onRemoved] 収集用ウィンドウが閉じられました windowId:', windowId);
     collectionWindowId = null;
     // ウィンドウが手動で閉じられた場合、収集を停止
+    // ただし、activeCollectionTabsが空でない場合のみ（実際に収集中の場合）
     if (activeCollectionTabs.size > 0) {
-      log('収集用ウィンドウが閉じられました。収集を停止します', 'error');
-      activeCollectionTabs.clear();
-      chrome.storage.local.set({
-        isQueueCollecting: false,
-        collectingItems: []
+      // 収集タブがまだ存在するか確認（ウィンドウが閉じられてもタブが別ウィンドウに移動している可能性）
+      Promise.all([...activeCollectionTabs].map(tabId =>
+        chrome.tabs.get(tabId).catch(() => null)
+      )).then(tabs => {
+        const existingTabs = tabs.filter(t => t !== null);
+        if (existingTabs.length === 0) {
+          // 本当にタブがなくなった場合のみ停止
+          log('収集用ウィンドウが閉じられました。収集を停止します', 'error');
+          activeCollectionTabs.clear();
+          chrome.storage.local.set({
+            isQueueCollecting: false,
+            collectingItems: []
+          });
+          forwardToAll({ action: 'queueUpdated' });
+        } else {
+          console.log('[windows.onRemoved] 収集タブはまだ存在します:', existingTabs.length);
+        }
       });
-      forwardToAll({ action: 'queueUpdated' });
     }
   }
 });
