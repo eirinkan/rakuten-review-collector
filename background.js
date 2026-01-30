@@ -1835,10 +1835,10 @@ async function handleCollectionComplete(tabId) {
   console.log('[handleCollectionComplete] effectiveTabId:', effectiveTabId, 'completedItem:', completedItem ? 'あり' : 'なし');
 
   if (effectiveTabId || completedItem) {
-    // キュー収集の場合はタブを再利用するため、activeCollectionTabsから削除しない
+    // キュー収集の場合: activeCollectionTabsからの削除とタブを閉じる処理は、
+    // chrome.alarms予約の直前で行う（onRemovedリスナーとの競合を避けるため）
+    // ここではスプレッドシートURLのクリアのみ行う
     if (isQueueCollecting && effectiveTabId) {
-      // タブIDを保存（次の商品で再利用）
-      lastUsedTabId = effectiveTabId;
       // スプレッドシートURLはクリア（次の商品用に新しく設定される）
       tabSpreadsheetUrls.delete(effectiveTabId);
     } else if (effectiveTabId) {
@@ -1917,6 +1917,25 @@ async function handleCollectionComplete(tabId) {
   // キューに次の商品がある場合、次を処理
   if (queue.length > 0 && isQueueCollecting) {
     log('次の商品の収集を開始します...');
+
+    // 重要: タブを閉じる処理はここで行う（processNextInQueueではなく）
+    // 理由: processNextInQueueでタブを閉じると chrome.tabs.onRemoved が発火し、
+    // 同名のアラームが上書きされて処理が中断してしまうため
+    if (effectiveTabId) {
+      // activeCollectionTabsから先に削除（onRemovedリスナーが発火しないようにする）
+      activeCollectionTabs.delete(effectiveTabId);
+      console.log('[handleCollectionComplete] activeCollectionTabsから削除:', effectiveTabId);
+
+      // タブを閉じる
+      try {
+        await chrome.tabs.remove(effectiveTabId);
+        console.log('[handleCollectionComplete] 収集完了タブを閉じました:', effectiveTabId);
+      } catch (e) {
+        // タブが既に閉じられている場合は無視
+        console.log('[handleCollectionComplete] タブ閉じスキップ（既に閉じられている）:', effectiveTabId);
+      }
+    }
+
     console.log('[handleCollectionComplete] 次のキュー処理をchrome.alarmsで予約');
     // 重要: Service WorkerではsetTimeout/setIntervalがスロットリングされるため、
     // chrome.alarms APIを使用して確実に次の処理を実行する
@@ -2184,16 +2203,10 @@ async function processNextInQueue() {
   let tab;
   const isAmazonUrl = nextItem.url.includes('amazon.co.jp');
 
-  // 前のタブがあれば閉じる
-  if (lastUsedTabId) {
-    try {
-      await chrome.tabs.remove(lastUsedTabId);
-      console.log('[processNextInQueue] 前のタブを閉じました:', lastUsedTabId);
-    } catch (e) {
-      // タブが既に閉じられている場合は無視
-    }
-    lastUsedTabId = null;
-  }
+  // 注意: タブを閉じる処理は handleCollectionComplete で行う
+  // processNextInQueue でタブを閉じると chrome.tabs.onRemoved が発火し、
+  // 同名のアラームが上書きされて処理が中断する問題があるため
+  lastUsedTabId = null;
 
   // 新規タブを作成
   if (collectionWindowId) {
