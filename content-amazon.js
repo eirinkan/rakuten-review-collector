@@ -1258,12 +1258,16 @@
       console.log(`[Amazonレビュー収集] 「次へ」ボタンをクリックします: ${nextLink.href}`);
       nextLink.click();
 
-      // SPA遷移を検出して収集を再開する
-      // クリック後、URLが変わってもページリロードされない場合（SPA的遷移）に対応
-      setTimeout(async () => {
+      // SPA遷移を検出して収集を再開する（setIntervalベースでバックグラウンドタブ対応）
+      let checkCount = 0;
+      const maxChecks = 30; // 最大30回（約15秒）
+      const checkInterval = setInterval(async () => {
+        checkCount++;
         const newUrl = window.location.href;
-        // URLが変わっている & まだ同じスクリプトインスタンス（SPAナビゲーション）の場合
+
+        // URLが変わっている場合
         if (newUrl !== currentUrl) {
+          clearInterval(checkInterval);
           console.log('[Amazonレビュー収集] SPA遷移を検出');
 
           // ページ番号を検証
@@ -1281,14 +1285,26 @@
           }
 
           console.log('[Amazonレビュー収集] ページ番号OK、収集を継続します');
-          // DOMが更新されるのを待つ
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // 短い待機後に収集を再開
+          await sleep(500);
           // 収集を再開
           isCollecting = false;
           startCollectionLock = false;
           startCollection();
+          return;
         }
-      }, 1500);
+
+        // タイムアウト
+        if (checkCount >= maxChecks) {
+          clearInterval(checkInterval);
+          console.log('[Amazonレビュー収集] SPA遷移タイムアウト、URL直接遷移を試みます');
+          // URL直接操作でフォールバック
+          const retryUrl = new URL(currentUrl);
+          retryUrl.searchParams.set('pageNumber', nextPage.toString());
+          retryUrl.searchParams.set('_t', Date.now().toString());
+          window.location.href = retryUrl.toString();
+        }
+      }, 500); // 500msごとにチェック
       return;
     }
 
