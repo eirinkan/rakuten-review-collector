@@ -17,6 +17,9 @@ const RESUME_DEBOUNCE_MS = 5000;
 // 最後に使用したタブID（キュー収集でタブを再利用するため）
 let lastUsedTabId = null;
 
+// キュー処理用のアラーム名
+const QUEUE_NEXT_ALARM_NAME = 'processNextInQueue';
+
 // ===== Amazonボット対策: レート制限 =====
 const AMAZON_DAILY_LIMIT = 100;  // 1日100ページまで（警戒圏）
 
@@ -244,37 +247,35 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
  * @param {Object} message - 送信するメッセージ
  * @param {string} description - ログ出力用の説明
  */
-function sendMessageWithRetry(tabId, message, description = '') {
+/**
+ * タブにメッセージを送信（即座にリトライ、最大10回）
+ * Service WorkerではsetTimeout/setIntervalがスロットリングされるため、
+ * 再帰的に即座にリトライする方式を採用
+ *
+ * 注意: content scriptが準備できていない場合（ページ読み込み中など）は
+ * 失敗するため、適切な遅延後に呼び出すこと
+ */
+async function sendMessageWithRetry(tabId, message, description = '', retryCount = 0) {
   const MAX_RETRIES = 10;
-  const POLL_INTERVAL = 500;  // 500msごとにポーリング
-  let retryCount = 0;
-  let initialDelayDone = false;
 
-  // setIntervalベースでリトライ（バックグラウンドタブ対策）
-  const intervalId = setInterval(async () => {
-    // 最初の1回目は少し待機（content scriptの初期化を待つ）
-    // 2回目以降（500ms後）から実際に送信開始
-    if (!initialDelayDone) {
-      initialDelayDone = true;
-      return; // 最初の500msは待機
+  try {
+    console.log(`[background] ${description}メッセージ送信（試行${retryCount + 1}/${MAX_RETRIES}）`);
+    const response = await chrome.tabs.sendMessage(tabId, message);
+    console.log(`[background] ${description}応答:`, response);
+    return response;
+  } catch (err) {
+    console.log(`[background] ${description}送信エラー（試行${retryCount + 1}）:`, err.message);
+
+    if (retryCount < MAX_RETRIES - 1) {
+      // 即座にリトライ（Service Workerでは遅延なしで再帰呼び出し）
+      // ただし、少しの遅延を入れるためにPromise.resolve()を挟む
+      await Promise.resolve();
+      return sendMessageWithRetry(tabId, message, description, retryCount + 1);
+    } else {
+      console.log(`[background] ${description}最大リトライ回数に達しました`);
+      throw err;
     }
-
-    try {
-      console.log(`[background] ${description}メッセージ送信（試行${retryCount + 1}/${MAX_RETRIES}）`);
-      const response = await chrome.tabs.sendMessage(tabId, message);
-      console.log(`[background] ${description}応答:`, response);
-      clearInterval(intervalId); // 成功したらインターバルを停止
-    } catch (err) {
-      console.log(`[background] ${description}送信エラー（試行${retryCount + 1}）:`, err.message);
-      retryCount++;
-
-      // 最大リトライ回数に達したら停止
-      if (retryCount >= MAX_RETRIES) {
-        console.log(`[background] ${description}最大リトライ回数に達しました`);
-        clearInterval(intervalId);
-      }
-    }
-  }, POLL_INTERVAL);
+  }
 }
 
 /**
@@ -1916,18 +1917,16 @@ async function handleCollectionComplete(tabId) {
   // キューに次の商品がある場合、次を処理
   if (queue.length > 0 && isQueueCollecting) {
     log('次の商品の収集を開始します...');
-    console.log('[handleCollectionComplete] 次のキュー処理を開始（setIntervalベース）');
-    // バックグラウンドタブ対策: setTimeoutの代わりにsetIntervalで500msごとにポーリング
-    // 3秒（6回×500ms）待機してからprocessNextInQueueを呼び出す
-    let waitCount = 0;
-    const waitInterval = setInterval(() => {
-      waitCount++;
-      if (waitCount >= 6) { // 6回×500ms = 3秒
-        clearInterval(waitInterval);
-        console.log('[handleCollectionComplete] processNextInQueue呼び出し');
-        processNextInQueue();
-      }
-    }, 500);
+    console.log('[handleCollectionComplete] 次のキュー処理をchrome.alarmsで予約');
+    // 重要: Service WorkerではsetTimeout/setIntervalがスロットリングされるため、
+    // chrome.alarms APIを使用して確実に次の処理を実行する
+    // delayInMinutesの最小値は約0.5秒（Chrome 120以降）
+    // 参考: https://developer.chrome.com/docs/extensions/reference/alarms/
+    await chrome.alarms.create(QUEUE_NEXT_ALARM_NAME, {
+      delayInMinutes: 0.05  // 約3秒後（0.05分 = 3秒）
+    });
+    console.log('[handleCollectionComplete] アラーム設定完了: processNextInQueue');
+
   } else if (activeCollectionTabs.size === 0 && isQueueCollecting) {
     console.log('[handleCollectionComplete] すべてのキュー収集が完了');
     // すべて完了（キュー収集中の場合）
@@ -2660,15 +2659,11 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     const stateKey = `collectionState_${tabId}`;
     chrome.storage.local.remove(stateKey);
 
-    // キューに次がある場合は処理を続行（setIntervalベースで1秒後）
-    let waitCount = 0;
-    const waitInterval = setInterval(() => {
-      waitCount++;
-      if (waitCount >= 2) { // 2回×500ms = 1秒
-        clearInterval(waitInterval);
-        processNextInQueue();
-      }
-    }, 500);
+    // キューに次がある場合は処理を続行（chrome.alarmsで1秒後）
+    console.log('[tabs.onRemoved] キュー処理続行をアラームで予約');
+    chrome.alarms.create(QUEUE_NEXT_ALARM_NAME, {
+      delayInMinutes: 0.017  // 約1秒後（0.017分 ≈ 1秒）
+    });
   }
 });
 
@@ -2822,10 +2817,19 @@ async function runScheduledCollection() {
 
 // アラームリスナー
 chrome.alarms.onAlarm.addListener((alarm) => {
+  console.log('[alarms.onAlarm] アラーム発火:', alarm.name);
+
   if (alarm.name === SCHEDULED_ALARM_NAME) {
     runScheduledCollection().catch(error => {
       console.error('定期収集エラー:', error);
       log('定期収集でエラーが発生しました: ' + error.message, 'error');
+    });
+  } else if (alarm.name === QUEUE_NEXT_ALARM_NAME) {
+    // キュー処理の次の商品を開始
+    console.log('[alarms.onAlarm] processNextInQueueを実行');
+    processNextInQueue().catch(error => {
+      console.error('キュー処理エラー:', error);
+      log('キュー処理でエラーが発生しました: ' + error.message, 'error');
     });
   }
 });
