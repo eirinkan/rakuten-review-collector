@@ -2159,16 +2159,14 @@
     }
 
     // ページ読み込み完了を待って自動再開をチェック
-    // バックグラウンドタブでも動作するように、loadイベントを使用
+    // バックグラウンドタブでは setTimeout がスロットリングされるため、即座に実行する
+    // DOM読み込みは waitForReviews 関数で待機するため、ここで待つ必要はない
     if (document.readyState === 'complete') {
-      // 既に読み込み完了している場合は、少し待ってからチェック
-      // （background.jsからのメッセージと競合しないように）
-      setTimeout(checkAndResumeCollection, 1500);
+      // 既に読み込み完了している場合は即座にチェック
+      checkAndResumeCollection();
     } else {
-      // まだ読み込み中の場合は、loadイベントで実行
-      window.addEventListener('load', () => {
-        setTimeout(checkAndResumeCollection, 1500);
-      }, { once: true });
+      // まだ読み込み中の場合は、loadイベントで即座に実行
+      window.addEventListener('load', checkAndResumeCollection, { once: true });
     }
   } else {
     console.log('[Amazonレビュー収集] レビューページではない:', window.location.href);
