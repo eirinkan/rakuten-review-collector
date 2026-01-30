@@ -135,18 +135,14 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       await chrome.storage.local.set({ collectionState: state });
 
       // デバウンスをスキップして直接resumeCollectionを送信
-      setTimeout(() => {
-        console.log('[background] resumeCollectionメッセージ送信（フィルター遷移）');
-        chrome.tabs.sendMessage(tabId, {
-          action: 'resumeCollection',
-          incrementalOnly: state.incrementalOnly || false,
-          lastCollectedDate: state.lastCollectedDate || null,
-          queueName: state.queueName || null,
-          productId: state.productId || null
-        }).catch((err) => {
-          console.log('[background] resumeCollection送信エラー:', err);
-        });
-      }, 3000);
+      // バックグラウンドタブでもcontent scriptが確実に初期化されるように、リトライ機能付きで送信
+      sendMessageWithRetry(tabId, {
+        action: 'resumeCollection',
+        incrementalOnly: state.incrementalOnly || false,
+        lastCollectedDate: state.lastCollectedDate || null,
+        queueName: state.queueName || null,
+        productId: state.productId || null
+      }, 'resumeCollection（フィルター遷移）');
       return; // ここでreturnしてデバウンスチェックをスキップ
     } else {
       // 通常のページ遷移チェック
@@ -165,18 +161,14 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         lastResumeSentTime.set(tabId, now);
 
         // startCollectionを送信（resumeCollectionではなく）
-        setTimeout(() => {
-          console.log('[background] startCollectionメッセージ送信（キュー開始）');
-          chrome.tabs.sendMessage(tabId, {
-            action: 'startCollection',
-            incrementalOnly: state.incrementalOnly || false,
-            lastCollectedDate: state.lastCollectedDate || null,
-            queueName: state.queueName || null,
-            productId: state.productId || null
-          }).catch((err) => {
-            console.log('[background] startCollection送信エラー:', err);
-          });
-        }, 3000);
+        // バックグラウンドタブでもcontent scriptが確実に初期化されるように、リトライ機能付きで送信
+        sendMessageWithRetry(tabId, {
+          action: 'startCollection',
+          incrementalOnly: state.incrementalOnly || false,
+          lastCollectedDate: state.lastCollectedDate || null,
+          queueName: state.queueName || null,
+          productId: state.productId || null
+        }, 'startCollection（キュー開始）');
         return;
       }
 
@@ -211,26 +203,56 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     // タブのアクティブ化は無効化（バックグラウンドで動作させるため）
     // ボット対策よりもユーザビリティを優先
 
-    // 少し待ってからメッセージを送信（DOM読み込み完了を待つ）
-    setTimeout(() => {
-      console.log('[background] resumeCollectionメッセージ送信...', {
-        queueName: state.queueName,
-        productId: state.productId
-      });
-      chrome.tabs.sendMessage(tabId, {
-        action: 'resumeCollection',
-        incrementalOnly: state.incrementalOnly || false,
-        lastCollectedDate: state.lastCollectedDate || null,
-        queueName: state.queueName || null,
-        productId: state.productId || null  // 商品IDも送信
-      }).then((response) => {
-        console.log('[background] resumeCollection応答:', response);
-      }).catch((err) => {
-        console.log('[background] 収集再開メッセージ送信エラー:', err);
-      });
-    }, 3000);
+    // バックグラウンドタブでもcontent scriptが確実に初期化されるように、リトライ機能付きで送信
+    console.log('[background] resumeCollectionメッセージ送信準備...', {
+      queueName: state.queueName,
+      productId: state.productId
+    });
+    sendMessageWithRetry(tabId, {
+      action: 'resumeCollection',
+      incrementalOnly: state.incrementalOnly || false,
+      lastCollectedDate: state.lastCollectedDate || null,
+      queueName: state.queueName || null,
+      productId: state.productId || null  // 商品IDも送信
+    }, 'resumeCollection');
   }
 });
+
+/**
+ * タブにメッセージを送信（リトライ機能付き）
+ * バックグラウンドタブでは content script の初期化が遅れる可能性があるため、
+ * 失敗した場合は最大5回までリトライする
+ * @param {number} tabId - タブID
+ * @param {Object} message - 送信するメッセージ
+ * @param {string} description - ログ出力用の説明
+ * @param {number} retryCount - 現在のリトライ回数（内部使用）
+ */
+async function sendMessageWithRetry(tabId, message, description = '', retryCount = 0) {
+  const MAX_RETRIES = 5;
+  const INITIAL_DELAY = 1000;  // 最初の送信は1秒後
+  const RETRY_DELAY = 2000;    // リトライは2秒間隔
+
+  // 最初の送信は少し待機（content scriptの初期化を待つ）
+  const delay = retryCount === 0 ? INITIAL_DELAY : RETRY_DELAY;
+
+  setTimeout(async () => {
+    try {
+      console.log(`[background] ${description}メッセージ送信（試行${retryCount + 1}/${MAX_RETRIES + 1}）`);
+      const response = await chrome.tabs.sendMessage(tabId, message);
+      console.log(`[background] ${description}応答:`, response);
+    } catch (err) {
+      console.log(`[background] ${description}送信エラー（試行${retryCount + 1}）:`, err.message);
+
+      // content scriptがまだ準備できていない場合はリトライ
+      if (retryCount < MAX_RETRIES) {
+        console.log(`[background] ${description}リトライします（${retryCount + 2}/${MAX_RETRIES + 1}）`);
+        sendMessageWithRetry(tabId, message, description, retryCount + 1);
+      } else {
+        console.log(`[background] ${description}最大リトライ回数に達しました`);
+      }
+    }
+  }, delay);
+}
 
 /**
  * URLが楽天かAmazonかを判定
@@ -780,6 +802,8 @@ async function saveReviewsToSpreadsheet(completedItem, logPrefix) {
   const isAmazon = completedItem?.url?.includes('amazon.co.jp');
   const productId = extractProductIdFromUrl(completedItem?.url || '');
 
+  log(`${logPrefix} [DEBUG] バッチ保存開始 isAmazon=${isAmazon}`);
+
   // スプレッドシートURLを取得
   let spreadsheetUrl = completedItem?.spreadsheetUrl || null;
 
@@ -787,12 +811,11 @@ async function saveReviewsToSpreadsheet(completedItem, logPrefix) {
   if (!spreadsheetUrl && !isScheduled) {
     const syncSettings = await chrome.storage.sync.get(['spreadsheetUrl', 'amazonSpreadsheetUrl']);
     spreadsheetUrl = isAmazon ? syncSettings.amazonSpreadsheetUrl : syncSettings.spreadsheetUrl;
+    log(`${logPrefix} [DEBUG] 設定から取得 URL=${spreadsheetUrl ? '設定済み' : '未設定'}`);
   }
 
   if (!spreadsheetUrl) {
-    if (isScheduled) {
-      log(logPrefix + ' 定期収集用のスプレッドシートが設定されていません', 'error');
-    }
+    log(`${logPrefix} [DEBUG] スプレッドシートURL未設定で終了`, 'error');
     return;
   }
 
@@ -801,7 +824,10 @@ async function saveReviewsToSpreadsheet(completedItem, logPrefix) {
     const stateResult = await chrome.storage.local.get(['collectionState']);
     const allReviews = stateResult.collectionState?.reviews || [];
 
+    log(`${logPrefix} [DEBUG] ローカルストレージのレビュー数: ${allReviews.length}件`);
+
     if (allReviews.length === 0) {
+      log(`${logPrefix} [DEBUG] レビュー0件で終了`);
       return;
     }
 
@@ -811,7 +837,10 @@ async function saveReviewsToSpreadsheet(completedItem, logPrefix) {
       ? allReviews.filter(r => r.productId === productId)
       : allReviews;
 
+    log(`${logPrefix} [DEBUG] フィルタ後: ${productReviews.length}件`);
+
     if (productReviews.length === 0) {
+      log(`${logPrefix} [DEBUG] フィルタ後0件で終了`);
       return;
     }
 
@@ -1923,11 +1952,12 @@ async function startQueueCollection() {
     });
     collectionWindowId = window.id;
 
-    // ウィンドウ作成後に自動最小化（検証済み: 最小化状態でも収集は正常動作）
-    // ユーザーの作業を邪魔しないよう、バックグラウンドで収集
-    setTimeout(() => {
-      chrome.windows.update(collectionWindowId, { state: 'minimized' }).catch(() => {});
-    }, 500);
+    // 楽天のみウィンドウを自動最小化（Amazonは最小化すると正常に動作しない）
+    if (!isAmazonFirst) {
+      setTimeout(() => {
+        chrome.windows.update(collectionWindowId, { state: 'minimized' }).catch(() => {});
+      }, 500);
+    }
 
     // about:blankタブは後で閉じる
     if (window.tabs && window.tabs[0]) {

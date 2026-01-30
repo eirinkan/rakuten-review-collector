@@ -2104,9 +2104,72 @@
     });
   }
 
-  // ページ読み込み時のログ（自動再開はbackground.jsのtabs.onUpdatedリスナーが担当）
+  // ページ読み込み時に収集状態を確認し、自動再開
+  // background.jsのtabs.onUpdatedと連携し、content script側でも自律的に再開する
+  // バックグラウンドタブでも確実に動作するように、複数の方法で初期化を試みる
   if (isReviewPage) {
-    console.log('[Amazonレビュー収集] レビューページ検出（再開はbackground.jsから）');
+    console.log('[Amazonレビュー収集] レビューページ検出、自動再開をチェックします');
+
+    // 収集状態を確認して自動再開する関数
+    async function checkAndResumeCollection() {
+      // 既に収集中または初期化中の場合はスキップ
+      if (isCollecting || startCollectionLock || resumeCollectionLock) {
+        console.log('[Amazonレビュー収集] 既に処理中のためスキップ:', { isCollecting, startCollectionLock, resumeCollectionLock });
+        return;
+      }
+
+      try {
+        const result = await chrome.storage.local.get(['collectionState']);
+        const state = result.collectionState;
+
+        console.log('[Amazonレビュー収集] 自動再開チェック:', {
+          isRunning: state?.isRunning,
+          source: state?.source,
+          productId: state?.productId,
+          currentASIN: getASIN(),
+          documentReadyState: document.readyState
+        });
+
+        // 収集中かつAmazonかつ同じ商品の場合、自動再開
+        if (state && state.isRunning && state.source === 'amazon') {
+          const storedProductId = state.productId || state.currentProductId;
+          const currentASIN = getASIN();
+
+          if (storedProductId === currentASIN) {
+            console.log('[Amazonレビュー収集] 収集を自動再開します');
+
+            // 状態を復元
+            incrementalOnly = state.incrementalOnly || false;
+            lastCollectedDate = state.lastCollectedDate || null;
+            currentQueueName = state.queueName || null;
+            currentProductId = currentASIN;
+
+            // 収集を開始
+            startCollection();
+          } else {
+            console.log('[Amazonレビュー収集] 商品IDが異なるため自動再開しません:', {
+              stored: storedProductId,
+              current: currentASIN
+            });
+          }
+        }
+      } catch (e) {
+        console.log('[Amazonレビュー収集] 自動再開チェックエラー:', e);
+      }
+    }
+
+    // ページ読み込み完了を待って自動再開をチェック
+    // バックグラウンドタブでも動作するように、loadイベントを使用
+    if (document.readyState === 'complete') {
+      // 既に読み込み完了している場合は、少し待ってからチェック
+      // （background.jsからのメッセージと競合しないように）
+      setTimeout(checkAndResumeCollection, 1500);
+    } else {
+      // まだ読み込み中の場合は、loadイベントで実行
+      window.addEventListener('load', () => {
+        setTimeout(checkAndResumeCollection, 1500);
+      }, { once: true });
+    }
   } else {
     console.log('[Amazonレビュー収集] レビューページではない:', window.location.href);
   }
