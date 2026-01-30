@@ -1732,19 +1732,48 @@ function formatDate(date) {
  * 収集完了時の処理
  */
 async function handleCollectionComplete(tabId) {
+  console.log('[handleCollectionComplete] 開始 tabId:', tabId);
+
   // 収集中アイテムと収集状態を取得
   const initialResult = await chrome.storage.local.get(['collectingItems', 'isQueueCollecting', 'expectedReviewTotal', 'collectionState']);
   const isQueueCollecting = initialResult.isQueueCollecting || false;
   const expectedTotal = initialResult.expectedReviewTotal || 0;
   const currentState = initialResult.collectionState || {};
   const actualCount = currentState.reviewCount || 0;
+  const collectingItems = initialResult.collectingItems || [];
+
+  console.log('[handleCollectionComplete] isQueueCollecting:', isQueueCollecting);
+  console.log('[handleCollectionComplete] collectingItems:', JSON.stringify(collectingItems));
 
   // 収集中アイテムから商品情報を取得（ログ出力用）
   let completedItem = null;
   if (tabId) {
-    const collectingItems = initialResult.collectingItems || [];
     completedItem = collectingItems.find(item => item.tabId === tabId);
+    console.log('[handleCollectionComplete] tabIdで検索した結果:', completedItem ? 'found' : 'not found');
   }
+
+  // tabIdで見つからない場合、収集中アイテムが1件だけならそれを使う（Amazon収集時のフォールバック）
+  if (!completedItem && collectingItems.length === 1) {
+    completedItem = collectingItems[0];
+    console.log('[handleCollectionComplete] フォールバック: 収集中アイテムが1件のため使用:', completedItem?.url);
+    // tabIdを更新（後続の処理で使用）
+    if (tabId && completedItem) {
+      completedItem.tabId = tabId;
+    }
+  }
+
+  // それでも見つからない場合、Amazon収集中のアイテムを探す
+  if (!completedItem && collectingItems.length > 0) {
+    completedItem = collectingItems.find(item => item.url?.includes('amazon.co.jp'));
+    if (completedItem) {
+      console.log('[handleCollectionComplete] フォールバック: Amazon URLで検索して発見:', completedItem?.url);
+      if (tabId) {
+        completedItem.tabId = tabId;
+      }
+    }
+  }
+
+  console.log('[handleCollectionComplete] 最終的なcompletedItem:', completedItem ? completedItem.url : 'null');
 
   // レビュー件数の検証（期待値との比較）
   const verifyReviewCount = () => {
@@ -1769,28 +1798,42 @@ async function handleCollectionComplete(tabId) {
   };
 
   // アクティブタブとスプレッドシートURL、収集中リストの処理
-  if (tabId) {
+  // completedItemがある場合は処理を続行（tabIdがなくてもフォールバックで見つかった場合）
+  const effectiveTabId = tabId || completedItem?.tabId;
+  console.log('[handleCollectionComplete] effectiveTabId:', effectiveTabId, 'completedItem:', completedItem ? 'あり' : 'なし');
+
+  if (effectiveTabId || completedItem) {
     // キュー収集の場合はタブを再利用するため、activeCollectionTabsから削除しない
-    if (isQueueCollecting) {
+    if (isQueueCollecting && effectiveTabId) {
       // タブIDを保存（次の商品で再利用）
-      lastUsedTabId = tabId;
+      lastUsedTabId = effectiveTabId;
       // スプレッドシートURLはクリア（次の商品用に新しく設定される）
-      tabSpreadsheetUrls.delete(tabId);
-    } else {
+      tabSpreadsheetUrls.delete(effectiveTabId);
+    } else if (effectiveTabId) {
       // 単一収集の場合は通常通り削除
-      activeCollectionTabs.delete(tabId);
-      tabSpreadsheetUrls.delete(tabId);
+      activeCollectionTabs.delete(effectiveTabId);
+      tabSpreadsheetUrls.delete(effectiveTabId);
     }
 
     // タブごとの状態をクリーンアップ
-    const stateKey = `collectionState_${tabId}`;
-    await chrome.storage.local.remove(stateKey);
+    if (effectiveTabId) {
+      const stateKey = `collectionState_${effectiveTabId}`;
+      await chrome.storage.local.remove(stateKey);
+    }
 
-    // 収集中リストから削除
+    // 収集中リストから削除（URLベースでも削除できるように）
     const collectingResult = await chrome.storage.local.get(['collectingItems']);
-    let collectingItems = collectingResult.collectingItems || [];
-    collectingItems = collectingItems.filter(item => item.tabId !== tabId);
-    await chrome.storage.local.set({ collectingItems });
+    let updatedCollectingItems = collectingResult.collectingItems || [];
+    const beforeCount = updatedCollectingItems.length;
+    if (effectiveTabId) {
+      updatedCollectingItems = updatedCollectingItems.filter(item => item.tabId !== effectiveTabId);
+    }
+    // tabIdで削除できなかった場合、URLベースで削除
+    if (updatedCollectingItems.length === beforeCount && completedItem?.url) {
+      updatedCollectingItems = updatedCollectingItems.filter(item => item.url !== completedItem.url);
+    }
+    console.log('[handleCollectionComplete] collectingItems更新: before=', beforeCount, 'after=', updatedCollectingItems.length);
+    await chrome.storage.local.set({ collectingItems: updatedCollectingItems });
 
     // 商品の収集完了ログを出力
     if (completedItem) {
@@ -1798,6 +1841,7 @@ async function handleCollectionComplete(tabId) {
       // 定期収集の場合は[キュー名・商品ID]形式
       const logPrefix = completedItem.queueName ? `[${completedItem.queueName}・${productId}]` : `[${productId}]`;
       log(`${logPrefix} 収集が完了しました`, 'success');
+      console.log('[handleCollectionComplete] スプレッドシート保存を開始:', logPrefix);
       // 商品ごとの通知（設定で有効な場合のみ）
       showNotification('楽天レビュー収集', `${logPrefix} 収集が完了しました`, productId);
 
@@ -1808,14 +1852,26 @@ async function handleCollectionComplete(tabId) {
       await chrome.storage.local.set({ productLastCollected });
 
       // スプレッドシートへの保存（バッチ処理：商品収集完了時に一括書き込み）
-      await saveReviewsToSpreadsheet(completedItem, logPrefix);
+      try {
+        await saveReviewsToSpreadsheet(completedItem, logPrefix);
+        console.log('[handleCollectionComplete] スプレッドシート保存完了');
+      } catch (saveError) {
+        console.error('[handleCollectionComplete] スプレッドシート保存エラー:', saveError);
+        log(`${logPrefix} スプレッドシート保存でエラーが発生しました: ${saveError.message}`, 'error');
+      }
+    } else {
+      console.log('[handleCollectionComplete] completedItemがnullのためスプレッドシート保存をスキップ');
     }
+  } else {
+    console.log('[handleCollectionComplete] tabIdもcompletedItemもないため、スプレッドシート保存をスキップ');
   }
 
   // 状態を更新
   const result = await chrome.storage.local.get(['collectionState', 'queue']);
   const state = result.collectionState || {};
   const queue = result.queue || [];
+
+  console.log('[handleCollectionComplete] キュー状態確認: queue.length=', queue.length, 'isQueueCollecting=', isQueueCollecting, 'activeCollectionTabs.size=', activeCollectionTabs.size);
 
   state.isRunning = activeCollectionTabs.size > 0;
   await chrome.storage.local.set({ collectionState: state });
@@ -1829,10 +1885,12 @@ async function handleCollectionComplete(tabId) {
   // キューに次の商品がある場合、次を処理
   if (queue.length > 0 && isQueueCollecting) {
     log('次の商品の収集を開始します...');
+    console.log('[handleCollectionComplete] 次のキュー処理を3秒後に開始');
     setTimeout(() => {
       processNextInQueue();
     }, 3000);
   } else if (activeCollectionTabs.size === 0 && isQueueCollecting) {
+    console.log('[handleCollectionComplete] すべてのキュー収集が完了');
     // すべて完了（キュー収集中の場合）
     await chrome.storage.local.set({ isQueueCollecting: false, collectingItems: [] });
 
