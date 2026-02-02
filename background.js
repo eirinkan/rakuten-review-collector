@@ -14,11 +14,6 @@ const tabSpreadsheetUrls = new Map();
 const lastResumeSentTime = new Map();
 // 重複送信防止の閾値（ミリ秒）
 const RESUME_DEBOUNCE_MS = 5000;
-// 最後に使用したタブID（キュー収集でタブを再利用するため）
-let lastUsedTabId = null;
-
-// キュー処理用のアラーム名
-const QUEUE_NEXT_ALARM_NAME = 'processNextInQueue';
 
 // ===== Amazonボット対策: レート制限 =====
 const AMAZON_DAILY_LIMIT = 100;  // 1日100ページまで（警戒圏）
@@ -95,76 +90,33 @@ async function getAmazonRateLimitInfo() {
 // Amazonページ遷移時の収集再開リスナー（グローバル）
 // 注意: Service Workerが再起動するとactiveCollectionTabsがリセットされるため、
 // collectionState.isRunningをメインの条件として使用
-//
-// 重要: このリスナーは以下の2つのケースを処理する
-// 1. レビューページ間の遷移（ページ送り、フィルター切り替え）
-// 2. キュー処理からの開始（商品ページまたはレビューページ）
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   // ページ読み込み完了時のみ処理
   if (changeInfo.status !== 'complete') return;
 
+  // Amazonレビューページかどうか確認
   const url = tab.url || '';
-
-  // Amazonページかどうか確認（商品ページまたはレビューページ）
-  const isAmazonProductPage = url.includes('amazon.co.jp/dp/') || url.includes('amazon.co.jp/gp/product/');
-  const isAmazonReviewPage = url.includes('amazon.co.jp/product-reviews/');
-  const isAmazonPage = isAmazonProductPage || isAmazonReviewPage;
-
-  if (!isAmazonPage) return;
+  if (!url.includes('amazon.co.jp/product-reviews/')) return;
 
   // 収集状態を確認（Service Worker再起動後もストレージは永続化される）
   const result = await chrome.storage.local.get(['collectionState']);
   const state = result.collectionState;
 
-  console.log('[background] Amazonページ検出:', {
+  console.log('[background] Amazonレビューページ検出:', {
     tabId,
     url: url.substring(0, 100),
-    isProductPage: isAmazonProductPage,
-    isReviewPage: isAmazonReviewPage,
     isActiveTab: activeCollectionTabs.has(tabId),
     activeTabsCount: activeCollectionTabs.size,
     state: state ? {
       isRunning: state.isRunning,
       source: state.source,
-      startedFromQueue: state.startedFromQueue,
       lastProcessedPage: state.lastProcessedPage
     } : null
   });
 
   // 収集中でAmazonの場合のみ処理
   if (state && state.isRunning && state.source === 'amazon') {
-
-    // キュー処理から開始された場合の特別処理（商品ページでもレビューページでも発火）
-    // processNextInQueue内のローカルリスナーを使わず、このグローバルリスナーで統一処理
-    if (state.startedFromQueue) {
-      console.log('[background] キュー処理からの開始 - startCollectionを送信', {
-        isProductPage: isAmazonProductPage,
-        isReviewPage: isAmazonReviewPage
-      });
-      // フラグをクリア（次回のフィルター遷移等では通常処理を行う）
-      state.startedFromQueue = false;
-      await chrome.storage.local.set({ collectionState: state });
-
-      // 重複送信防止
-      const now = Date.now();
-      lastResumeSentTime.set(tabId, now);
-
-      // startCollectionを送信
-      // バックグラウンドタブでもcontent scriptが確実に初期化されるように、リトライ機能付きで送信
-      sendMessageWithRetry(tabId, {
-        action: 'startCollection',
-        incrementalOnly: state.incrementalOnly || false,
-        lastCollectedDate: state.lastCollectedDate || null,
-        queueName: state.queueName || null,
-        productId: state.productId || null
-      }, 'startCollection（キュー開始）');
-      return;
-    }
-
-    // 以下はレビューページでのみ処理（ページ遷移、フィルター切り替え）
-    if (!isAmazonReviewPage) return;
-
-    // URLからページ番号を取得
+    // URLからページ番号とフィルターを取得
     const urlObj = new URL(url);
     const currentPage = parseInt(urlObj.searchParams.get('pageNumber') || '1', 10);
     const lastPage = state.lastProcessedPage || 0;
@@ -183,20 +135,56 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       await chrome.storage.local.set({ collectionState: state });
 
       // デバウンスをスキップして直接resumeCollectionを送信
-      sendMessageWithRetry(tabId, {
-        action: 'resumeCollection',
-        incrementalOnly: state.incrementalOnly || false,
-        lastCollectedDate: state.lastCollectedDate || null,
-        queueName: state.queueName || null,
-        productId: state.productId || null
-      }, 'resumeCollection（フィルター遷移）');
-      return;
-    }
+      setTimeout(() => {
+        console.log('[background] resumeCollectionメッセージ送信（フィルター遷移）');
+        chrome.tabs.sendMessage(tabId, {
+          action: 'resumeCollection',
+          incrementalOnly: state.incrementalOnly || false,
+          lastCollectedDate: state.lastCollectedDate || null,
+          queueName: state.queueName || null,
+          productId: state.productId || null
+        }).catch((err) => {
+          console.log('[background] resumeCollection送信エラー:', err);
+        });
+      }, 3000);
+      return; // ここでreturnしてデバウンスチェックをスキップ
+    } else {
+      // 通常のページ遷移チェック
 
-    // 同じページなら重複実行しない
-    if (currentPage <= lastPage) {
-      console.log('[background] 同じまたは前のページのため再開スキップ:', { currentPage, lastPage });
-      return;
+      // キュー処理から開始された場合の特別処理
+      // 商品ページ→レビューページ遷移時、キューのリスナーは既に削除されているため
+      // グローバルリスナーがstartCollectionを送信する必要がある
+      if (state.startedFromQueue) {
+        console.log('[background] キュー処理からの開始 - startCollectionを送信');
+        // フラグをクリア（次回のフィルター遷移等では通常処理を行う）
+        state.startedFromQueue = false;
+        await chrome.storage.local.set({ collectionState: state });
+
+        // 重複送信防止
+        const now = Date.now();
+        lastResumeSentTime.set(tabId, now);
+
+        // startCollectionを送信（resumeCollectionではなく）
+        setTimeout(() => {
+          console.log('[background] startCollectionメッセージ送信（キュー開始）');
+          chrome.tabs.sendMessage(tabId, {
+            action: 'startCollection',
+            incrementalOnly: state.incrementalOnly || false,
+            lastCollectedDate: state.lastCollectedDate || null,
+            queueName: state.queueName || null,
+            productId: state.productId || null
+          }).catch((err) => {
+            console.log('[background] startCollection送信エラー:', err);
+          });
+        }, 3000);
+        return;
+      }
+
+      // 同じページなら重複実行しない
+      if (currentPage <= lastPage) {
+        console.log('[background] 同じまたは前のページのため再開スキップ:', { currentPage, lastPage });
+        return;
+      }
     }
 
     // 重複送信防止: 同じタブに対して5秒以内の再送信を防ぐ
@@ -220,63 +208,29 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       activeCollectionTabs.add(tabId);
     }
 
-    // バックグラウンドタブでもcontent scriptが確実に初期化されるように、リトライ機能付きで送信
-    console.log('[background] resumeCollectionメッセージ送信準備...', {
-      queueName: state.queueName,
-      productId: state.productId
-    });
-    sendMessageWithRetry(tabId, {
-      action: 'resumeCollection',
-      incrementalOnly: state.incrementalOnly || false,
-      lastCollectedDate: state.lastCollectedDate || null,
-      queueName: state.queueName || null,
-      productId: state.productId || null
-    }, 'resumeCollection');
+    // タブのアクティブ化は無効化（バックグラウンドで動作させるため）
+    // ボット対策よりもユーザビリティを優先
+
+    // 少し待ってからメッセージを送信（DOM読み込み完了を待つ）
+    setTimeout(() => {
+      console.log('[background] resumeCollectionメッセージ送信...', {
+        queueName: state.queueName,
+        productId: state.productId
+      });
+      chrome.tabs.sendMessage(tabId, {
+        action: 'resumeCollection',
+        incrementalOnly: state.incrementalOnly || false,
+        lastCollectedDate: state.lastCollectedDate || null,
+        queueName: state.queueName || null,
+        productId: state.productId || null  // 商品IDも送信
+      }).then((response) => {
+        console.log('[background] resumeCollection応答:', response);
+      }).catch((err) => {
+        console.log('[background] 収集再開メッセージ送信エラー:', err);
+      });
+    }, 3000);
   }
 });
-
-/**
- * タブにメッセージを送信（リトライ機能付き）
- * バックグラウンドタブでは content script の初期化が遅れる可能性があるため、
- * 失敗した場合は最大10回までリトライする
- *
- * 重要: setTimeoutはバックグラウンドタブで最小1秒にスロットリングされるため、
- * setIntervalベースで500msごとにポーリングしてリトライする
- *
- * @param {number} tabId - タブID
- * @param {Object} message - 送信するメッセージ
- * @param {string} description - ログ出力用の説明
- */
-/**
- * タブにメッセージを送信（即座にリトライ、最大10回）
- * Service WorkerではsetTimeout/setIntervalがスロットリングされるため、
- * 再帰的に即座にリトライする方式を採用
- *
- * 注意: content scriptが準備できていない場合（ページ読み込み中など）は
- * 失敗するため、適切な遅延後に呼び出すこと
- */
-async function sendMessageWithRetry(tabId, message, description = '', retryCount = 0) {
-  const MAX_RETRIES = 10;
-
-  try {
-    console.log(`[background] ${description}メッセージ送信（試行${retryCount + 1}/${MAX_RETRIES}）`);
-    const response = await chrome.tabs.sendMessage(tabId, message);
-    console.log(`[background] ${description}応答:`, response);
-    return response;
-  } catch (err) {
-    console.log(`[background] ${description}送信エラー（試行${retryCount + 1}）:`, err.message);
-
-    if (retryCount < MAX_RETRIES - 1) {
-      // 即座にリトライ（Service Workerでは遅延なしで再帰呼び出し）
-      // ただし、少しの遅延を入れるためにPromise.resolve()を挟む
-      await Promise.resolve();
-      return sendMessageWithRetry(tabId, message, description, retryCount + 1);
-    } else {
-      console.log(`[background] ${description}最大リトライ回数に達しました`);
-      throw err;
-    }
-  }
-}
 
 /**
  * URLが楽天かAmazonかを判定
@@ -558,23 +512,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case 'collectionComplete':
-      // 非同期関数を正しく処理（awaitして完了を待つ）
-      handleCollectionComplete(sender.tab?.id)
-        .then(() => {
-          console.log('[collectionComplete] 処理完了');
-          sendResponse({ success: true });
-        })
-        .catch(error => {
-          console.error('[collectionComplete] エラー:', error);
-          sendResponse({ success: false, error: error.message });
-        });
-      return true; // 非同期レスポンスを示す
+      handleCollectionComplete(sender.tab?.id);
+      sendResponse({ success: true });
+      break;
 
     case 'collectionStopped':
-      handleCollectionStopped(sender.tab?.id)
-        .then(() => sendResponse({ success: true }))
-        .catch(error => sendResponse({ success: false, error: error.message }));
-      return true;
+      handleCollectionStopped(sender.tab?.id);
+      sendResponse({ success: true });
+      break;
 
     case 'startQueueCollection':
       startQueueCollection()
@@ -796,108 +741,28 @@ async function handleSaveReviews(reviews, tabId = null, source = 'rakuten') {
     prefix = `[${currentItem.queueName}・${productId}] `;
   }
 
-  // 定期収集・通常収集共通: ローカルストレージに蓄積のみ
-  // スプレッドシートへの書き込みは商品収集完了時にバッチ処理で行う
+  // 定期収集・通常収集共通: まずローカルストレージに蓄積
   const newReviews = await saveToLocalStorage(reviews, detectedSource);
 
   if (newReviews.length === 0) {
     return;
   }
 
-  // スプレッドシートURLを収集中アイテムに保存（完了時に使用）
-  if (spreadsheetUrl && currentItem) {
-    currentItem.spreadsheetUrl = spreadsheetUrl;
-    const collectingResult = await chrome.storage.local.get(['collectingItems']);
-    const collectingItems = collectingResult.collectingItems || [];
-    const index = collectingItems.findIndex(item => item.tabId === tabId);
-    if (index >= 0) {
-      collectingItems[index] = currentItem;
-      await chrome.storage.local.set({ collectingItems });
-    }
-  }
+  if (spreadsheetUrl) {
+    try {
+      // ローカルストレージから全レビューを取得（蓄積されたもの）
+      const stateResult = await chrome.storage.local.get(['collectionState']);
+      const allReviews = stateResult.collectionState?.reviews || [];
 
-  // スプレッドシート未設定の警告（定期収集の場合のみ）
-  if (!spreadsheetUrl && isScheduled) {
+      if (allReviews.length > 0) {
+        await sendToSheets(spreadsheetUrl, allReviews, syncSettings.separateSheets !== false, isScheduled, detectedSource);
+        log(prefix + 'スプレッドシートに保存しました');
+      }
+    } catch (error) {
+      log(`スプレッドシートへの保存に失敗: ${error.message}`, 'error');
+    }
+  } else if (isScheduled) {
     log(prefix + '定期収集用のスプレッドシートが設定されていません', 'error');
-  }
-}
-
-/**
- * スプレッドシートへの保存（商品収集完了時にバッチ処理）
- * @param {Object} completedItem - 完了した収集アイテム
- * @param {string} logPrefix - ログ出力用のプレフィックス
- */
-async function saveReviewsToSpreadsheet(completedItem, logPrefix) {
-  // 定期収集かどうかを判定
-  const isScheduled = !!(completedItem?.queueName);
-
-  // URLから販路と商品IDを判定
-  const isAmazon = completedItem?.url?.includes('amazon.co.jp');
-  const productId = extractProductIdFromUrl(completedItem?.url || '');
-
-  log(`${logPrefix} [DEBUG] バッチ保存開始 isAmazon=${isAmazon}`);
-
-  // スプレッドシートURLを取得
-  let spreadsheetUrl = completedItem?.spreadsheetUrl || null;
-
-  // URLが収集アイテムにない場合は設定から取得
-  if (!spreadsheetUrl && !isScheduled) {
-    const syncSettings = await chrome.storage.sync.get(['spreadsheetUrl', 'amazonSpreadsheetUrl']);
-    spreadsheetUrl = isAmazon ? syncSettings.amazonSpreadsheetUrl : syncSettings.spreadsheetUrl;
-    log(`${logPrefix} [DEBUG] 設定から取得 URL=${spreadsheetUrl ? '設定済み' : '未設定'}`);
-  }
-
-  if (!spreadsheetUrl) {
-    log(`${logPrefix} [DEBUG] スプレッドシートURL未設定で終了`, 'error');
-    return;
-  }
-
-  try {
-    // ローカルストレージから全レビューを取得
-    const stateResult = await chrome.storage.local.get(['collectionState']);
-    const allReviews = stateResult.collectionState?.reviews || [];
-
-    log(`${logPrefix} [DEBUG] ローカルストレージのレビュー数: ${allReviews.length}件`);
-
-    if (allReviews.length === 0) {
-      log(`${logPrefix} [DEBUG] レビュー0件で終了`);
-      return;
-    }
-
-    // この商品のレビューのみフィルタリング
-    // 複数商品を並列収集している場合に他の商品のデータを含めないため
-    const productReviews = productId
-      ? allReviews.filter(r => r.productId === productId)
-      : allReviews;
-
-    log(`${logPrefix} [DEBUG] フィルタ後: ${productReviews.length}件`);
-
-    if (productReviews.length === 0) {
-      log(`${logPrefix} [DEBUG] フィルタ後0件で終了`);
-      return;
-    }
-
-    // 販路を判定
-    const source = productReviews[0]?.source || (isAmazon ? 'amazon' : 'rakuten');
-
-    // 設定を取得
-    const syncSettings = await chrome.storage.sync.get(['separateSheets']);
-
-    // スプレッドシートに保存（この商品のレビューのみ）
-    await sendToSheets(spreadsheetUrl, productReviews, syncSettings.separateSheets !== false, isScheduled, source);
-    log(logPrefix + ` スプレッドシートに保存しました（${productReviews.length}件）`, 'success');
-
-    // 保存済みのレビューをローカルストレージから削除
-    // 並列収集時に他の商品のレビューは残す
-    const remainingReviews = productId
-      ? allReviews.filter(r => r.productId !== productId)
-      : [];
-
-    const state = stateResult.collectionState || {};
-    state.reviews = remainingReviews;
-    await chrome.storage.local.set({ collectionState: state });
-  } catch (error) {
-    log(`${logPrefix} スプレッドシートへの保存に失敗: ${error.message}`, 'error');
   }
 }
 
@@ -1763,49 +1628,19 @@ function formatDate(date) {
  * 収集完了時の処理
  */
 async function handleCollectionComplete(tabId) {
-  console.log('[handleCollectionComplete] 開始 tabId:', tabId);
-
-  try {
-    // 収集中アイテムと収集状態を取得
-    const initialResult = await chrome.storage.local.get(['collectingItems', 'isQueueCollecting', 'expectedReviewTotal', 'collectionState']);
-    const isQueueCollecting = initialResult.isQueueCollecting || false;
-    const expectedTotal = initialResult.expectedReviewTotal || 0;
-    const currentState = initialResult.collectionState || {};
-    const actualCount = currentState.reviewCount || 0;
-    const collectingItems = initialResult.collectingItems || [];
-
-    console.log('[handleCollectionComplete] isQueueCollecting:', isQueueCollecting);
-    console.log('[handleCollectionComplete] collectingItems:', JSON.stringify(collectingItems));
+  // 収集中アイテムと収集状態を取得
+  const initialResult = await chrome.storage.local.get(['collectingItems', 'isQueueCollecting', 'expectedReviewTotal', 'collectionState']);
+  const isQueueCollecting = initialResult.isQueueCollecting || false;
+  const expectedTotal = initialResult.expectedReviewTotal || 0;
+  const currentState = initialResult.collectionState || {};
+  const actualCount = currentState.reviewCount || 0;
 
   // 収集中アイテムから商品情報を取得（ログ出力用）
   let completedItem = null;
   if (tabId) {
+    const collectingItems = initialResult.collectingItems || [];
     completedItem = collectingItems.find(item => item.tabId === tabId);
-    console.log('[handleCollectionComplete] tabIdで検索した結果:', completedItem ? 'found' : 'not found');
   }
-
-  // tabIdで見つからない場合、収集中アイテムが1件だけならそれを使う（Amazon収集時のフォールバック）
-  if (!completedItem && collectingItems.length === 1) {
-    completedItem = collectingItems[0];
-    console.log('[handleCollectionComplete] フォールバック: 収集中アイテムが1件のため使用:', completedItem?.url);
-    // tabIdを更新（後続の処理で使用）
-    if (tabId && completedItem) {
-      completedItem.tabId = tabId;
-    }
-  }
-
-  // それでも見つからない場合、Amazon収集中のアイテムを探す
-  if (!completedItem && collectingItems.length > 0) {
-    completedItem = collectingItems.find(item => item.url?.includes('amazon.co.jp'));
-    if (completedItem) {
-      console.log('[handleCollectionComplete] フォールバック: Amazon URLで検索して発見:', completedItem?.url);
-      if (tabId) {
-        completedItem.tabId = tabId;
-      }
-    }
-  }
-
-  console.log('[handleCollectionComplete] 最終的なcompletedItem:', completedItem ? completedItem.url : 'null');
 
   // レビュー件数の検証（期待値との比較）
   const verifyReviewCount = () => {
@@ -1829,43 +1664,19 @@ async function handleCollectionComplete(tabId) {
     return true; // 検証できない場合は成功扱い
   };
 
-  // アクティブタブとスプレッドシートURL、収集中リストの処理
-  // completedItemがある場合は処理を続行（tabIdがなくてもフォールバックで見つかった場合）
-  const effectiveTabId = tabId || completedItem?.tabId;
-  console.log('[handleCollectionComplete] effectiveTabId:', effectiveTabId, 'completedItem:', completedItem ? 'あり' : 'なし');
-
-  if (effectiveTabId || completedItem) {
-    // キュー収集の場合: activeCollectionTabsからの削除とタブを閉じる処理は、
-    // chrome.alarms予約の直前で行う（onRemovedリスナーとの競合を避けるため）
-    // ここではスプレッドシートURLのクリアのみ行う
-    if (isQueueCollecting && effectiveTabId) {
-      // スプレッドシートURLはクリア（次の商品用に新しく設定される）
-      tabSpreadsheetUrls.delete(effectiveTabId);
-    } else if (effectiveTabId) {
-      // 単一収集の場合は通常通り削除
-      activeCollectionTabs.delete(effectiveTabId);
-      tabSpreadsheetUrls.delete(effectiveTabId);
-    }
-
+  // アクティブタブから削除
+  if (tabId) {
+    activeCollectionTabs.delete(tabId);
+    tabSpreadsheetUrls.delete(tabId);
     // タブごとの状態をクリーンアップ
-    if (effectiveTabId) {
-      const stateKey = `collectionState_${effectiveTabId}`;
-      await chrome.storage.local.remove(stateKey);
-    }
+    const stateKey = `collectionState_${tabId}`;
+    await chrome.storage.local.remove(stateKey);
 
-    // 収集中リストから削除（URLベースでも削除できるように）
+    // 収集中リストから削除
     const collectingResult = await chrome.storage.local.get(['collectingItems']);
-    let updatedCollectingItems = collectingResult.collectingItems || [];
-    const beforeCount = updatedCollectingItems.length;
-    if (effectiveTabId) {
-      updatedCollectingItems = updatedCollectingItems.filter(item => item.tabId !== effectiveTabId);
-    }
-    // tabIdで削除できなかった場合、URLベースで削除
-    if (updatedCollectingItems.length === beforeCount && completedItem?.url) {
-      updatedCollectingItems = updatedCollectingItems.filter(item => item.url !== completedItem.url);
-    }
-    console.log('[handleCollectionComplete] collectingItems更新: before=', beforeCount, 'after=', updatedCollectingItems.length);
-    await chrome.storage.local.set({ collectingItems: updatedCollectingItems });
+    let collectingItems = collectingResult.collectingItems || [];
+    collectingItems = collectingItems.filter(item => item.tabId !== tabId);
+    await chrome.storage.local.set({ collectingItems });
 
     // 商品の収集完了ログを出力
     if (completedItem) {
@@ -1873,7 +1684,6 @@ async function handleCollectionComplete(tabId) {
       // 定期収集の場合は[キュー名・商品ID]形式
       const logPrefix = completedItem.queueName ? `[${completedItem.queueName}・${productId}]` : `[${productId}]`;
       log(`${logPrefix} 収集が完了しました`, 'success');
-      console.log('[handleCollectionComplete] スプレッドシート保存を開始:', logPrefix);
       // 商品ごとの通知（設定で有効な場合のみ）
       showNotification('楽天レビュー収集', `${logPrefix} 収集が完了しました`, productId);
 
@@ -1882,28 +1692,22 @@ async function handleCollectionComplete(tabId) {
       const productLastCollected = lcResult.productLastCollected || {};
       productLastCollected[productId] = new Date().toISOString().split('T')[0]; // YYYY-MM-DD形式
       await chrome.storage.local.set({ productLastCollected });
-
-      // スプレッドシートへの保存（バッチ処理：商品収集完了時に一括書き込み）
-      try {
-        await saveReviewsToSpreadsheet(completedItem, logPrefix);
-        console.log('[handleCollectionComplete] スプレッドシート保存完了');
-      } catch (saveError) {
-        console.error('[handleCollectionComplete] スプレッドシート保存エラー:', saveError);
-        log(`${logPrefix} スプレッドシート保存でエラーが発生しました: ${saveError.message}`, 'error');
-      }
-    } else {
-      console.log('[handleCollectionComplete] completedItemがnullのためスプレッドシート保存をスキップ');
     }
-  } else {
-    console.log('[handleCollectionComplete] tabIdもcompletedItemもないため、スプレッドシート保存をスキップ');
+
+    // キュー収集の場合のみタブを閉じる（単一収集ではユーザーがページに留まる）
+    if (isQueueCollecting) {
+      try {
+        await chrome.tabs.remove(tabId);
+      } catch (e) {
+        // タブが既に閉じられている場合は無視
+      }
+    }
   }
 
   // 状態を更新
   const result = await chrome.storage.local.get(['collectionState', 'queue']);
   const state = result.collectionState || {};
   const queue = result.queue || [];
-
-  console.log('[handleCollectionComplete] キュー状態確認: queue.length=', queue.length, 'isQueueCollecting=', isQueueCollecting, 'activeCollectionTabs.size=', activeCollectionTabs.size);
 
   state.isRunning = activeCollectionTabs.size > 0;
   await chrome.storage.local.set({ collectionState: state });
@@ -1917,49 +1721,12 @@ async function handleCollectionComplete(tabId) {
   // キューに次の商品がある場合、次を処理
   if (queue.length > 0 && isQueueCollecting) {
     log('次の商品の収集を開始します...');
-
-    // 重要: タブを閉じる処理はここで行う（processNextInQueueではなく）
-    // 理由: processNextInQueueでタブを閉じると chrome.tabs.onRemoved が発火し、
-    // 同名のアラームが上書きされて処理が中断してしまうため
-    if (effectiveTabId) {
-      // activeCollectionTabsから先に削除（onRemovedリスナーが発火しないようにする）
-      activeCollectionTabs.delete(effectiveTabId);
-      console.log('[handleCollectionComplete] activeCollectionTabsから削除:', effectiveTabId);
-
-      // タブを閉じる
-      try {
-        await chrome.tabs.remove(effectiveTabId);
-        console.log('[handleCollectionComplete] 収集完了タブを閉じました:', effectiveTabId);
-      } catch (e) {
-        // タブが既に閉じられている場合は無視
-        console.log('[handleCollectionComplete] タブ閉じスキップ（既に閉じられている）:', effectiveTabId);
-      }
-    }
-
-    console.log('[handleCollectionComplete] 次のキュー処理をchrome.alarmsで予約');
-    // 重要: Service WorkerではsetTimeout/setIntervalがスロットリングされるため、
-    // chrome.alarms APIを使用して確実に次の処理を実行する
-    // delayInMinutesの最小値は約0.5秒（Chrome 120以降）
-    // 参考: https://developer.chrome.com/docs/extensions/reference/alarms/
-    await chrome.alarms.create(QUEUE_NEXT_ALARM_NAME, {
-      delayInMinutes: 0.05  // 約3秒後（0.05分 = 3秒）
-    });
-    console.log('[handleCollectionComplete] アラーム設定完了: processNextInQueue');
-
+    setTimeout(() => {
+      processNextInQueue();
+    }, 3000);
   } else if (activeCollectionTabs.size === 0 && isQueueCollecting) {
-    console.log('[handleCollectionComplete] すべてのキュー収集が完了');
     // すべて完了（キュー収集中の場合）
     await chrome.storage.local.set({ isQueueCollecting: false, collectingItems: [] });
-
-    // 再利用したタブを閉じる
-    if (lastUsedTabId) {
-      try {
-        await chrome.tabs.remove(lastUsedTabId);
-      } catch (e) {
-        // タブが既に閉じられている場合は無視
-      }
-      lastUsedTabId = null;
-    }
 
     // 収集用ウィンドウを閉じる
     if (collectionWindowId) {
@@ -1987,13 +1754,6 @@ async function handleCollectionComplete(tabId) {
 
     const reviewCount = state.reviewCount || 0;
     showNotification('楽天レビュー収集', `収集が完了しました（${reviewCount}件のレビュー）`);
-  }
-
-  } catch (error) {
-    // handleCollectionComplete内の全エラーをキャッチ
-    console.error('[handleCollectionComplete] 致命的エラー:', error);
-    log(`収集完了処理でエラーが発生しました: ${error.message}`, 'error');
-    throw error; // 呼び出し元に再スロー
   }
 }
 
@@ -2087,12 +1847,11 @@ async function startQueueCollection() {
     });
     collectionWindowId = window.id;
 
-    // 楽天のみウィンドウを自動最小化（Amazonは最小化すると正常に動作しない）
-    if (!isAmazonFirst) {
-      setTimeout(() => {
-        chrome.windows.update(collectionWindowId, { state: 'minimized' }).catch(() => {});
-      }, 500);
-    }
+    // ウィンドウ作成後に自動最小化（検証済み: 最小化状態でも収集は正常動作）
+    // ユーザーの作業を邪魔しないよう、バックグラウンドで収集
+    setTimeout(() => {
+      chrome.windows.update(collectionWindowId, { state: 'minimized' }).catch(() => {});
+    }, 500);
 
     // about:blankタブは後で閉じる
     if (window.tabs && window.tabs[0]) {
@@ -2198,17 +1957,11 @@ async function processNextInQueue() {
   const queuePrefix = nextItem.queueName ? `[${nextItem.queueName}・${productId}]` : '';
   console.log('[processNextInQueue] 処理URL:', nextItem.url, 'isAmazon:', nextItem.url.includes('amazon.co.jp'));
 
-  // 毎回新しいタブで開く（タブ再利用は無効化）
-  // 理由: タブ再利用時のURL変更とcontent script初期化のタイミング問題を回避
+  // 収集用ウィンドウにタブを作成
   let tab;
   const isAmazonUrl = nextItem.url.includes('amazon.co.jp');
 
-  // 注意: タブを閉じる処理は handleCollectionComplete で行う
-  // processNextInQueue でタブを閉じると chrome.tabs.onRemoved が発火し、
-  // 同名のアラームが上書きされて処理が中断する問題があるため
-  lastUsedTabId = null;
-
-  // 新規タブを作成
+  // 直接URLにアクセス（バックグラウンドで動作させるためactive: false）
   if (collectionWindowId) {
     try {
       tab = await chrome.tabs.create({
@@ -2216,7 +1969,6 @@ async function processNextInQueue() {
         windowId: collectionWindowId,
         active: false
       });
-      console.log('[processNextInQueue] 新規タブを作成:', tab.id);
     } catch (e) {
       // ウィンドウが閉じられている場合は通常のタブで開く
       console.error('収集用ウィンドウにタブ作成失敗:', e);
@@ -2225,7 +1977,6 @@ async function processNextInQueue() {
   } else {
     // フォールバック: 通常のタブ
     tab = await chrome.tabs.create({ url: nextItem.url, active: false });
-    console.log('[processNextInQueue] 新規タブを作成（通常）:', tab.id);
   }
 
   // tabIdを収集中アイテムに設定
@@ -2279,50 +2030,41 @@ async function processNextInQueue() {
     }
   });
 
-  // Amazonの場合: グローバルリスナー（chrome.tabs.onUpdated）がstartedFromQueueフラグを見て
-  // startCollectionを送信するので、ここでは何もしない
-  //
-  // 楽天の場合: グローバルリスナーはAmazonのみ対応しているため、ここでローカルリスナーを使用
-  if (!isAmazonUrl) {
-    // 楽天用のローカルリスナー
-    let startCollectionSent = false;
+  // ページ読み込み完了後に収集開始を指示
+  let startCollectionSent = false; // 重複送信防止フラグ
 
-    chrome.tabs.onUpdated.addListener(function listener(tabId, info, tabInfo) {
-      if (tabId === tab.id && info.status === 'complete') {
-        if (startCollectionSent) {
-          console.log('[キュー処理・楽天] startCollection既に送信済みのためスキップ');
-          return;
-        }
-        startCollectionSent = true;
-        chrome.tabs.onUpdated.removeListener(listener);
-
-        (async () => {
-          let lastCollectedDate = null;
-          if (nextItem.incrementalOnly) {
-            const productId = extractProductIdFromUrl(nextItem.url);
-            const lcResult = await chrome.storage.local.get(['productLastCollected']);
-            const productLastCollected = lcResult.productLastCollected || {};
-            lastCollectedDate = productLastCollected[productId] || null;
-          }
-
-          const productIdForMessage = extractProductIdFromUrl(nextItem.url);
-
-          console.log('[キュー処理・楽天] startCollectionメッセージ送信');
-          sendMessageWithRetry(tab.id, {
-            action: 'startCollection',
-            incrementalOnly: nextItem.incrementalOnly || false,
-            lastCollectedDate: lastCollectedDate,
-            queueName: nextItem.queueName || nextItem.title || productIdForMessage,
-            productId: productIdForMessage
-          }, 'startCollection（楽天キュー処理）');
-        })();
+  chrome.tabs.onUpdated.addListener(function listener(tabId, info, tabInfo) {
+    if (tabId === tab.id && info.status === 'complete') {
+      // 重複送信防止
+      if (startCollectionSent) {
+        console.log('[キュー処理] startCollection既に送信済みのためスキップ');
+        return;
       }
-    });
-  } else {
-    // Amazonの場合はグローバルリスナーに任せる
-    // startedFromQueue フラグが設定されているので、グローバルリスナーが処理する
-    console.log('[キュー処理・Amazon] グローバルリスナーに処理を委譲（startedFromQueue=true）');
-  }
+      startCollectionSent = true;
+      chrome.tabs.onUpdated.removeListener(listener);
+
+      setTimeout(async () => {
+        // 差分取得の設定を取得
+        let lastCollectedDate = null;
+        if (nextItem.incrementalOnly) {
+          const productId = extractProductIdFromUrl(nextItem.url);
+          const lcResult = await chrome.storage.local.get(['productLastCollected']);
+          const productLastCollected = lcResult.productLastCollected || {};
+          lastCollectedDate = productLastCollected[productId] || null;
+        }
+
+        const productIdForMessage = extractProductIdFromUrl(nextItem.url);
+        console.log('[キュー処理] startCollectionメッセージ送信');
+        chrome.tabs.sendMessage(tab.id, {
+          action: 'startCollection',
+          incrementalOnly: nextItem.incrementalOnly || false,
+          lastCollectedDate: lastCollectedDate,
+          queueName: nextItem.queueName || nextItem.title || productIdForMessage,
+          productId: productIdForMessage
+        }).catch(() => {});
+      }, 2000);
+    }
+  });
 }
 
 /**
@@ -2664,43 +2406,26 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     const stateKey = `collectionState_${tabId}`;
     chrome.storage.local.remove(stateKey);
 
-    // キューに次がある場合は処理を続行（chrome.alarmsで1秒後）
-    console.log('[tabs.onRemoved] キュー処理続行をアラームで予約');
-    chrome.alarms.create(QUEUE_NEXT_ALARM_NAME, {
-      delayInMinutes: 0.017  // 約1秒後（0.017分 ≈ 1秒）
-    });
+    // キューに次がある場合は処理を続行
+    setTimeout(() => {
+      processNextInQueue();
+    }, 1000);
   }
 });
 
 // 収集用ウィンドウが閉じられた時のクリーンアップ
 chrome.windows.onRemoved.addListener((windowId) => {
-  // collectionWindowIdが明示的に設定されていて、かつそのウィンドウが閉じられた場合のみ処理
-  // 注意: タブ再利用時やClaude in Chrome使用時はcollectionWindowIdが未設定(null)なので、
-  // この条件に入らないようにする
-  if (collectionWindowId && windowId === collectionWindowId) {
-    console.log('[windows.onRemoved] 収集用ウィンドウが閉じられました windowId:', windowId);
+  if (windowId === collectionWindowId) {
     collectionWindowId = null;
     // ウィンドウが手動で閉じられた場合、収集を停止
-    // ただし、activeCollectionTabsが空でない場合のみ（実際に収集中の場合）
     if (activeCollectionTabs.size > 0) {
-      // 収集タブがまだ存在するか確認（ウィンドウが閉じられてもタブが別ウィンドウに移動している可能性）
-      Promise.all([...activeCollectionTabs].map(tabId =>
-        chrome.tabs.get(tabId).catch(() => null)
-      )).then(tabs => {
-        const existingTabs = tabs.filter(t => t !== null);
-        if (existingTabs.length === 0) {
-          // 本当にタブがなくなった場合のみ停止
-          log('収集用ウィンドウが閉じられました。収集を停止します', 'error');
-          activeCollectionTabs.clear();
-          chrome.storage.local.set({
-            isQueueCollecting: false,
-            collectingItems: []
-          });
-          forwardToAll({ action: 'queueUpdated' });
-        } else {
-          console.log('[windows.onRemoved] 収集タブはまだ存在します:', existingTabs.length);
-        }
+      log('収集用ウィンドウが閉じられました。収集を停止します', 'error');
+      activeCollectionTabs.clear();
+      chrome.storage.local.set({
+        isQueueCollecting: false,
+        collectingItems: []
       });
+      forwardToAll({ action: 'queueUpdated' });
     }
   }
 });
@@ -2822,19 +2547,10 @@ async function runScheduledCollection() {
 
 // アラームリスナー
 chrome.alarms.onAlarm.addListener((alarm) => {
-  console.log('[alarms.onAlarm] アラーム発火:', alarm.name);
-
   if (alarm.name === SCHEDULED_ALARM_NAME) {
     runScheduledCollection().catch(error => {
       console.error('定期収集エラー:', error);
       log('定期収集でエラーが発生しました: ' + error.message, 'error');
-    });
-  } else if (alarm.name === QUEUE_NEXT_ALARM_NAME) {
-    // キュー処理の次の商品を開始
-    console.log('[alarms.onAlarm] processNextInQueueを実行');
-    processNextInQueue().catch(error => {
-      console.error('キュー処理エラー:', error);
-      log('キュー処理でエラーが発生しました: ' + error.message, 'error');
     });
   }
 });

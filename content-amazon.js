@@ -313,33 +313,6 @@
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     switch (message.action) {
       case 'startCollection':
-        // 新しい商品からの開始かどうかを判定
-        // productIdが異なる場合は新しい商品なので、すべてのロックをリセット
-        const incomingProductId = message.productId || getASIN();
-        const isNewProduct = incomingProductId && currentProductId && incomingProductId !== currentProductId;
-
-        console.log('[Amazonレビュー収集] startCollection受信:', {
-          incomingProductId,
-          currentProductId,
-          isNewProduct,
-          isCollecting,
-          startCollectionLock,
-          resumeCollectionLock
-        });
-
-        // 新しい商品の場合はすべてのロックをリセット
-        if (isNewProduct) {
-          console.log('[Amazonレビュー収集] 新しい商品を検出、ロックをリセット');
-          isCollecting = false;
-          startCollectionLock = false;
-          resumeCollectionLock = false;
-          shouldStop = false;
-          autoResumeExecuted = false;
-          collectedReviewKeys.clear();
-          consecutiveSkipPages = 0;
-          sessionPageCount = 0;
-        }
-
         // 既に収集中の場合
         if (isCollecting) {
           if (message.force) {
@@ -351,13 +324,6 @@
             sendResponse({ success: false, error: '既に収集中' });
             break;
           }
-        }
-
-        // ロックが残っている場合もリセット（新しいstartCollectionが来たということは、新しい収集のはず）
-        if (startCollectionLock || resumeCollectionLock) {
-          console.log('[Amazonレビュー収集] ロックが残っているためリセット');
-          startCollectionLock = false;
-          resumeCollectionLock = false;
         }
 
         if (isProductPage) {
@@ -428,32 +394,6 @@
         break;
 
       case 'resumeCollection':
-        // 新しい商品からの再開かどうかを判定
-        const resumeProductId = message.productId || getASIN();
-        const isNewProductForResume = resumeProductId && currentProductId && resumeProductId !== currentProductId;
-
-        console.log('[Amazonレビュー収集] resumeCollection受信（初期チェック）:', {
-          resumeProductId,
-          currentProductId,
-          isNewProductForResume,
-          isCollecting,
-          startCollectionLock,
-          resumeCollectionLock
-        });
-
-        // 新しい商品の場合はすべてのロックをリセット
-        if (isNewProductForResume) {
-          console.log('[Amazonレビュー収集] resumeCollection: 新しい商品を検出、ロックをリセット');
-          isCollecting = false;
-          startCollectionLock = false;
-          resumeCollectionLock = false;
-          shouldStop = false;
-          autoResumeExecuted = false;
-          collectedReviewKeys.clear();
-          consecutiveSkipPages = 0;
-          sessionPageCount = 0;
-        }
-
         // 同期的なロックチェック（最初に行う - 重複実行防止）
         if (resumeCollectionLock) {
           console.log('[Amazonレビュー収集] resumeCollection実行中のためスキップ');
@@ -1181,11 +1121,12 @@
 
       log('次のページに移動します');
 
+      // 次のページ遷移のために状態をリセット（同一オリジン遷移でスクリプトが再注入されない場合に対応）
+      isCollecting = false;
+      startCollectionLock = false;
+      autoResumeExecuted = false;
+
       // クリックでページ遷移（人間らしいマウス移動＋クリック）
-      // 注意: isCollecting は true のままにしておく
-      // ページ遷移後に content script が再読み込みされる場合は、新しいスクリプトで isCollecting = false から開始
-      // SPA的な遷移の場合は、URL変更監視がisCollecting=trueを見てスキップし、
-      // collectReviews()が次のページで再度呼ばれる
       await clickNextPage();
       return true; // ページ遷移中
     }
@@ -1307,7 +1248,6 @@
   async function clickNextPage() {
     const currentPage = getCurrentPageNumber();
     const nextPage = currentPage + 1;
-    const currentUrl = window.location.href;
 
     console.log(`[Amazonレビュー収集] 次のページに遷移: ページ${currentPage} → ページ${nextPage}`);
 
@@ -1317,54 +1257,6 @@
     if (nextLink) {
       console.log(`[Amazonレビュー収集] 「次へ」ボタンをクリックします: ${nextLink.href}`);
       nextLink.click();
-
-      // SPA遷移を検出して収集を再開する（setIntervalベースでバックグラウンドタブ対応）
-      let checkCount = 0;
-      const maxChecks = 30; // 最大30回（約15秒）
-      const checkInterval = setInterval(async () => {
-        checkCount++;
-        const newUrl = window.location.href;
-
-        // URLが変わっている場合
-        if (newUrl !== currentUrl) {
-          clearInterval(checkInterval);
-          console.log('[Amazonレビュー収集] SPA遷移を検出');
-
-          // ページ番号を検証
-          const actualPage = getCurrentPageNumber();
-          if (actualPage !== nextPage) {
-            console.log(`[Amazonレビュー収集] ページ番号の不一致を検出: 期待=${nextPage}, 実際=${actualPage}`);
-            console.log('[Amazonレビュー収集] URL直接操作でリトライします');
-
-            // URL直接操作でリトライ（キャッシュ対策としてタイムスタンプを追加）
-            const retryUrl = new URL(currentUrl);
-            retryUrl.searchParams.set('pageNumber', nextPage.toString());
-            retryUrl.searchParams.set('_t', Date.now().toString()); // キャッシュバスター
-            window.location.href = retryUrl.toString();
-            return;
-          }
-
-          console.log('[Amazonレビュー収集] ページ番号OK、収集を継続します');
-          // 短い待機後に収集を再開
-          await sleep(500);
-          // 収集を再開
-          isCollecting = false;
-          startCollectionLock = false;
-          startCollection();
-          return;
-        }
-
-        // タイムアウト
-        if (checkCount >= maxChecks) {
-          clearInterval(checkInterval);
-          console.log('[Amazonレビュー収集] SPA遷移タイムアウト、URL直接遷移を試みます');
-          // URL直接操作でフォールバック
-          const retryUrl = new URL(currentUrl);
-          retryUrl.searchParams.set('pageNumber', nextPage.toString());
-          retryUrl.searchParams.set('_t', Date.now().toString());
-          window.location.href = retryUrl.toString();
-        }
-      }, 500); // 500msごとにチェック
       return;
     }
 
@@ -2008,18 +1900,10 @@
   }
 
   /**
-   * スリープ（バックグラウンドタブ対応版）
-   * macOS/ChromeではバックグラウンドタブのsetTimeoutが大幅にthrottleされるため、
-   * 長い待機を短縮して対応
+   * スリープ
    */
   function sleep(ms) {
-    // 100ms以下は即座に解決（throttle対策）
-    if (ms <= 100) {
-      return Promise.resolve();
-    }
-    // 長い待機は最大500msに制限（バックグラウンドでも動作するように）
-    const actualMs = Math.min(ms, 500);
-    return new Promise(resolve => setTimeout(resolve, actualMs));
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   // ===== ボット対策: 人間らしい行動パターン =====
@@ -2037,16 +1921,16 @@
    * 人間はページを開いたらまず全体を見渡す
    */
   async function initialPageScan() {
-    // バックグラウンドタブ対応: 軽量化バージョン
-    // 短い待機のみ
-    await sleep(300 + Math.random() * 300);
+    // ページを開いた直後、まず画面を見渡す動作（1-3秒）
+    const scanTime = 1000 + Math.random() * 2000;
+    await sleep(scanTime);
 
-    // 軽くスクロールして全体を確認
-    const quickScroll = 100 + Math.random() * 100;
-    window.scrollTo({ top: quickScroll, behavior: 'auto' });
-    await sleep(200);
-    window.scrollTo({ top: 0, behavior: 'auto' });
-    await sleep(100);
+    // 軽くスクロールして全体を確認（人間は最初に全体像を把握する）
+    const quickScroll = 100 + Math.random() * 200;
+    window.scrollTo({ top: quickScroll, behavior: 'smooth' });
+    await sleep(500 + Math.random() * 500);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    await sleep(300);
   }
 
   /**
@@ -2083,31 +1967,67 @@
    * 各レビューを「読む」動作をシミュレート
    */
   async function simulateReadingReviews() {
-    // バックグラウンドタブではsetTimeoutがthrottleされるため、軽量化バージョンを使用
     const reviews = document.querySelectorAll(AMAZON_SELECTORS.reviewContainer);
 
-    // ページ全体を一度スクロールするだけ（個別レビューへのスクロールは省略）
-    if (reviews.length > 0) {
-      // 最初のレビューを表示
-      reviews[0].scrollIntoView({ behavior: 'auto', block: 'start' });
-      await sleep(200);
+    for (const review of reviews) {
+      if (shouldStop) return;
 
-      // 最後のレビューまでスクロール
-      reviews[reviews.length - 1].scrollIntoView({ behavior: 'auto', block: 'end' });
-      await sleep(300);
+      // レビューまでスクロール（画面中央に表示）
+      review.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      await sleep(300 + Math.random() * 200); // スクロール完了待ち
+
+      // レビューの長さに応じた読み時間を計算
+      const bodyElem = review.querySelector('[data-hook="review-body"]');
+      const bodyText = bodyElem?.textContent || '';
+      const charCount = bodyText.length;
+
+      // 100文字あたり0.3-0.5秒（人間の読書速度をシミュレート）
+      const baseReadTime = (charCount / 100) * (READING_SPEED_PER_100CHARS + Math.random() * 200);
+      const readTime = Math.min(Math.max(baseReadTime, 300), 3000); // 0.3-3秒の範囲
+
+      // 時々レビューにホバー（20%の確率）
+      if (Math.random() < 0.2) {
+        await hoverOnReview(review);
+      }
+
+      // 読む時間
+      await sleep(readTime);
+
+      // 時々スキップ（つまらないレビューは読み飛ばす: 15%）
+      if (Math.random() < 0.15) {
+        // スキップ時は早めに次へ
+        continue;
+      }
     }
-
-    // 全体で短い待機のみ（バックグラウンドタブ対応）
-    await sleep(500 + Math.random() * 500);
   }
 
   /**
    * ランダムなマイクロブレイク（人間らしい休憩）
-   * バックグラウンドタブ対応: 無効化（setTimeoutがthrottleされるため）
+   * 固定間隔ではなく、確率ベースで発生
    */
   async function maybeHaveBreak() {
-    // バックグラウンドタブでのthrottle問題を回避するため、休憩機能を無効化
-    // 代わりにページ遷移時の短い待機で対応
+    // 各ページで MICRO_BREAK_PROBABILITY の確率で休憩
+    if (Math.random() < MICRO_BREAK_PROBABILITY) {
+      const breakType = Math.random();
+
+      if (breakType < 0.6) {
+        // 短い休憩（60%）: 3-10秒
+        const breakTime = 3000 + Math.random() * 7000;
+        log(`少し休憩中...（${Math.round(breakTime / 1000)}秒）`);
+        await sleep(breakTime);
+      } else if (breakType < 0.9) {
+        // 中程度の休憩（30%）: 15-45秒
+        const breakTime = 15000 + Math.random() * 30000;
+        log(`しばらく休憩中...（${Math.round(breakTime / 1000)}秒）`);
+        await sleep(breakTime);
+      } else {
+        // 長い休憩（10%）: 1-3分
+        const breakTime = 60000 + Math.random() * 120000;
+        log(`長めの休憩中...（${Math.round(breakTime / 1000)}秒）`);
+        await sleep(breakTime);
+      }
+      return true;
+    }
     return false;
   }
 
@@ -2184,124 +2104,9 @@
     });
   }
 
-  // ページ読み込み時に収集状態を確認し、自動再開
-  // background.jsのtabs.onUpdatedと連携し、content script側でも自律的に再開する
-  // バックグラウンドタブでも確実に動作するように、複数の方法で初期化を試みる
+  // ページ読み込み時のログ（自動再開はbackground.jsのtabs.onUpdatedリスナーが担当）
   if (isReviewPage) {
-    console.log('[Amazonレビュー収集] レビューページ検出、自動再開をチェックします');
-
-    // 収集状態を確認して自動再開する関数
-    async function checkAndResumeCollection() {
-      // 既に収集中または初期化中の場合はスキップ
-      if (isCollecting || startCollectionLock || resumeCollectionLock) {
-        console.log('[Amazonレビュー収集] 既に処理中のためスキップ:', { isCollecting, startCollectionLock, resumeCollectionLock });
-        return;
-      }
-
-      try {
-        const result = await chrome.storage.local.get(['collectionState']);
-        const state = result.collectionState;
-
-        console.log('[Amazonレビュー収集] 自動再開チェック:', {
-          isRunning: state?.isRunning,
-          source: state?.source,
-          productId: state?.productId,
-          currentASIN: getASIN(),
-          documentReadyState: document.readyState
-        });
-
-        // 収集中かつAmazonかつ同じ商品の場合、自動再開
-        if (state && state.isRunning && state.source === 'amazon') {
-          const storedProductId = state.productId || state.currentProductId;
-          const currentASIN = getASIN();
-
-          if (storedProductId === currentASIN) {
-            console.log('[Amazonレビュー収集] 収集を自動再開します');
-
-            // 状態を復元
-            incrementalOnly = state.incrementalOnly || false;
-            lastCollectedDate = state.lastCollectedDate || null;
-            currentQueueName = state.queueName || null;
-            currentProductId = currentASIN;
-
-            // 収集を開始
-            startCollection();
-          } else {
-            console.log('[Amazonレビュー収集] 商品IDが異なるため自動再開しません:', {
-              stored: storedProductId,
-              current: currentASIN
-            });
-          }
-        }
-      } catch (e) {
-        console.log('[Amazonレビュー収集] 自動再開チェックエラー:', e);
-      }
-    }
-
-    // スクリプト読み込み時点で即座にチェック
-    // バックグラウンドタブでは load イベントのコールバックもスロットリングされるため、
-    // イベントを待たずに即座に実行する
-    // DOM読み込みは startCollection 内の waitForReviews 関数で待機するため問題なし
-    checkAndResumeCollection();
-
-    // ===== URL変更監視（SPA対応） =====
-    // Amazonは「次へ」クリック時にページをリロードせず、コンテンツを動的に更新することがある
-    // その場合、content scriptが再読み込みされないため、URL変更を監視して収集を再開する
-    //
-    // 注意: この監視は「ページリロードなしのSPA遷移」を検出するためのもの
-    // 通常のページ遷移では content script が再読み込みされるため、この監視は不要
-    // しかし、Amazonの一部のページ遷移はSPA的に行われるため、バックアップとして機能する
-    let lastUrl = window.location.href;
-    let urlCheckInterval = null;
-    let urlChangeHandling = false; // URL変更処理中フラグ
-
-    function startUrlMonitoring() {
-      if (urlCheckInterval) return; // 既に監視中
-
-      urlCheckInterval = setInterval(() => {
-        const currentUrl = window.location.href;
-        if (currentUrl !== lastUrl && !urlChangeHandling) {
-          console.log('[Amazonレビュー収集] URL変更を検出:', {
-            from: lastUrl,
-            to: currentUrl,
-            isCollecting: isCollecting
-          });
-          lastUrl = currentUrl;
-
-          // 既に収集中の場合は、URL変更監視からの再開は行わない
-          // （収集ロジック内でページ遷移を処理しているため）
-          if (isCollecting) {
-            console.log('[Amazonレビュー収集] 収集中のため、URL変更監視からの再開はスキップ');
-            return;
-          }
-
-          // URLがレビューページかどうか確認
-          const isStillReviewPage = currentUrl.includes('/product-reviews/') ||
-                                     currentUrl.includes('/reviews/') ||
-                                     currentUrl.includes('reviewerType=');
-
-          if (isStillReviewPage) {
-            console.log('[Amazonレビュー収集] レビューページへのURL変更、自動再開をチェックします');
-            urlChangeHandling = true;
-
-            // フラグをリセットして再開を許可
-            startCollectionLock = false;
-            autoResumeExecuted = false;
-
-            // DOMが完全に更新されるまで待機（1.5秒）
-            setTimeout(() => {
-              urlChangeHandling = false;
-              checkAndResumeCollection();
-            }, 1500);
-          }
-        }
-      }, 500); // 500msごとにURL変更をチェック
-
-      console.log('[Amazonレビュー収集] URL変更監視を開始しました');
-    }
-
-    // URL監視を開始
-    startUrlMonitoring();
+    console.log('[Amazonレビュー収集] レビューページ検出（再開はbackground.jsから）');
   } else {
     console.log('[Amazonレビュー収集] レビューページではない:', window.location.href);
   }
