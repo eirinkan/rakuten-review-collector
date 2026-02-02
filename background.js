@@ -742,28 +742,16 @@ async function handleSaveReviews(reviews, tabId = null, source = 'rakuten') {
   }
 
   // 定期収集・通常収集共通: まずローカルストレージに蓄積
+  // バッチ処理: スプレッドシートへの書き込みは handleCollectionComplete で一括実行
   const newReviews = await saveToLocalStorage(reviews, detectedSource);
 
   if (newReviews.length === 0) {
     return;
   }
 
-  if (spreadsheetUrl) {
-    try {
-      // ローカルストレージから全レビューを取得（蓄積されたもの）
-      const stateResult = await chrome.storage.local.get(['collectionState']);
-      const allReviews = stateResult.collectionState?.reviews || [];
-
-      if (allReviews.length > 0) {
-        await sendToSheets(spreadsheetUrl, allReviews, syncSettings.separateSheets !== false, isScheduled, detectedSource);
-        log(prefix + 'スプレッドシートに保存しました');
-      }
-    } catch (error) {
-      log(`スプレッドシートへの保存に失敗: ${error.message}`, 'error');
-    }
-  } else if (isScheduled) {
-    log(prefix + '定期収集用のスプレッドシートが設定されていません', 'error');
-  }
+  // スプレッドシートへの書き込みは商品収集完了時に一括で行う（バッチ処理）
+  // handleCollectionComplete内のsaveReviewsToSpreadsheetで実行される
+  // ここではローカルストレージへの蓄積のみ行う
 }
 
 /**
@@ -1625,6 +1613,80 @@ function formatDate(date) {
 }
 
 /**
+ * スプレッドシートへの保存（商品収集完了時にバッチ処理）
+ * @param {Object} completedItem - 完了した収集アイテム
+ * @param {string} logPrefix - ログ出力用のプレフィックス
+ */
+async function saveReviewsToSpreadsheet(completedItem, logPrefix) {
+  // 定期収集かどうかを判定
+  const isScheduled = !!(completedItem?.queueName);
+
+  // URLから販路と商品IDを判定
+  const isAmazon = completedItem?.url?.includes('amazon.co.jp');
+  const productId = extractProductIdFromUrl(completedItem?.url || '');
+
+  console.log(`${logPrefix} [DEBUG] バッチ保存開始 isAmazon=${isAmazon}`);
+
+  // スプレッドシートURLを取得
+  let spreadsheetUrl = completedItem?.spreadsheetUrl || null;
+
+  // URLが収集アイテムにない場合は設定から取得
+  if (!spreadsheetUrl && !isScheduled) {
+    const syncSettings = await chrome.storage.sync.get(['spreadsheetUrl', 'amazonSpreadsheetUrl']);
+    spreadsheetUrl = isAmazon ? syncSettings.amazonSpreadsheetUrl : syncSettings.spreadsheetUrl;
+    console.log(`${logPrefix} [DEBUG] 設定から取得 URL=${spreadsheetUrl ? '設定済み' : '未設定'}`);
+  }
+
+  if (!spreadsheetUrl) {
+    console.log(`${logPrefix} [DEBUG] スプレッドシートURL未設定で終了`);
+    return;
+  }
+
+  try {
+    // ローカルストレージから全レビューを取得
+    const stateResult = await chrome.storage.local.get(['collectionState']);
+    const allReviews = stateResult.collectionState?.reviews || [];
+
+    console.log(`${logPrefix} [DEBUG] ローカルストレージのレビュー数: ${allReviews.length}件`);
+
+    if (allReviews.length === 0) {
+      console.log(`${logPrefix} [DEBUG] レビュー0件で終了`);
+      return;
+    }
+
+    // この商品のレビューのみフィルタリング
+    // 複数商品を並列収集している場合に他の商品のデータを含めないため
+    const productReviews = productId
+      ? allReviews.filter(r => r.productId === productId)
+      : allReviews;
+
+    console.log(`${logPrefix} [DEBUG] フィルタ後: ${productReviews.length}件`);
+
+    if (productReviews.length === 0) {
+      console.log(`${logPrefix} [DEBUG] フィルタ後0件で終了`);
+      return;
+    }
+
+    // 販路を判定
+    const detectedSource = isAmazon ? 'amazon' : 'rakuten';
+
+    // シート分離設定を取得
+    const syncSettings = await chrome.storage.sync.get(['separateSheets']);
+    const separateSheets = syncSettings.separateSheets !== false;
+
+    // スプレッドシートに書き込み
+    await sendToSheets(spreadsheetUrl, productReviews, separateSheets, isScheduled, detectedSource);
+    log(`${logPrefix} スプレッドシートに${productReviews.length}件を一括保存しました`);
+
+    console.log(`${logPrefix} [DEBUG] バッチ保存完了`);
+  } catch (error) {
+    console.error(`${logPrefix} [DEBUG] バッチ保存エラー:`, error);
+    log(`${logPrefix} スプレッドシート保存でエラー: ${error.message}`, 'error');
+    throw error;
+  }
+}
+
+/**
  * 収集完了時の処理
  */
 async function handleCollectionComplete(tabId) {
@@ -1692,6 +1754,15 @@ async function handleCollectionComplete(tabId) {
       const productLastCollected = lcResult.productLastCollected || {};
       productLastCollected[productId] = new Date().toISOString().split('T')[0]; // YYYY-MM-DD形式
       await chrome.storage.local.set({ productLastCollected });
+
+      // スプレッドシートへの保存（バッチ処理：商品収集完了時に一括書き込み）
+      try {
+        await saveReviewsToSpreadsheet(completedItem, logPrefix);
+        console.log('[handleCollectionComplete] スプレッドシート保存完了');
+      } catch (saveError) {
+        console.error('[handleCollectionComplete] スプレッドシート保存エラー:', saveError);
+        log(`${logPrefix} スプレッドシート保存でエラーが発生しました: ${saveError.message}`, 'error');
+      }
     }
 
     // キュー収集の場合のみタブを閉じる（単一収集ではユーザーがページに留まる）
