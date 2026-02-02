@@ -8,6 +8,42 @@
 let activeCollectionTabs = new Set();
 // 収集用ウィンドウのID
 let collectionWindowId = null;
+
+// ===== activeCollectionTabs の永続化 =====
+/**
+ * activeCollectionTabsをchrome.storage.localに保存
+ */
+async function persistActiveCollectionTabs() {
+  const tabIds = Array.from(activeCollectionTabs);
+  await chrome.storage.local.set({ activeCollectionTabIds: tabIds });
+  console.log('[persistActiveCollectionTabs] 保存:', tabIds);
+}
+
+/**
+ * chrome.storage.localからactiveCollectionTabsを復元
+ */
+async function restoreActiveCollectionTabs() {
+  const result = await chrome.storage.local.get(['activeCollectionTabIds']);
+  const tabIds = result.activeCollectionTabIds || [];
+
+  // 存在するタブのみを復元（閉じられたタブは除外）
+  for (const tabId of tabIds) {
+    try {
+      await chrome.tabs.get(tabId);
+      activeCollectionTabs.add(tabId);
+    } catch (e) {
+      // タブが存在しない場合は無視
+      console.log('[restoreActiveCollectionTabs] タブが存在しない:', tabId);
+    }
+  }
+
+  // 存在するタブのみを再保存
+  await persistActiveCollectionTabs();
+  console.log('[restoreActiveCollectionTabs] 復元完了:', Array.from(activeCollectionTabs));
+}
+
+// Service Worker起動時に復元
+restoreActiveCollectionTabs();
 // タブごとのスプレッドシートURL（定期収集用）
 const tabSpreadsheetUrls = new Map();
 // タブごとの最後のresumeCollection送信時刻（重複送信防止）
@@ -218,6 +254,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     if (!activeCollectionTabs.has(tabId)) {
       console.log('[background] タブをactiveCollectionTabsに追加:', tabId);
       activeCollectionTabs.add(tabId);
+      persistActiveCollectionTabs();  // 永続化
     }
 
     // バックグラウンドタブでもcontent scriptが確実に初期化されるように、リトライ機能付きで送信
@@ -1903,7 +1940,15 @@ async function handleCollectionComplete(tabId) {
   const state = result.collectionState || {};
   const queue = result.queue || [];
 
-  console.log('[handleCollectionComplete] キュー状態確認: queue.length=', queue.length, 'isQueueCollecting=', isQueueCollecting, 'activeCollectionTabs.size=', activeCollectionTabs.size);
+  // 条件判定用の詳細ログ
+  console.log('[handleCollectionComplete] ==== 条件チェック ====');
+  console.log('[handleCollectionComplete] queue.length:', queue.length);
+  console.log('[handleCollectionComplete] isQueueCollecting:', isQueueCollecting);
+  console.log('[handleCollectionComplete] activeCollectionTabs.size:', activeCollectionTabs.size);
+  console.log('[handleCollectionComplete] effectiveTabId:', effectiveTabId);
+  console.log('[handleCollectionComplete] 条件1 (queue.length > 0 && isQueueCollecting):', queue.length > 0 && isQueueCollecting);
+  console.log('[handleCollectionComplete] 条件2 (queue.length === 0 && isQueueCollecting):', queue.length === 0 && isQueueCollecting);
+  console.log('[handleCollectionComplete] ========================');
 
   state.isRunning = activeCollectionTabs.size > 0;
   await chrome.storage.local.set({ collectionState: state });
@@ -1916,6 +1961,7 @@ async function handleCollectionComplete(tabId) {
 
   // キューに次の商品がある場合、次を処理
   if (queue.length > 0 && isQueueCollecting) {
+    console.log('[handleCollectionComplete] >>> 条件1に入った: 次の商品を処理');
     log('次の商品の収集を開始します...');
 
     // 重要: タブを閉じる処理はここで行う（processNextInQueueではなく）
@@ -1924,6 +1970,7 @@ async function handleCollectionComplete(tabId) {
     if (effectiveTabId) {
       // activeCollectionTabsから先に削除（onRemovedリスナーが発火しないようにする）
       activeCollectionTabs.delete(effectiveTabId);
+      await persistActiveCollectionTabs();  // 永続化
       console.log('[handleCollectionComplete] activeCollectionTabsから削除:', effectiveTabId);
 
       // タブを閉じる
@@ -1946,10 +1993,14 @@ async function handleCollectionComplete(tabId) {
     });
     console.log('[handleCollectionComplete] アラーム設定完了: processNextInQueue');
 
-  } else if (activeCollectionTabs.size === 0 && isQueueCollecting) {
-    console.log('[handleCollectionComplete] すべてのキュー収集が完了');
+  } else if (queue.length === 0 && isQueueCollecting) {
+    // 重要: activeCollectionTabs.size === 0 ではなく queue.length === 0 で判定
+    // 理由: Service Worker再起動時にactiveCollectionTabsはクリアされるため、
+    //       activeCollectionTabs.size で判定すると誤って「完了」と判断してしまう
+    console.log('[handleCollectionComplete] すべてのキュー収集が完了（queue.length === 0）');
     // すべて完了（キュー収集中の場合）
     await chrome.storage.local.set({ isQueueCollecting: false, collectingItems: [] });
+    await persistActiveCollectionTabs();  // 永続化
 
     // 再利用したタブを閉じる
     if (lastUsedTabId) {
@@ -2010,6 +2061,7 @@ async function handleCollectionStopped(tabId) {
 
   // アクティブタブから削除
   activeCollectionTabs.delete(tabId);
+  await persistActiveCollectionTabs();  // 永続化
   tabSpreadsheetUrls.delete(tabId);
 
   // タブごとの状態をクリーンアップ
@@ -2234,6 +2286,7 @@ async function processNextInQueue() {
 
   // アクティブタブとして追跡
   activeCollectionTabs.add(tab.id);
+  await persistActiveCollectionTabs();  // 永続化
 
   // タブのアクティブ化は無効化（バックグラウンドで動作させるため）
 
@@ -2363,6 +2416,7 @@ async function startSingleCollection(productInfo, tabId) {
 
   // アクティブタブとして追跡
   activeCollectionTabs.add(tabId);
+  await persistActiveCollectionTabs();  // 永続化
 
   // 収集状態をセット（タブIDごとに管理）
   const stateKey = `collectionState_${tabId}`;
@@ -2654,9 +2708,10 @@ chrome.commands.onCommand.addListener((command) => {
 });
 
 // タブが閉じられた時のクリーンアップ
-chrome.tabs.onRemoved.addListener((tabId) => {
+chrome.tabs.onRemoved.addListener(async (tabId) => {
   if (activeCollectionTabs.has(tabId)) {
     activeCollectionTabs.delete(tabId);
+    await persistActiveCollectionTabs();  // 永続化
     tabSpreadsheetUrls.delete(tabId);
     log(`タブ ${tabId} が閉じられました。収集を中断しました`, 'error');
 
@@ -2692,6 +2747,7 @@ chrome.windows.onRemoved.addListener((windowId) => {
           // 本当にタブがなくなった場合のみ停止
           log('収集用ウィンドウが閉じられました。収集を停止します', 'error');
           activeCollectionTabs.clear();
+          persistActiveCollectionTabs();  // 永続化
           chrome.storage.local.set({
             isQueueCollecting: false,
             collectingItems: []
