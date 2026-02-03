@@ -1655,6 +1655,9 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 
       })
     }
   );
+
+  // 8. 空白行を削除（シートの行数を調整）
+  await trimEmptyRows(token, spreadsheetId, sheetId, encodedSheetName);
 }
 
 /**
@@ -1853,6 +1856,73 @@ async function appendToSheetWithoutClear(token, spreadsheetId, sheetName, review
   // URL列にクリック可能なリンク書式を適用
   if (reviews.length > 0) {
     await formatUrlColumns(token, spreadsheetId, sheetId, reviews, source);
+  }
+
+  // シートの余分な行を削除（空白行をなくす）
+  await trimEmptyRows(token, spreadsheetId, sheetId, encodedSheetName);
+}
+
+/**
+ * シートの空白行を削除
+ */
+async function trimEmptyRows(token, spreadsheetId, sheetId, encodedSheetName) {
+  try {
+    // A列のデータを取得して最後のデータ行を特定
+    const getResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A:A`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const getData = await getResponse.json();
+    const values = getData.values || [];
+
+    // 最後のデータがある行を特定（空白行をスキップ）
+    let lastDataRow = 0;
+    for (let i = values.length - 1; i >= 0; i--) {
+      if (values[i] && values[i][0] && values[i][0].trim() !== '') {
+        lastDataRow = i + 1; // 1-indexed
+        break;
+      }
+    }
+
+    if (lastDataRow === 0) return; // データがない場合は何もしない
+
+    // シートの現在の行数を取得
+    const sheetPropsResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets(properties)`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const sheetPropsData = await sheetPropsResponse.json();
+    const sheetProps = sheetPropsData.sheets?.find(s => s.properties.sheetId === sheetId);
+    const currentRowCount = sheetProps?.properties?.gridProperties?.rowCount || 1000;
+
+    // 余分な行がある場合は削除
+    if (currentRowCount > lastDataRow) {
+      await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            requests: [{
+              deleteDimension: {
+                range: {
+                  sheetId: sheetId,
+                  dimension: 'ROWS',
+                  startIndex: lastDataRow,
+                  endIndex: currentRowCount
+                }
+              }
+            }]
+          })
+        }
+      );
+    }
+  } catch (e) {
+    console.error('空白行削除エラー:', e);
+    // エラーが発生しても処理を続行
   }
 }
 
