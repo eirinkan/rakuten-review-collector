@@ -23,7 +23,7 @@
     { value: 'four_star', label: '★4' },
     { value: 'five_star', label: '★5' }
   ];
-  const MAX_PAGES_PER_FILTER = 999999; // 制限なし（Amazonの実際の制限を検証するため）
+  const MAX_PAGES_PER_FILTER = 10; // Amazonの仕様: 星フィルター使用時は最大10ページ（100件）まで
 
   // ===== ボット対策: マウス・スクロール関連関数 =====
 
@@ -856,11 +856,20 @@
 
     if (expectedTotal > 0) {
       chrome.storage.local.set({ expectedReviewTotal: expectedTotal });
-      totalPages = Math.ceil(expectedTotal / 10); // Amazonは1ページ10件
+      let calculatedPages = Math.ceil(expectedTotal / 10); // Amazonは1ページ10件
+
+      // 重要: 星フィルター使用時、Amazonは最大10ページ（100件）までしか表示しない
+      // 100件以上のレビューがある星でも、10ページ目で「次へ」がグレーアウトする
+      if (useStarFilter && calculatedPages > MAX_PAGES_PER_FILTER) {
+        console.log(`[Amazonレビュー収集] ${currentFilter}: ${calculatedPages}ページ計算 → ${MAX_PAGES_PER_FILTER}ページに制限（Amazon仕様）`);
+        calculatedPages = MAX_PAGES_PER_FILTER;
+      }
+      totalPages = calculatedPages;
 
       // 星フィルター適用時は詳細ログ
       if (currentFilter) {
-        log(`${currentFilter}レビュー収集開始（${expectedTotal.toLocaleString()}件、${totalPages}ページ）`);
+        const displayCount = useStarFilter ? Math.min(expectedTotal, MAX_PAGES_PER_FILTER * 10) : expectedTotal;
+        log(`${currentFilter}レビュー収集開始（${displayCount.toLocaleString()}件、${totalPages}ページ）`);
       } else if (incrementalOnly && lastCollectedDate) {
         log(`差分収集を開始します（前回: ${lastCollectedDate}、全${expectedTotal.toLocaleString()}件中新着のみ）`);
       } else {
