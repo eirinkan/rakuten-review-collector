@@ -895,7 +895,41 @@
     // 現在のページからレビューを収集
     const reachedOldReviews = await collectCurrentPage();
 
-    if (reachedOldReviews) {
+    // 差分取得で新着がない場合、次のフィルターへの遷移が必要
+    if (reachedOldReviews === 'FILTER_CHANGE_NEEDED') {
+      log('このフィルターでの新着レビュー収集が完了しました');
+
+      // 星フィルターを使用している場合、次のフィルターに遷移
+      if (useStarFilter) {
+        const currentFilter = getCurrentStarFilter();
+        log(`現在のフィルター: ${currentFilter?.label || '不明'}`);
+
+        // 次のフィルターに切り替え
+        if (switchToNextStarFilter()) {
+          log(`次のフィルター（${getCurrentStarFilter()?.label}）に遷移します`);
+          await navigateToFilteredPage(currentStarFilterIndex);
+          return; // ページ遷移中、新しいページでcollectReviewsが再度呼ばれる
+        } else {
+          // 全フィルター完了
+          log('全ての星評価フィルター（★1〜★5）での収集が完了しました');
+          isCollecting = false;
+          if (!shouldStop) {
+            chrome.runtime.sendMessage({ action: 'collectionComplete' });
+          }
+          return;
+        }
+      } else {
+        // 星フィルターを使用していない場合は収集完了
+        log('前回以降の新着レビューの収集が完了しました');
+        isCollecting = false;
+        if (!shouldStop) {
+          chrome.runtime.sendMessage({ action: 'collectionComplete' });
+        }
+        return;
+      }
+    }
+
+    if (reachedOldReviews === true) {
       log('前回以降の新着レビューの収集が完了しました');
       isCollecting = false;
       if (!shouldStop) {
@@ -1009,7 +1043,11 @@
       if (reviews.length === 0) {
         log('前回以降の新着レビューがこのページにはありません');
         reachedOldReviews = true;
-        return reachedOldReviews;
+
+        // 星フィルターを使用している場合、次のフィルターに遷移する必要があるかもしれない
+        // ここでは単純に true を返し、collectAllPages() 側でフィルター遷移を処理させる
+        // フラグを設定して、collectAllPages() が次のフィルターに遷移できるようにする
+        return 'FILTER_CHANGE_NEEDED';
       }
 
       if (filteredCount > 0 && reviews.length < beforeDateFilter) {
