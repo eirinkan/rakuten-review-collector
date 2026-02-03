@@ -388,6 +388,23 @@ document.addEventListener('DOMContentLoaded', () => {
     return '';
   }
 
+  /**
+   * 入力がASIN形式かどうか判定
+   * ASINは10文字の英数字（先頭がB、数字、または大文字英字で始まる）
+   */
+  function isAsin(input) {
+    if (!input) return false;
+    const trimmed = input.trim().toUpperCase();
+    return /^[A-Z0-9]{10}$/.test(trimmed);
+  }
+
+  /**
+   * ASINからAmazonレビューページURLを生成
+   */
+  function asinToUrl(asin) {
+    return `https://www.amazon.co.jp/product-reviews/${asin.trim().toUpperCase()}/`;
+  }
+
   // 楽天のURLから商品管理番号を抽出
   function extractRakutenItemCodeFromUrl(url) {
     if (!url) return '';
@@ -1006,7 +1023,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 改行で分割して複数URLを取得
-    const urls = text.split('\n').map(u => u.trim()).filter(u => u.length > 0);
+    let urls = text.split('\n').map(u => u.trim()).filter(u => u.length > 0);
+
+    // ASIN形式の入力をURLに変換
+    urls = urls.map(input => {
+      if (isAsin(input)) {
+        const convertedUrl = asinToUrl(input);
+        console.log('[addToQueue] ASINをURLに変換:', input, '→', convertedUrl);
+        return convertedUrl;
+      }
+      return input;
+    });
 
     // ランキングURLの場合（1件のみ対応）- 楽天 + Amazon
     const rankingUrl = urls.find(u =>
@@ -1061,7 +1088,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const productUrls = [...rakutenUrls, ...amazonUrls];
 
     if (productUrls.length === 0) {
-      showStatus(addStatus, 'error', '楽天またはAmazonの商品ページURLを入力してください');
+      showStatus(addStatus, 'error', '楽天/AmazonのURLまたはASIN（10桁）を入力してください');
       return;
     }
 
