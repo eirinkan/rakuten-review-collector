@@ -585,6 +585,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
 
+    // ===== タブID取得（content scriptが自分のタブIDを知るため） =====
+    case 'getMyTabId':
+      sendResponse({ tabId: sender.tab?.id || null });
+      return false; // 同期レスポンス
+
     // ===== 既存の機能 =====
     case 'saveReviews':
       handleSaveReviews(message.reviews, sender.tab?.id, message.source || 'rakuten')
@@ -2337,7 +2342,8 @@ async function processNextInQueue() {
       // 新しい商品の収集なので、星フィルター状態をリセット（★1から開始）
       useStarFilter: true,
       currentStarFilterIndex: 0,     // ★1から開始
-      pagesCollectedInCurrentFilter: 0
+      pagesCollectedInCurrentFilter: 0,
+      activeTabId: tab.id            // 収集中のタブID（他タブでの操作を防止）
     }
   });
 
@@ -2465,7 +2471,8 @@ async function startSingleCollection(productInfo, tabId) {
       // 新しい商品の収集なので、星フィルター状態をリセット（★1から開始）
       useStarFilter: true,
       currentStarFilterIndex: 0,     // ★1から開始
-      pagesCollectedInCurrentFilter: 0
+      pagesCollectedInCurrentFilter: 0,
+      activeTabId: tabId             // 収集中のタブID（他タブでの操作を防止）
     }
   });
 

@@ -686,6 +686,39 @@
     // 即座に両方のフラグをロック（競合防止）
     startCollectionLock = true;
 
+    // ===== 別タブでの重複操作防止 =====
+    // 収集中のタブIDをチェックし、このタブでのみ操作を許可
+    try {
+      const myTabIdResult = await new Promise(resolve => {
+        chrome.runtime.sendMessage({ action: 'getMyTabId' }, resolve);
+      });
+      const myTabId = myTabIdResult?.tabId;
+
+      const stateResult = await new Promise(resolve => {
+        chrome.storage.local.get(['collectionState'], resolve);
+      });
+      const state = stateResult.collectionState || {};
+
+      // 収集中で、かつ別のタブがアクティブな場合はスキップ
+      if (state.isRunning && state.activeTabId && state.activeTabId !== myTabId) {
+        console.log(`[Amazonレビュー収集] 別タブ（ID: ${state.activeTabId}）で収集中のためスキップ（このタブ: ${myTabId}）`);
+        startCollectionLock = false;
+        return;
+      }
+
+      // このタブで収集開始する場合、activeTabIdを更新
+      if (myTabId) {
+        state.activeTabId = myTabId;
+        await new Promise(resolve => {
+          chrome.storage.local.set({ collectionState: state }, resolve);
+        });
+        console.log(`[Amazonレビュー収集] activeTabIdを設定: ${myTabId}`);
+      }
+    } catch (e) {
+      console.log('[Amazonレビュー収集] タブIDチェックでエラー:', e);
+      // エラーの場合は続行（後方互換性のため）
+    }
+
     // ===== ボット対策: レート制限チェック =====
     const rateLimit = await checkRateLimit();
     if (!rateLimit.allowed) {
