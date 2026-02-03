@@ -2317,6 +2317,10 @@ async function processNextInQueue() {
   // 共通のcollectionStateもリセット（レビュー蓄積を防ぐ）
   // queueNameも含めて自動再開時に正しく復元できるようにする
   // 重要: すべての状態を明示的に初期化（以前の収集の状態が残らないようにする）
+  // ただし、Amazon星フィルター状態は保持する（★3だけで止まる問題の修正）
+  const existingStateResult = await chrome.storage.local.get(['collectionState']);
+  const existingState = existingStateResult.collectionState || {};
+
   await chrome.storage.local.set({
     collectionState: {
       isRunning: true,
@@ -2332,7 +2336,11 @@ async function processNextInQueue() {
       queueName: nextItem.queueName || null,
       incrementalOnly: nextItem.incrementalOnly || false,
       source: isAmazonUrl ? 'amazon' : 'rakuten', // 販路を設定（自動再開に必要）
-      startedFromQueue: true         // キュー処理からの開始フラグ（競合防止用）
+      startedFromQueue: true,        // キュー処理からの開始フラグ（競合防止用）
+      // Amazon星フィルター状態を保持（フィルター遷移中に失われないようにする）
+      useStarFilter: existingState.useStarFilter !== false,
+      currentStarFilterIndex: existingState.currentStarFilterIndex || 0,
+      pagesCollectedInCurrentFilter: existingState.pagesCollectedInCurrentFilter || 0
     }
   });
 
@@ -2441,6 +2449,10 @@ async function startSingleCollection(productInfo, tabId) {
   // 共通のcollectionStateもリセット（レビュー蓄積を防ぐ）
   // queueName, productIdも設定（フィルター遷移後の再開に必要）
   // 重要: processNextInQueueと同様の形式に統一
+  // ただし、Amazon星フィルター状態は保持する（★3だけで止まる問題の修正）
+  const existingStateResult2 = await chrome.storage.local.get(['collectionState']);
+  const existingState2 = existingStateResult2.collectionState || {};
+
   await chrome.storage.local.set({
     collectionState: {
       isRunning: true,
@@ -2455,7 +2467,11 @@ async function startSingleCollection(productInfo, tabId) {
       source: productInfo.source || (productInfo.url.includes('amazon') ? 'amazon' : 'rakuten'),
       queueName: queueName,
       productId: productId,
-      startedFromQueue: false        // 拡張ウィンドウからの開始
+      startedFromQueue: false,       // 拡張ウィンドウからの開始
+      // Amazon星フィルター状態を保持（フィルター遷移中に失われないようにする）
+      useStarFilter: existingState2.useStarFilter !== false,
+      currentStarFilterIndex: existingState2.currentStarFilterIndex || 0,
+      pagesCollectedInCurrentFilter: existingState2.pagesCollectedInCurrentFilter || 0
     }
   });
 
