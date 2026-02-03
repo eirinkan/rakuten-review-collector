@@ -1511,8 +1511,8 @@
     url.searchParams.set('filterByStar', filterValue);
     // 認証済み購入のみ
     url.searchParams.set('reviewerType', 'avp_only_reviews');
-    // トップレビュー順（役に立った順）
-    url.searchParams.set('sortBy', 'helpful');
+    // 新しい順
+    url.searchParams.set('sortBy', 'recent');
     // ページ1から開始
     url.searchParams.set('pageNumber', '1');
     return url.toString();

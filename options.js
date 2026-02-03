@@ -340,7 +340,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // スプレッドシートボタンの状態を更新
       updateSpreadsheetBtnState();
       if (separateSheetsCheckbox) {
-        separateSheetsCheckbox.checked = result.separateSheets !== false;
+        // デフォルトはオフ（false）
+        separateSheetsCheckbox.checked = result.separateSheets === true;
       }
       if (separateCsvFilesCheckbox) {
         separateCsvFilesCheckbox.checked = result.separateCsvFiles !== false;

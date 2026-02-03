@@ -939,7 +939,8 @@ async function saveReviewsToSpreadsheet(completedItem, logPrefix) {
     const syncSettings = await chrome.storage.sync.get(['separateSheets']);
 
     // スプレッドシートに保存（この商品のレビューのみ）
-    await sendToSheets(spreadsheetUrl, productReviews, syncSettings.separateSheets !== false, isScheduled, source);
+    // デフォルトはオフ（false）
+    await sendToSheets(spreadsheetUrl, productReviews, syncSettings.separateSheets === true, isScheduled, source);
     log(logPrefix + ` スプレッドシートに保存しました（${productReviews.length}件）`, 'success');
 
     // 保存済みのレビューをローカルストレージから削除
@@ -1693,7 +1694,7 @@ async function sendToSheets(spreadsheetUrl, reviews, separateSheets = true, isSc
   }
 
   if (separateSheets) {
-    // 商品ごとにシートを分ける
+    // 商品ごとにシートを分ける（シートをクリアして書き込み）
     const reviewsByProduct = groupReviewsByProduct(reviews);
     for (const [productId, productReviews] of Object.entries(reviewsByProduct)) {
       // 「楽・商品管理番号」または「Ama・ASIN」形式（全収集で統一）
@@ -1704,9 +1705,154 @@ async function sendToSheets(spreadsheetUrl, reviews, separateSheets = true, isSc
       await appendToSheet(token, spreadsheetId, sheetName, productReviews, productSource);
     }
   } else {
-    // 全て同じシートに保存（販路別）
+    // 全て同じシートに保存（販路別）- 追記モード
     const sheetName = source === 'amazon' ? 'Amazon' : '楽天';
-    await appendToSheet(token, spreadsheetId, sheetName, reviews, source);
+    await appendToSheetWithoutClear(token, spreadsheetId, sheetName, reviews, source);
+  }
+}
+
+/**
+ * シートに追記（既存データを保持）
+ * シートを分けない設定の場合に使用
+ */
+async function appendToSheetWithoutClear(token, spreadsheetId, sheetName, reviews, source = 'rakuten') {
+  // シートが存在しなければ作成
+  const actualSheetName = await ensureSheetExists(token, spreadsheetId, sheetName);
+  const encodedSheetName = encodeURIComponent(actualSheetName);
+  const sheetId = await getSheetId(token, spreadsheetId, actualSheetName);
+
+  // テキストが=で始まる場合はエスケープ
+  const escapeFormula = (text) => {
+    if (!text) return '';
+    const str = String(text);
+    if (str.startsWith('=') || str.startsWith('+') || str.startsWith('-') || str.startsWith('@')) {
+      return "'" + str;
+    }
+    return str;
+  };
+
+  // 販路別のヘッダーとデータマッピング
+  let headers;
+  let dataValues;
+
+  if (source === 'amazon') {
+    headers = [
+      'レビュー日', 'ASIN', '商品名', '商品URL', '評価', 'タイトル', '本文',
+      '投稿者', 'バリエーション', '参考になった数', '国', '認証購入', 'Vineレビュー',
+      '画像あり', 'レビュー掲載URL', '収集日時'
+    ];
+    dataValues = reviews.map(review => [
+      escapeFormula(review.reviewDate || ''),
+      escapeFormula(review.productId || ''),
+      escapeFormula(review.productName || ''),
+      review.productUrl || '',
+      review.rating || '',
+      escapeFormula(review.title || ''),
+      escapeFormula(review.body || ''),
+      escapeFormula(review.author || ''),
+      escapeFormula(review.variation || ''),
+      review.helpfulCount || 0,
+      escapeFormula(review.country || ''),
+      review.isVerified ? '○' : '',
+      review.isVine ? '○' : '',
+      review.hasImage ? '○' : '',
+      review.pageUrl || '',
+      escapeFormula(review.collectedAt || '')
+    ]);
+  } else {
+    headers = [
+      'レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文',
+      '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先',
+      '購入回数', '参考になった数', 'ショップからの返信', 'ショップ名', 'レビュー掲載URL', '収集日時',
+      '販路', '国'
+    ];
+    dataValues = reviews.map(review => [
+      escapeFormula(review.reviewDate || ''),
+      escapeFormula(review.productId || ''),
+      escapeFormula(review.productName || ''),
+      review.productUrl || '',
+      review.rating || '',
+      escapeFormula(review.title || ''),
+      escapeFormula(review.body || ''),
+      escapeFormula(review.author || ''),
+      escapeFormula(review.age || ''),
+      escapeFormula(review.gender || ''),
+      escapeFormula(review.orderDate || ''),
+      escapeFormula(review.variation || ''),
+      escapeFormula(review.usage || ''),
+      escapeFormula(review.recipient || ''),
+      escapeFormula(review.purchaseCount || ''),
+      review.helpfulCount || 0,
+      escapeFormula(review.shopReply || ''),
+      escapeFormula(review.shopName || ''),
+      review.pageUrl || '',
+      escapeFormula(review.collectedAt || ''),
+      '楽天',
+      escapeFormula(review.country || '日本')
+    ]);
+  }
+
+  const lastColumn = source === 'amazon' ? 'P' : 'V';
+
+  // 現在のシートの行数を取得
+  const getResponse = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A:A`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const getData = await getResponse.json();
+  const existingRows = getData.values?.length || 0;
+
+  if (existingRows === 0) {
+    // シートが空の場合はヘッダー + データを書き込み
+    const allValues = [headers, ...dataValues];
+    await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A1:${lastColumn}${allValues.length}?valueInputOption=USER_ENTERED`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ values: allValues })
+      }
+    );
+    // ヘッダー書式を適用
+    await formatHeaderRow(token, spreadsheetId, sheetId, source);
+    // データ行に書式を適用
+    if (dataValues.length > 0) {
+      await formatDataRows(token, spreadsheetId, sheetId, 1, allValues.length, source);
+    }
+  } else {
+    // 既存データがある場合は最後の行の次に追記
+    const startRow = existingRows + 1;
+    const endRow = startRow + dataValues.length - 1;
+
+    const appendResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A${startRow}:${lastColumn}${endRow}?valueInputOption=USER_ENTERED`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ values: dataValues })
+      }
+    );
+
+    if (!appendResponse.ok) {
+      const error = await appendResponse.json();
+      throw new Error(error.error?.message || 'スプレッドシートへの追記に失敗しました');
+    }
+
+    // 追記した行にデータ書式を適用
+    if (dataValues.length > 0) {
+      await formatDataRows(token, spreadsheetId, sheetId, startRow - 1, endRow, source);
+    }
+  }
+
+  // URL列にクリック可能なリンク書式を適用
+  if (reviews.length > 0) {
+    await formatUrlColumns(token, spreadsheetId, sheetId, reviews, source);
   }
 }
 
@@ -1981,23 +2127,16 @@ async function handleCollectionComplete(tabId) {
     console.log('[handleCollectionComplete] >>> 条件1に入った: 次の商品を処理');
     log('次の商品の収集を開始します...');
 
-    // 重要: タブを閉じる処理はここで行う（processNextInQueueではなく）
-    // 理由: processNextInQueueでタブを閉じると chrome.tabs.onRemoved が発火し、
-    // 同名のアラームが上書きされて処理が中断してしまうため
+    // タブを再利用するため、閉じずにlastUsedTabIdに保存
     if (effectiveTabId) {
-      // activeCollectionTabsから先に削除（onRemovedリスナーが発火しないようにする）
+      // activeCollectionTabsから先に削除（次の商品用に再登録するため）
       activeCollectionTabs.delete(effectiveTabId);
       await persistActiveCollectionTabs();  // 永続化
       console.log('[handleCollectionComplete] activeCollectionTabsから削除:', effectiveTabId);
 
-      // タブを閉じる
-      try {
-        await chrome.tabs.remove(effectiveTabId);
-        console.log('[handleCollectionComplete] 収集完了タブを閉じました:', effectiveTabId);
-      } catch (e) {
-        // タブが既に閉じられている場合は無視
-        console.log('[handleCollectionComplete] タブ閉じスキップ（既に閉じられている）:', effectiveTabId);
-      }
+      // タブは閉じずに再利用用に保持
+      lastUsedTabId = effectiveTabId;
+      console.log('[handleCollectionComplete] タブを再利用用に保持:', effectiveTabId);
     }
 
     console.log('[handleCollectionComplete] 次のキュー処理をchrome.alarmsで予約');
@@ -2267,34 +2406,50 @@ async function processNextInQueue() {
   const queuePrefix = nextItem.queueName ? `[${nextItem.queueName}・${productId}]` : '';
   console.log('[processNextInQueue] 処理URL:', nextItem.url, 'isAmazon:', nextItem.url.includes('amazon.co.jp'));
 
-  // 毎回新しいタブで開く（タブ再利用は無効化）
-  // 理由: タブ再利用時のURL変更とcontent script初期化のタイミング問題を回避
+  // タブ再利用の実装
   let tab;
   const isAmazonUrl = nextItem.url.includes('amazon.co.jp');
 
-  // 注意: タブを閉じる処理は handleCollectionComplete で行う
-  // processNextInQueue でタブを閉じると chrome.tabs.onRemoved が発火し、
-  // 同名のアラームが上書きされて処理が中断する問題があるため
-  lastUsedTabId = null;
-
-  // 新規タブを作成
-  if (collectionWindowId) {
+  // 既存のタブを再利用するか、新規タブを作成
+  if (lastUsedTabId) {
     try {
-      tab = await chrome.tabs.create({
-        url: nextItem.url,
-        windowId: collectionWindowId,
-        active: false
-      });
-      console.log('[processNextInQueue] 新規タブを作成:', tab.id);
+      // 既存タブが存在するか確認
+      const existingTab = await chrome.tabs.get(lastUsedTabId);
+      if (existingTab) {
+        // タブを再利用してURLを更新
+        await chrome.tabs.update(lastUsedTabId, { url: nextItem.url });
+        tab = { id: lastUsedTabId };
+        console.log('[processNextInQueue] タブを再利用:', lastUsedTabId);
+      }
     } catch (e) {
-      // ウィンドウが閉じられている場合は通常のタブで開く
-      console.error('収集用ウィンドウにタブ作成失敗:', e);
-      tab = await chrome.tabs.create({ url: nextItem.url, active: false });
+      // タブが存在しない場合は新規作成
+      console.log('[processNextInQueue] 再利用タブが存在しないため新規作成');
+      lastUsedTabId = null;
     }
-  } else {
-    // フォールバック: 通常のタブ
-    tab = await chrome.tabs.create({ url: nextItem.url, active: false });
-    console.log('[processNextInQueue] 新規タブを作成（通常）:', tab.id);
+  }
+
+  // 再利用できなかった場合は新規タブを作成
+  if (!tab) {
+    if (collectionWindowId) {
+      try {
+        tab = await chrome.tabs.create({
+          url: nextItem.url,
+          windowId: collectionWindowId,
+          active: false
+        });
+        console.log('[processNextInQueue] 新規タブを作成:', tab.id);
+      } catch (e) {
+        // ウィンドウが閉じられている場合は通常のタブで開く
+        console.error('収集用ウィンドウにタブ作成失敗:', e);
+        tab = await chrome.tabs.create({ url: nextItem.url, active: false });
+      }
+    } else {
+      // フォールバック: 通常のタブ
+      tab = await chrome.tabs.create({ url: nextItem.url, active: false });
+      console.log('[processNextInQueue] 新規タブを作成（通常）:', tab.id);
+    }
+    // 新規作成したタブを再利用用に保持
+    lastUsedTabId = tab.id;
   }
 
   // tabIdを収集中アイテムに設定
