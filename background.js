@@ -1705,8 +1705,7 @@ async function sendToSheets(spreadsheetUrl, reviews, separateSheets = true, isSc
     }
   } else {
     // 全て同じシートに保存（販路別）
-    const prefix = source === 'amazon' ? 'Ama' : '楽';
-    const sheetName = `${prefix}・レビュー`;
+    const sheetName = source === 'amazon' ? 'Amazon' : '楽天';
     await appendToSheet(token, spreadsheetId, sheetName, reviews, source);
   }
 }

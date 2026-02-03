@@ -273,6 +273,14 @@ document.addEventListener('DOMContentLoaded', () => {
       notifyPerProductCheckbox.addEventListener('change', saveNotificationSettings);
     }
 
+    // シート分割・CSV分割設定のチェックボックス変更時に自動保存
+    if (separateSheetsCheckbox) {
+      separateSheetsCheckbox.addEventListener('change', saveSheetSettings);
+    }
+    if (separateCsvFilesCheckbox) {
+      separateCsvFilesCheckbox.addEventListener('change', saveSheetSettings);
+    }
+
     // スプレッドシートURL入力（自動保存 - Sheets API直接連携）
     if (spreadsheetUrlInput) {
       let spreadsheetUrlSaveTimeout = null;
@@ -739,6 +747,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const enableNotification = enableNotificationCheckbox ? enableNotificationCheckbox.checked : true;
     const notifyPerProduct = notifyPerProductCheckbox ? notifyPerProductCheckbox.checked : false;
     chrome.storage.sync.set({ enableNotification, notifyPerProduct });
+  }
+
+  // シート分割・CSV分割設定を保存（チェックボックス変更時）
+  function saveSheetSettings() {
+    const separateSheets = separateSheetsCheckbox ? separateSheetsCheckbox.checked : true;
+    const separateCsvFiles = separateCsvFilesCheckbox ? separateCsvFilesCheckbox.checked : true;
+    chrome.storage.sync.set({ separateSheets, separateCsvFiles });
+    console.log('[設定保存] separateSheets:', separateSheets, 'separateCsvFiles:', separateCsvFiles);
   }
 
   async function downloadCSV() {
