@@ -168,7 +168,9 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   });
 
   // 収集中でAmazonの場合のみ処理
-  if (state && state.isRunning && state.source === 'amazon') {
+  // 重要: activeCollectionTabs.has(tabId) を追加して、実際に収集中のタブのみを対象にする
+  // これにより、手動で開いたAmazonレビューページに干渉しない
+  if (state && state.isRunning && state.source === 'amazon' && activeCollectionTabs.has(tabId)) {
 
     // キュー処理から開始された場合の特別処理（商品ページでもレビューページでも発火）
     // processNextInQueue内のローカルリスナーを使わず、このグローバルリスナーで統一処理
@@ -250,11 +252,13 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
     console.log('[background] Amazonレビューページ遷移検出、収集再開メッセージを送信:', { currentPage, lastPage });
 
-    // Service Workerが再起動している可能性があるので、タブをアクティブに追加
+    // 注意: 171行目の条件でactiveCollectionTabs.has(tabId)をチェック済みなので、
+    // ここに到達した時点でタブは既にactiveCollectionTabsに含まれている
+    // 以下のチェックは防御的プログラミングとして残す
     if (!activeCollectionTabs.has(tabId)) {
-      console.log('[background] タブをactiveCollectionTabsに追加:', tabId);
-      activeCollectionTabs.add(tabId);
-      persistActiveCollectionTabs();  // 永続化
+      // 本来ここには到達しないはず（171行目でフィルタされる）
+      console.log('[background] 警告: 収集中タブではないためスキップ:', tabId);
+      return;
     }
 
     // バックグラウンドタブでもcontent scriptが確実に初期化されるように、リトライ機能付きで送信
