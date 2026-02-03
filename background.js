@@ -170,7 +170,16 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   // 収集中でAmazonの場合のみ処理
   // 重要: activeCollectionTabs.has(tabId) を追加して、実際に収集中のタブのみを対象にする
   // これにより、手動で開いたAmazonレビューページに干渉しない
+  // さらに: activeTabId でもチェックして、別タブでの操作を完全にブロック
   if (state && state.isRunning && state.source === 'amazon' && activeCollectionTabs.has(tabId)) {
+    // activeTabIdが設定されていて、このタブと異なる場合はスキップ
+    if (state.activeTabId && state.activeTabId !== tabId) {
+      console.log('[background] activeTabId不一致のためスキップ:', {
+        activeTabId: state.activeTabId,
+        thisTabId: tabId
+      });
+      return;
+    }
 
     // キュー処理から開始された場合の特別処理（商品ページでもレビューページでも発火）
     // processNextInQueue内のローカルリスナーを使わず、このグローバルリスナーで統一処理

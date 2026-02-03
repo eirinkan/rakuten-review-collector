@@ -428,78 +428,97 @@
         break;
 
       case 'resumeCollection':
-        // 新しい商品からの再開かどうかを判定
-        const resumeProductId = message.productId || getASIN();
-        const isNewProductForResume = resumeProductId && currentProductId && resumeProductId !== currentProductId;
+        // ===== 別タブで収集中かチェック（最優先） =====
+        (async () => {
+          try {
+            const myTabResult = await new Promise(resolve => {
+              chrome.runtime.sendMessage({ action: 'getMyTabId' }, resolve);
+            });
+            const myTabId = myTabResult?.tabId;
 
-        console.log('[Amazonレビュー収集] resumeCollection受信（初期チェック）:', {
-          resumeProductId,
-          currentProductId,
-          isNewProductForResume,
-          isCollecting,
-          startCollectionLock,
-          resumeCollectionLock
-        });
+            const stateResult = await new Promise(resolve => {
+              chrome.storage.local.get(['collectionState'], resolve);
+            });
+            const state = stateResult.collectionState || {};
 
-        // 新しい商品の場合はすべてのロックをリセット
-        if (isNewProductForResume) {
-          console.log('[Amazonレビュー収集] resumeCollection: 新しい商品を検出、ロックをリセット');
-          isCollecting = false;
-          startCollectionLock = false;
-          resumeCollectionLock = false;
-          shouldStop = false;
+            if (state.isRunning && state.activeTabId && myTabId && state.activeTabId !== myTabId) {
+              console.log('[Amazonレビュー収集] resumeCollection: 別タブ（ID: ' + state.activeTabId + '）で収集中のため、このタブ（ID: ' + myTabId + '）では操作しません');
+              return;
+            }
+          } catch (e) {
+            console.log('[Amazonレビュー収集] resumeCollection: タブIDチェックエラー:', e);
+          }
+
+          // 新しい商品からの再開かどうかを判定
+          const resumeProductId = message.productId || getASIN();
+          const isNewProductForResume = resumeProductId && currentProductId && resumeProductId !== currentProductId;
+
+          console.log('[Amazonレビュー収集] resumeCollection受信（初期チェック）:', {
+            resumeProductId,
+            currentProductId,
+            isNewProductForResume,
+            isCollecting,
+            startCollectionLock,
+            resumeCollectionLock
+          });
+
+          // 新しい商品の場合はすべてのロックをリセット
+          if (isNewProductForResume) {
+            console.log('[Amazonレビュー収集] resumeCollection: 新しい商品を検出、ロックをリセット');
+            isCollecting = false;
+            startCollectionLock = false;
+            resumeCollectionLock = false;
+            shouldStop = false;
+            autoResumeExecuted = false;
+            collectedReviewKeys.clear();
+            consecutiveSkipPages = 0;
+            sessionPageCount = 0;
+          }
+
+          // 同期的なロックチェック（最初に行う - 重複実行防止）
+          if (resumeCollectionLock) {
+            console.log('[Amazonレビュー収集] resumeCollection実行中のためスキップ');
+            return;
+          }
+          // isCollectingとstartCollectionLockもチェック
+          if (isCollecting || startCollectionLock) {
+            console.log('[Amazonレビュー収集] 既に収集中のためスキップ', { isCollecting, startCollectionLock });
+            return;
+          }
+          // resumeCollectionLockだけをセット（isCollectingはstartCollection内でセット）
+          resumeCollectionLock = true;
+
+          // backgroundからのページ遷移後の収集再開
+          const currentPathIsReview = window.location.pathname.includes('/product-reviews/');
+          console.log('[Amazonレビュー収集] resumeCollectionメッセージ受信', {
+            isReviewPage,
+            currentPathIsReview,
+            isCollecting,
+            startCollectionLock,
+            resumeCollectionLock,
+            currentUrl: window.location.href.substring(0, 80),
+            currentPage: getCurrentPageNumber()
+          });
+          if (!currentPathIsReview) {
+            console.log('[Amazonレビュー収集] レビューページではないためスキップ');
+            resumeCollectionLock = false;
+            return;
+          }
+          // 収集を再開
+          console.log('[Amazonレビュー収集] 収集再開を開始します');
+          incrementalOnly = message.incrementalOnly || false;
+          lastCollectedDate = message.lastCollectedDate || null;
+          currentQueueName = message.queueName || null;
+          if (message.productId) {
+            currentProductId = message.productId;
+          }
           autoResumeExecuted = false;
-          collectedReviewKeys.clear();
-          consecutiveSkipPages = 0;
-          sessionPageCount = 0;
-        }
-
-        // 同期的なロックチェック（最初に行う - 重複実行防止）
-        if (resumeCollectionLock) {
-          console.log('[Amazonレビュー収集] resumeCollection実行中のためスキップ');
-          sendResponse({ success: false, error: 'resumeCollection実行中' });
-          break;
-        }
-        // isCollectingとstartCollectionLockもチェック
-        if (isCollecting || startCollectionLock) {
-          console.log('[Amazonレビュー収集] 既に収集中のためスキップ', { isCollecting, startCollectionLock });
-          sendResponse({ success: false, error: '既に収集中' });
-          break;
-        }
-        // resumeCollectionLockだけをセット（isCollectingはstartCollection内でセット）
-        resumeCollectionLock = true;
-
-        // backgroundからのページ遷移後の収集再開
-        const currentPathIsReview = window.location.pathname.includes('/product-reviews/');
-        console.log('[Amazonレビュー収集] resumeCollectionメッセージ受信', {
-          isReviewPage,
-          currentPathIsReview,
-          isCollecting,
-          startCollectionLock,
-          resumeCollectionLock,
-          currentUrl: window.location.href.substring(0, 80),
-          currentPage: getCurrentPageNumber()
-        });
-        if (!currentPathIsReview) {
-          console.log('[Amazonレビュー収集] レビューページではないためスキップ');
-          resumeCollectionLock = false;
-          sendResponse({ success: false, error: 'レビューページではありません' });
-          break;
-        }
-        // 収集を再開
-        console.log('[Amazonレビュー収集] 収集再開を開始します');
-        incrementalOnly = message.incrementalOnly || false;
-        lastCollectedDate = message.lastCollectedDate || null;
-        currentQueueName = message.queueName || null;
-        if (message.productId) {
-          currentProductId = message.productId;
-        }
-        autoResumeExecuted = false;
-        const resumePage = getCurrentPageNumber();
-        log(`ページ${resumePage}の収集を再開します`);
-        startCollection();
-        // startCollection完了後にロック解除（非同期処理のため長めに）
-        setTimeout(() => { resumeCollectionLock = false; }, 10000);
+          const resumePage = getCurrentPageNumber();
+          log(`ページ${resumePage}の収集を再開します`);
+          startCollection();
+          // startCollection完了後にロック解除（非同期処理のため長めに）
+          setTimeout(() => { resumeCollectionLock = false; }, 10000);
+        })();
         sendResponse({ success: true });
         break;
 
@@ -2282,10 +2301,30 @@
         const result = await chrome.storage.local.get(['collectionState']);
         const state = result.collectionState;
 
+        // ===== 別タブで収集中かチェック（最優先） =====
+        // このタブのIDを取得
+        let myTabId = null;
+        try {
+          const tabIdResult = await new Promise(resolve => {
+            chrome.runtime.sendMessage({ action: 'getMyTabId' }, resolve);
+          });
+          myTabId = tabIdResult?.tabId;
+        } catch (e) {
+          console.log('[Amazonレビュー収集] タブID取得エラー:', e);
+        }
+
+        // 別タブで収集中の場合は何もしない
+        if (state && state.isRunning && state.activeTabId && myTabId && state.activeTabId !== myTabId) {
+          console.log('[Amazonレビュー収集] 別タブ（ID: ' + state.activeTabId + '）で収集中のため、このタブ（ID: ' + myTabId + '）では操作しません');
+          return;
+        }
+
         console.log('[Amazonレビュー収集] 自動再開チェック:', {
           isRunning: state?.isRunning,
           source: state?.source,
           productId: state?.productId,
+          activeTabId: state?.activeTabId,
+          myTabId: myTabId,
           currentASIN: getASIN(),
           documentReadyState: document.readyState
         });
