@@ -2337,6 +2337,42 @@
           </div>
         </div>
 
+        <!-- 収集オプション -->
+        <div class="settings-section">
+          <h3>収集オプション</h3>
+
+          <!-- 楽天: 新着順で取得 -->
+          <label class="checkbox-label">
+            <input type="checkbox" id="rakutenSortByNew" checked>
+            <span>楽天: 新着順でレビューを取得</span>
+          </label>
+          <p class="help-text" style="margin: 4px 0 12px 24px; font-size: 12px; color: var(--text-muted);">
+            OFFの場合は標準順（参考になった順の可能性）
+          </p>
+
+          <!-- 期間指定 -->
+          <label class="checkbox-label">
+            <input type="checkbox" id="enableDateFilter">
+            <span>収集期間を指定する</span>
+          </label>
+          <div id="dateFilterOptions" style="margin: 8px 0 0 24px; display: none;">
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+              <div>
+                <label style="font-size: 12px; color: var(--text-secondary);">開始日</label>
+                <input type="date" id="dateFilterFrom" style="padding: 6px 10px; border: 1px solid var(--border-input); border-radius: 6px; background: var(--bg-input);">
+              </div>
+              <span style="color: var(--text-muted);">〜</span>
+              <div>
+                <label style="font-size: 12px; color: var(--text-secondary);">終了日</label>
+                <input type="date" id="dateFilterTo" style="padding: 6px 10px; border: 1px solid var(--border-input); border-radius: 6px; background: var(--bg-input);">
+              </div>
+            </div>
+            <p class="help-text" style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">
+              指定した期間内のレビューのみ収集します（楽天・Amazon共通）
+            </p>
+          </div>
+        </div>
+
         <!-- スプレッドシート -->
         <div class="settings-section">
           <h3>スプレッドシート（通常収集）</h3>

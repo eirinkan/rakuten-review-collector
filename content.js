@@ -14,6 +14,9 @@
   let incrementalOnly = false; // 差分取得モード
   let lastCollectedDate = null; // 前回収集日
   let currentQueueName = null; // 定期収集のキュー名
+  let enableDateFilter = false; // 期間指定フィルター
+  let dateFilterFrom = null; // 期間指定：開始日
+  let dateFilterTo = null; // 期間指定：終了日
 
   // ページタイプを判定
   const isReviewPage = window.location.hostname === 'review.rakuten.co.jp';
@@ -209,6 +212,40 @@
       return;
     }
 
+    // 設定を読み込み
+    const settings = await new Promise(resolve => {
+      chrome.storage.sync.get(['rakutenSortByNew', 'enableDateFilter', 'dateFilterFrom', 'dateFilterTo'], resolve);
+    });
+
+    // 期間指定フィルター設定をグローバル変数に反映
+    enableDateFilter = settings.enableDateFilter || false;
+    dateFilterFrom = settings.dateFilterFrom || null;
+    dateFilterTo = settings.dateFilterTo || null;
+
+    // 新着順ソートが有効で、まだsort=6パラメータがない場合は遷移
+    const rakutenSortByNew = settings.rakutenSortByNew !== false; // デフォルト: ON
+    const currentUrl = new URL(window.location.href);
+    const currentSort = currentUrl.searchParams.get('sort');
+
+    if (rakutenSortByNew && currentSort !== '6') {
+      console.log('[楽天レビュー収集] 新着順でソートするためページを遷移します');
+      // 収集状態を保存
+      chrome.storage.local.get(['collectionState'], (result) => {
+        const state = result.collectionState || {};
+        state.isRunning = true;
+        state.incrementalOnly = incrementalOnly;
+        state.lastCollectedDate = lastCollectedDate;
+        state.queueName = currentQueueName;
+        state.source = 'rakuten';
+        chrome.storage.local.set({ collectionState: state }, () => {
+          // sort=6を追加してリダイレクト
+          currentUrl.searchParams.set('sort', '6');
+          window.location.href = currentUrl.toString();
+        });
+      });
+      return;
+    }
+
     isCollecting = true;
     shouldStop = false;
 
@@ -268,7 +305,7 @@
 
   /**
    * 現在のページからレビューを収集
-   * @returns {boolean} 差分取得で古いレビューに到達した場合はtrue
+   * @returns {boolean} 差分取得で古いレビューに到達した場合、または期間外に到達した場合はtrue
    */
   async function collectCurrentPage() {
     let reviews = extractReviews();
@@ -282,7 +319,7 @@
     let reachedOldReviews = false;
     if (incrementalOnly && lastCollectedDate) {
       const originalCount = reviews.length;
-      reviews = filterReviewsByDate(reviews, lastCollectedDate);
+      reviews = filterReviewsByDate(reviews, lastCollectedDate, null);
       const filteredCount = originalCount - reviews.length;
 
       if (filteredCount > 0) {
@@ -299,6 +336,38 @@
       // 一部のレビューが古い場合、次のページはさらに古いので終了フラグを立てる
       if (filteredCount > 0 && reviews.length < originalCount) {
         reachedOldReviews = true;
+      }
+    }
+
+    // 期間指定フィルターが有効な場合
+    if (enableDateFilter && (dateFilterFrom || dateFilterTo)) {
+      const originalCount = reviews.length;
+      reviews = filterReviewsByDateRange(reviews, dateFilterFrom, dateFilterTo);
+      const filteredCount = originalCount - reviews.length;
+
+      if (filteredCount > 0) {
+        const rangeText = dateFilterFrom && dateFilterTo
+          ? `${dateFilterFrom}〜${dateFilterTo}`
+          : dateFilterFrom
+            ? `${dateFilterFrom}以降`
+            : `${dateFilterTo}以前`;
+        log(`${originalCount}件中${filteredCount}件は期間外（${rangeText}）`);
+      }
+
+      // 全てのレビューが期間外の場合
+      if (reviews.length === 0) {
+        // 新着順（sort=6）の場合、開始日より古いレビューに到達したら終了
+        if (dateFilterFrom) {
+          const currentUrl = new URL(window.location.href);
+          const isNewestFirst = currentUrl.searchParams.get('sort') === '6';
+          if (isNewestFirst) {
+            log('指定期間より古いレビューに到達しました');
+            reachedOldReviews = true;
+            return reachedOldReviews;
+          }
+        }
+        log('このページには指定期間内のレビューがありません');
+        // 全ページスキャンのため、次のページも確認
       }
     }
 
@@ -893,6 +962,40 @@
       }
       // レビュー日が前回収集日以降の場合のみ含める（同日も含む）
       return reviewDateNorm >= normalizedAfterDate;
+    });
+  }
+
+  /**
+   * レビューを期間でフィルタリング（期間指定用）
+   * @param {Array} reviews - レビュー配列
+   * @param {string|null} fromDate - 開始日（YYYY-MM-DD形式、nullの場合は制限なし）
+   * @param {string|null} toDate - 終了日（YYYY-MM-DD形式、nullの場合は制限なし）
+   * @returns {Array} フィルタリングされたレビュー
+   */
+  function filterReviewsByDateRange(reviews, fromDate, toDate) {
+    if (!fromDate && !toDate) return reviews;
+
+    const normalizedFromDate = fromDate ? normalizeDateString(fromDate) : null;
+    const normalizedToDate = toDate ? normalizeDateString(toDate) : null;
+
+    return reviews.filter(review => {
+      const reviewDateNorm = normalizeDateString(review.reviewDate);
+      if (!reviewDateNorm) {
+        // 日付がないレビューは除外（期間指定時は日付不明は収集しない）
+        return false;
+      }
+
+      // 開始日チェック
+      if (normalizedFromDate && reviewDateNorm < normalizedFromDate) {
+        return false;
+      }
+
+      // 終了日チェック
+      if (normalizedToDate && reviewDateNorm > normalizedToDate) {
+        return false;
+      }
+
+      return true;
     });
   }
 

@@ -269,6 +269,9 @@
   let lastCollectedDate = null; // 前回収集日
   let currentQueueName = null; // 定期収集のキュー名
   let autoResumeExecuted = false; // 自動再開が実行済みかどうか
+  let enableDateFilter = false; // 期間指定フィルター
+  let dateFilterFrom = null; // 期間指定：開始日
+  let dateFilterTo = null; // 期間指定：終了日
   let collectedReviewKeys = new Set(); // このセッションで収集済みのレビューキー
   let startCollectionLock = false; // 収集開始のロック（重複防止）
   let resumeCollectionLock = false; // 収集再開のロック（重複防止）
@@ -745,6 +748,18 @@
       // エラーの場合は続行（後方互換性のため）
     }
 
+    // ===== 期間指定フィルター設定を読み込み =====
+    try {
+      const settings = await new Promise(resolve => {
+        chrome.storage.sync.get(['enableDateFilter', 'dateFilterFrom', 'dateFilterTo'], resolve);
+      });
+      enableDateFilter = settings.enableDateFilter || false;
+      dateFilterFrom = settings.dateFilterFrom || null;
+      dateFilterTo = settings.dateFilterTo || null;
+    } catch (e) {
+      console.log('[Amazonレビュー収集] 期間指定設定の読み込みエラー:', e);
+    }
+
     // ===== ボット対策: レート制限チェック =====
     const rateLimit = await checkRateLimit();
     if (!rateLimit.allowed) {
@@ -1120,6 +1135,33 @@
 
       if (filteredCount > 0 && reviews.length < beforeDateFilter) {
         reachedOldReviews = true;
+      }
+    }
+
+    // 期間指定フィルターが有効な場合
+    if (enableDateFilter && (dateFilterFrom || dateFilterTo)) {
+      const beforeFilter = reviews.length;
+      reviews = filterReviewsByDateRange(reviews, dateFilterFrom, dateFilterTo);
+      const filteredCount = beforeFilter - reviews.length;
+
+      if (filteredCount > 0) {
+        const rangeText = dateFilterFrom && dateFilterTo
+          ? `${dateFilterFrom}〜${dateFilterTo}`
+          : dateFilterFrom
+            ? `${dateFilterFrom}以降`
+            : `${dateFilterTo}以前`;
+        log(`${beforeFilter}件中${filteredCount}件は期間外（${rangeText}）`);
+      }
+
+      // 全てのレビューが期間外の場合
+      if (reviews.length === 0) {
+        // Amazonは新着順（sortBy=recent）なので、開始日より古いレビューに到達したら終了
+        if (dateFilterFrom) {
+          log('指定期間より古いレビューに到達しました');
+          return 'FILTER_CHANGE_NEEDED'; // 次の星フィルターへ遷移
+        }
+        log('このページには指定期間内のレビューがありません');
+        // 全ページスキャンのため、次のページも確認（次の星フィルターへ遷移）
       }
     }
 
@@ -1988,6 +2030,40 @@
         return true; // 日付がないレビューは含める
       }
       return reviewDateNorm >= normalizedAfterDate;
+    });
+  }
+
+  /**
+   * レビューを期間でフィルタリング（期間指定用）
+   * @param {Array} reviews - レビュー配列
+   * @param {string|null} fromDate - 開始日（YYYY-MM-DD形式、nullの場合は制限なし）
+   * @param {string|null} toDate - 終了日（YYYY-MM-DD形式、nullの場合は制限なし）
+   * @returns {Array} フィルタリングされたレビュー
+   */
+  function filterReviewsByDateRange(reviews, fromDate, toDate) {
+    if (!fromDate && !toDate) return reviews;
+
+    const normalizedFromDate = fromDate ? normalizeDateString(fromDate) : null;
+    const normalizedToDate = toDate ? normalizeDateString(toDate) : null;
+
+    return reviews.filter(review => {
+      const reviewDateNorm = normalizeDateString(review.reviewDate);
+      if (!reviewDateNorm) {
+        // 日付がないレビューは除外（期間指定時は日付不明は収集しない）
+        return false;
+      }
+
+      // 開始日チェック
+      if (normalizedFromDate && reviewDateNorm < normalizedFromDate) {
+        return false;
+      }
+
+      // 終了日チェック
+      if (normalizedToDate && reviewDateNorm > normalizedToDate) {
+        return false;
+      }
+
+      return true;
     });
   }
 
