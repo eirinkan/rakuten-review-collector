@@ -2336,16 +2336,16 @@
 
           if (storedProductId === currentASIN) {
             // 重複実行防止: 既に自動再開が実行されている場合はスキップ
-            if (autoResumeExecuted || startCollectionLock || isCollecting) {
+            if (autoResumeExecuted || isCollecting) {
               console.log('[Amazonレビュー収集] 既に再開処理中のためスキップ:', {
-                autoResumeExecuted, startCollectionLock, isCollecting
+                autoResumeExecuted, isCollecting
               });
               return;
             }
 
-            // 即座にロックを設定（他の呼び出しをブロック）
+            // 即座にフラグを設定（他の呼び出しをブロック）
+            // 注意: startCollectionLockはstartCollection()内で設定される
             autoResumeExecuted = true;
-            startCollectionLock = true;
 
             console.log('[Amazonレビュー収集] 収集を自動再開します');
 
