@@ -7,7 +7,7 @@
   'use strict';
 
   // バージョン（manifest.jsonと同期）
-  const VERSION = '2.0.29';
+  const VERSION = '2.0.32';
   console.log(`[楽天レビュー収集] v${VERSION} 読み込み完了 - URL: ${window.location.href.substring(0, 80)}...`);
 
   // 収集状態
@@ -374,29 +374,22 @@
       reviews = filterReviewsByDateRange(reviews, dateFilterFrom, dateFilterTo);
       const filteredCount = originalCount - reviews.length;
 
-      if (filteredCount > 0) {
-        const rangeText = dateFilterFrom && dateFilterTo
-          ? `${dateFilterFrom}〜${dateFilterTo}`
-          : dateFilterFrom
-            ? `${dateFilterFrom}以降`
-            : `${dateFilterTo}以前`;
-        log(`${originalCount}件中${filteredCount}件は期間外（${rangeText}）`);
-
-        // 新着順（sort=6）かつ開始日指定ありの場合、期間外レビューが出てきたら早期終了
-        // （これ以降のページは全て開始日より古いため）
-        if (dateFilterFrom) {
-          const currentUrl = new URL(window.location.href);
-          const isNewestFirst = currentUrl.searchParams.get('sort') === '6';
-          if (isNewestFirst) {
-            log('指定期間より古いレビューに到達 - このページで収集を終了します');
-            reachedOldReviews = true;
+      // 新着順かつ開始日指定ありの場合、期間外レビューが1件でも出てきたら早期終了
+      // （新着順なので、これ以降のページは全て開始日より古いため）
+      if (filteredCount > 0 && dateFilterFrom) {
+        const currentUrl = new URL(window.location.href);
+        const isNewestFirst = currentUrl.searchParams.get('sort') === '6';
+        if (isNewestFirst) {
+          const rangeText = dateFilterTo
+            ? `${dateFilterFrom}〜${dateFilterTo}`
+            : `${dateFilterFrom}以降`;
+          if (reviews.length > 0) {
+            log(`${originalCount}件中${reviews.length}件が期間内（${rangeText}）- このページで収集を終了`);
+          } else {
+            log(`指定期間（${rangeText}）より古いレビューに到達 - 収集を終了`);
           }
+          reachedOldReviews = true;
         }
-      }
-
-      // 全てのレビューが期間外の場合
-      if (reviews.length === 0 && !reachedOldReviews) {
-        log('このページには指定期間内のレビューがありません');
       }
     }
 
