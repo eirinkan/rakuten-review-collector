@@ -2967,7 +2967,9 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
     activeCollectionTabs.delete(tabId);
     await persistActiveCollectionTabs();  // 永続化
     tabSpreadsheetUrls.delete(tabId);
-    log(`タブ ${tabId} が閉じられました。収集を中断しました`, 'error');
+    // 注: このログは収集完了後の正常なタブクローズでも表示される
+    // collectionCompleteメッセージの後にタブが閉じられた場合は正常終了
+    console.log(`[tabs.onRemoved] タブ ${tabId} がactiveCollectionTabsから削除されました`);
 
     // タブごとの状態をクリーンアップ
     const stateKey = `collectionState_${tabId}`;

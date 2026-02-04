@@ -2005,10 +2005,18 @@
    * フィルター適用時も対応
    */
   function getTotalReviewCount() {
+    // デバッグ: 現在のURL（フィルター状態確認用）
+    const currentUrl = window.location.href;
+    const filterMatch = currentUrl.match(/filterByStar=(\w+)/);
+    const currentFilter = filterMatch ? filterMatch[1] : 'none';
+    console.log(`[Amazonレビュー収集] getTotalReviewCount開始 - フィルター: ${currentFilter}, URL: ${currentUrl.substring(0, 100)}`);
+
     // 1. 標準セレクターで取得を試みる
     const totalElem = document.querySelector(AMAZON_SELECTORS.totalReviews);
+    console.log(`[Amazonレビュー収集] totalElem存在: ${!!totalElem}, セレクター: ${AMAZON_SELECTORS.totalReviews}`);
     if (totalElem) {
       const text = totalElem.textContent || '';
+      console.log(`[Amazonレビュー収集] totalElem.textContent: "${text.substring(0, 100)}"`);
 
       // パターン1: 「1,234件のグローバルレーティング」「1,234件中」
       const matchKen = text.match(/([\d,]+)\s*件/);
@@ -2025,6 +2033,7 @@
         console.log(`[Amazonレビュー収集] getTotalReviewCount: ${count}件（セレクター: totalReviews - 一致パターン）`);
         return count;
       }
+      console.log(`[Amazonレビュー収集] totalElemのテキストからパターンマッチできず`);
     }
 
     // 2. フィルター適用時の別要素を試す
