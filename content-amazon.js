@@ -314,9 +314,10 @@
     switch (message.action) {
       case 'startCollection':
         // 新しい商品からの開始かどうかを判定
-        // productIdが異なる場合は新しい商品なので、すべてのロックをリセット
         const incomingProductId = message.productId || getASIN();
-        const isNewProduct = incomingProductId && currentProductId && incomingProductId !== currentProductId;
+        // currentProductIdが空の場合も「新しい商品」として扱う
+        // （新しいタブ、またはページ再読み込み後の最初の収集）
+        const isNewProduct = !currentProductId || (incomingProductId && incomingProductId !== currentProductId);
 
         console.log('[Amazonレビュー収集] startCollection受信:', {
           incomingProductId,
@@ -324,12 +325,13 @@
           isNewProduct,
           isCollecting,
           startCollectionLock,
-          resumeCollectionLock
+          resumeCollectionLock,
+          autoResumeExecuted
         });
 
-        // 新しい商品の場合はすべてのロックをリセット
+        // 新しい商品の場合（または初回）はすべてのロックをリセット
         if (isNewProduct) {
-          console.log('[Amazonレビュー収集] 新しい商品を検出、ロックをリセット');
+          console.log('[Amazonレビュー収集] 新しい商品/初回を検出、ロックをリセット');
           isCollecting = false;
           startCollectionLock = false;
           resumeCollectionLock = false;
@@ -340,7 +342,7 @@
           sessionPageCount = 0;
         }
 
-        // 既に収集中の場合
+        // 既に収集中の場合（新商品リセット後なのでここに来るのは同一商品の重複呼び出しのみ）
         if (isCollecting) {
           if (message.force) {
             shouldStop = true;
@@ -353,7 +355,7 @@
           }
         }
 
-        // ロックが残っている場合もリセット（新しいstartCollectionが来たということは、新しい収集のはず）
+        // 念のためロックが残っている場合もリセット
         if (startCollectionLock || resumeCollectionLock) {
           console.log('[Amazonレビュー収集] ロックが残っているためリセット');
           startCollectionLock = false;
