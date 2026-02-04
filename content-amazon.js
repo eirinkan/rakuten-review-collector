@@ -2290,18 +2290,29 @@
    * @returns {Promise<boolean>} - 件数が取得できたかどうか
    */
   async function waitForReviewCount(maxWaitMs = 3000) {
+    // フィルター遷移直後はDOMがまだ前のフィルターの値を保持している可能性がある
+    // 最低限の待機時間を確保
+    await sleep(500);
+
     const startTime = Date.now();
+    let lastSeenText = '';
+
     while (Date.now() - startTime < maxWaitMs) {
       const totalElem = document.querySelector(AMAZON_SELECTORS.totalReviews);
       if (totalElem) {
         const text = totalElem.textContent || '';
-        // 「XX件」または「XX一致」パターンがあれば更新完了
+        // 「XX件」または「XX一致」パターンがあれば更新完了の可能性
         if (text.match(/\d+\s*(件|一致)/)) {
-          console.log(`[Amazonレビュー収集] waitForReviewCount: 件数表示を検出（${Date.now() - startTime}ms） - "${text.substring(0, 50)}"`);
-          return true;
+          // テキストが安定しているか確認（2回連続で同じ値なら確定）
+          if (text === lastSeenText) {
+            console.log(`[Amazonレビュー収集] waitForReviewCount: 件数表示が安定（${Date.now() - startTime}ms） - "${text.substring(0, 50)}"`);
+            return true;
+          }
+          lastSeenText = text;
+          console.log(`[Amazonレビュー収集] waitForReviewCount: 件数を検出、安定確認中 - "${text.substring(0, 50)}"`);
         }
       }
-      await sleep(200);
+      await sleep(300);
     }
     console.log(`[Amazonレビュー収集] waitForReviewCount: タイムアウト（${maxWaitMs}ms）`);
     return false;
