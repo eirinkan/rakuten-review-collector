@@ -120,6 +120,13 @@
       text-shadow: 0 1px 2px rgba(0,0,0,0.2);
     }
 
+    .version-display {
+      font-size: 11px;
+      opacity: 0.6;
+      margin-left: 8px;
+      font-weight: normal;
+    }
+
     .header-stats {
       display: flex;
       gap: 16px;
@@ -2224,6 +2231,7 @@
     <div class="header">
       <div class="header-top">
         <h1 id="headerTitle" style="cursor: pointer;">レビュー収集</h1>
+        <span id="versionDisplay" class="version-display"></span>
         <div class="header-actions">
           <div class="spreadsheet-link-wrapper">
             <button id="spreadsheetLinkBtn" class="header-icon-btn disabled" title="スプレッドシートを開く">

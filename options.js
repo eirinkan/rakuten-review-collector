@@ -52,6 +52,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // テーマ管理を初期化
   new ThemeManager();
 
+  // バージョン表示
+  const versionDisplay = document.getElementById('versionDisplay');
+  if (versionDisplay) {
+    const manifest = chrome.runtime.getManifest();
+    versionDisplay.textContent = `v${manifest.version}`;
+  }
+
   // クイックスタートガイド（初回表示）
   initQuickStartGuide();
 

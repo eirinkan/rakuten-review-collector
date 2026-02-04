@@ -7,7 +7,7 @@
   'use strict';
 
   // バージョン（manifest.jsonと同期）
-  const VERSION = '2.0.27';
+  const VERSION = '2.0.28';
   console.log(`[楽天レビュー収集] v${VERSION} 読み込み完了 - URL: ${window.location.href.substring(0, 80)}...`);
 
   // 収集状態
