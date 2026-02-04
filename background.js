@@ -1696,9 +1696,12 @@ async function sendToSheets(spreadsheetUrl, reviews, separateSheets = true, isSc
     });
   }
 
+  // レビューを日付順（古い順 = 昇順）にソート
+  const sortedReviews = sortReviewsByDate(reviews);
+
   if (separateSheets) {
     // 商品ごとにシートを分ける（シートをクリアして書き込み）
-    const reviewsByProduct = groupReviewsByProduct(reviews);
+    const reviewsByProduct = groupReviewsByProduct(sortedReviews);
     for (const [productId, productReviews] of Object.entries(reviewsByProduct)) {
       // 「楽・商品管理番号」または「Ama・ASIN」形式（全収集で統一）
       // 商品の販路はレビューから判定
@@ -1710,8 +1713,25 @@ async function sendToSheets(spreadsheetUrl, reviews, separateSheets = true, isSc
   } else {
     // 全て同じシートに保存（販路別）- 追記モード
     const sheetName = source === 'amazon' ? 'Amazon' : '楽天';
-    await appendToSheetWithoutClear(token, spreadsheetId, sheetName, reviews, source);
+    await appendToSheetWithoutClear(token, spreadsheetId, sheetName, sortedReviews, source);
   }
+}
+
+/**
+ * レビューを日付順（古い順 = 昇順）にソート
+ * スプレッドシートで上から古い順に並ぶようにする
+ */
+function sortReviewsByDate(reviews) {
+  return [...reviews].sort((a, b) => {
+    const dateA = a.reviewDate || '';
+    const dateB = b.reviewDate || '';
+    // 日付文字列を比較（YYYY-MM-DD形式を想定）
+    // 日付がない場合は末尾に配置
+    if (!dateA && !dateB) return 0;
+    if (!dateA) return 1;
+    if (!dateB) return -1;
+    return dateA.localeCompare(dateB);
+  });
 }
 
 /**
