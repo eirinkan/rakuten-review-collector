@@ -2063,21 +2063,8 @@
       }
     }
 
-    // 3. ページネーションから推測
-    const paginationElems = document.querySelectorAll('.a-pagination li:not(.a-disabled) a');
-    let maxPage = 0;
-    for (const elem of paginationElems) {
-      const pageNum = parseInt(elem.textContent, 10);
-      if (!isNaN(pageNum) && pageNum > maxPage) {
-        maxPage = pageNum;
-      }
-    }
-    if (maxPage > 0) {
-      const estimatedCount = maxPage * 10; // 1ページ10件として推測
-      console.log(`[Amazonレビュー収集] getTotalReviewCount: ${estimatedCount}件（ページネーションから推測）`);
-      return estimatedCount;
-    }
-
+    // ページネーションからの推測は削除（間違った値の原因になるため）
+    // 件数が取得できなければ0を返し、ログには「件数不明」として処理する
     console.log('[Amazonレビュー収集] getTotalReviewCount: 件数を取得できませんでした');
     return 0;
   }
@@ -2285,34 +2272,21 @@
 
   /**
    * 件数表示要素のテキストが更新されるまで待機
-   * フィルター遷移後、DOMが完全に更新されるまで待つ
    * @param {number} maxWaitMs - 最大待機時間（ミリ秒）
    * @returns {Promise<boolean>} - 件数が取得できたかどうか
    */
   async function waitForReviewCount(maxWaitMs = 3000) {
-    // フィルター遷移直後はDOMがまだ前のフィルターの値を保持している可能性がある
-    // 最低限の待機時間を確保
-    await sleep(500);
-
     const startTime = Date.now();
-    let lastSeenText = '';
-
     while (Date.now() - startTime < maxWaitMs) {
       const totalElem = document.querySelector(AMAZON_SELECTORS.totalReviews);
       if (totalElem) {
         const text = totalElem.textContent || '';
-        // 「XX件」または「XX一致」パターンがあれば更新完了の可能性
         if (text.match(/\d+\s*(件|一致)/)) {
-          // テキストが安定しているか確認（2回連続で同じ値なら確定）
-          if (text === lastSeenText) {
-            console.log(`[Amazonレビュー収集] waitForReviewCount: 件数表示が安定（${Date.now() - startTime}ms） - "${text.substring(0, 50)}"`);
-            return true;
-          }
-          lastSeenText = text;
-          console.log(`[Amazonレビュー収集] waitForReviewCount: 件数を検出、安定確認中 - "${text.substring(0, 50)}"`);
+          console.log(`[Amazonレビュー収集] waitForReviewCount: 件数表示を検出（${Date.now() - startTime}ms）`);
+          return true;
         }
       }
-      await sleep(300);
+      await sleep(200);
     }
     console.log(`[Amazonレビュー収集] waitForReviewCount: タイムアウト（${maxWaitMs}ms）`);
     return false;
