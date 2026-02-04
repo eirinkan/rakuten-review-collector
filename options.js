@@ -271,6 +271,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (validUrls.length > 0) {
           addToQueueBtn.classList.remove('btn-secondary');
           addToQueueBtn.classList.add('btn-primary');
+          // 有効なURLが入力されたらエラーメッセージをクリア
+          if (addStatus) {
+            addStatus.textContent = '';
+            addStatus.className = 'status-message';
+          }
         } else {
           addToQueueBtn.classList.remove('btn-primary');
           addToQueueBtn.classList.add('btn-secondary');

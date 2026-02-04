@@ -1846,7 +1846,23 @@ async function appendToSheetWithoutClear(token, spreadsheetId, sheetName, review
       await formatDataRows(token, spreadsheetId, sheetId, 1, allValues.length, source);
     }
   } else {
-    // 既存データがある場合は最後の行の次に追記
+    // 既存データがある場合
+    // 1. ヘッダー行を上書き（書式も適用）
+    await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A1:${lastColumn}1?valueInputOption=USER_ENTERED`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ values: [headers] })
+      }
+    );
+    // ヘッダー書式を適用
+    await formatHeaderRow(token, spreadsheetId, sheetId, source);
+
+    // 2. データを最後の行の次に追記
     const startRow = existingRows + 1;
     const endRow = startRow + dataValues.length - 1;
 
