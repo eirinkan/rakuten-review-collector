@@ -7,8 +7,8 @@
   'use strict';
 
   // バージョン（manifest.jsonと同期）
-  const VERSION = '2.0.26';
-  console.log(`[楽天レビュー収集] v${VERSION} 読み込み完了`);
+  const VERSION = '2.0.27';
+  console.log(`[楽天レビュー収集] v${VERSION} 読み込み完了 - URL: ${window.location.href.substring(0, 80)}...`);
 
   // 収集状態
   let isCollecting = false;
@@ -156,36 +156,22 @@
 
   /**
    * 新着順ソートを確認・設定
-   * セレクトボックスを操作して新着レビュー順（value=6）に変更
+   * URLにsort=6パラメータを追加して直接遷移（セレクトボックス操作より確実）
    * @returns {boolean} ソートを変更した場合はtrue（ページ遷移が発生する）
    */
   async function ensureNewestSort() {
-    // URLに既にsort=6がある場合は何もしない（ページ遷移後の再実行防止）
-    if (window.location.href.includes('sort=6')) {
-      console.log('[楽天レビュー収集] URLで既に新着順です');
+    const currentUrl = new URL(window.location.href);
+    const currentSort = currentUrl.searchParams.get('sort');
+
+    // 既にsort=6の場合は何もしない
+    if (currentSort === '6') {
+      console.log('[楽天レビュー収集] URLで既に新着順です（sort=6）');
       return false;
     }
 
-    // 並び替えセレクトボックスを探す
-    const sortSelect = document.querySelector('select.link-dropdown--3uu_U') ||
-                       document.querySelector('select[class*="link-dropdown"]') ||
-                       document.querySelector('.rv-sort-wrap select') ||
-                       document.querySelector('[class*="sort"] select');
+    console.log('[楽天レビュー収集] 新着順に変更します（現在のsort: ' + (currentSort || 'なし') + '）');
 
-    if (!sortSelect) {
-      console.log('[楽天レビュー収集] 並び替えセレクトボックスが見つかりません');
-      return false;
-    }
-
-    // 既に新着順（value=6）の場合は何もしない
-    if (sortSelect.value === '6') {
-      console.log('[楽天レビュー収集] 既に新着順です');
-      return false;
-    }
-
-    console.log('[楽天レビュー収集] 新着順に変更します（現在: ' + sortSelect.value + '）');
-
-    // 収集状態を保存
+    // 収集状態を保存（ページ遷移後に再開するため）
     await new Promise(resolve => {
       chrome.storage.local.get(['collectionState'], (result) => {
         const state = result.collectionState || {};
@@ -198,14 +184,11 @@
       });
     });
 
-    // セレクトボックスの値を変更
-    sortSelect.value = '6';
-
-    // changeイベントを発火（これでページ遷移が発生する）
-    const event = new Event('change', { bubbles: true });
-    sortSelect.dispatchEvent(event);
-
     log('新着順に並び替えています...');
+
+    // URLにsort=6を追加して遷移（確実にページ遷移が発生する）
+    currentUrl.searchParams.set('sort', '6');
+    window.location.href = currentUrl.toString();
 
     // ページ遷移が発生するので、新しいページで収集が再開される
     return true;

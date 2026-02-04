@@ -7,8 +7,8 @@
   'use strict';
 
   // バージョン（manifest.jsonと同期）
-  const VERSION = '2.0.26';
-  console.log(`[Amazonレビュー収集] v${VERSION} 読み込み完了`);
+  const VERSION = '2.0.27';
+  console.log(`[Amazonレビュー収集] v${VERSION} 読み込み完了 - URL: ${window.location.href.substring(0, 80)}...`);
 
   // ===== ボット対策: 定数 =====
   const MAX_PAGES_PER_SESSION = 999999;  // 1セッションあたりの最大ページ数（実質無制限）
