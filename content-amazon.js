@@ -415,6 +415,10 @@
           incrementalOnly = message.incrementalOnly || false;
           lastCollectedDate = message.lastCollectedDate || null;
           currentQueueName = message.queueName || null;
+          // 重要: startCollection()を呼ぶ前にフラグを設定
+          // （checkAndResumeCollectionとの競合を防ぐ）
+          autoResumeExecuted = true;
+          startCollectionLock = true;
           startCollection();
           sendResponse({ success: true });
         } else {
