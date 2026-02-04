@@ -2257,7 +2257,7 @@
     </div>
 
     <!-- 定期収集 Card -->
-    <div class="card">
+    <div class="card" id="scheduledCollectionSection">
       <div class="queue-header">
         <h2>定期（β版）</h2>
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -2362,6 +2362,15 @@
           <label class="checkbox-label" style="margin-top: 12px;">
             <input type="checkbox" id="separateSheets">
             <span>商品ごとにシートを分ける</span>
+          </label>
+        </div>
+
+        <!-- 定期収集表示設定 -->
+        <div class="settings-section">
+          <h3>定期収集</h3>
+          <label class="checkbox-label">
+            <input type="checkbox" id="showScheduledCollection">
+            <span>定期収集機能を表示する（β版）</span>
           </label>
         </div>
       </div>

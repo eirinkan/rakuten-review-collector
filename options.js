@@ -75,6 +75,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const separateCsvFilesCheckbox = document.getElementById('separateCsvFiles');
   const enableNotificationCheckbox = document.getElementById('enableNotification');
   const notifyPerProductCheckbox = document.getElementById('notifyPerProduct');
+  const showScheduledCollectionCheckbox = document.getElementById('showScheduledCollection');
+  const scheduledCollectionSection = document.getElementById('scheduledCollectionSection');
 
   const queueList = document.getElementById('queueList');
   const startQueueBtn = document.getElementById('startQueueBtn');
@@ -281,6 +283,11 @@ document.addEventListener('DOMContentLoaded', () => {
       separateCsvFilesCheckbox.addEventListener('change', saveSheetSettings);
     }
 
+    // 定期収集表示設定のチェックボックス変更時に自動保存
+    if (showScheduledCollectionCheckbox) {
+      showScheduledCollectionCheckbox.addEventListener('change', saveScheduledCollectionVisibility);
+    }
+
     // スプレッドシートURL入力（自動保存 - Sheets API直接連携）
     if (spreadsheetUrlInput) {
       let spreadsheetUrlSaveTimeout = null;
@@ -314,7 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function loadSettings() {
-    chrome.storage.sync.get(['separateSheets', 'separateCsvFiles', 'spreadsheetUrl', 'amazonSpreadsheetUrl', 'enableNotification', 'notifyPerProduct'], (result) => {
+    chrome.storage.sync.get(['separateSheets', 'separateCsvFiles', 'spreadsheetUrl', 'amazonSpreadsheetUrl', 'enableNotification', 'notifyPerProduct', 'showScheduledCollection'], (result) => {
       // 楽天用スプレッドシートURL（Sheets API直接連携）
       if (result.spreadsheetUrl && spreadsheetUrlInput) {
         spreadsheetUrlInput.value = result.spreadsheetUrl;
@@ -352,6 +359,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       if (notifyPerProductCheckbox) {
         notifyPerProductCheckbox.checked = result.notifyPerProduct === true;
+      }
+      // 定期収集表示設定（デフォルト: 非表示 = false）
+      if (showScheduledCollectionCheckbox && scheduledCollectionSection) {
+        const show = result.showScheduledCollection === true;
+        showScheduledCollectionCheckbox.checked = show;
+        scheduledCollectionSection.style.display = show ? 'block' : 'none';
       }
     });
   }
@@ -756,6 +769,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const separateCsvFiles = separateCsvFilesCheckbox ? separateCsvFilesCheckbox.checked : true;
     chrome.storage.sync.set({ separateSheets, separateCsvFiles });
     console.log('[設定保存] separateSheets:', separateSheets, 'separateCsvFiles:', separateCsvFiles);
+  }
+
+  // 定期収集表示設定を保存（チェックボックス変更時）
+  function saveScheduledCollectionVisibility() {
+    const show = showScheduledCollectionCheckbox ? showScheduledCollectionCheckbox.checked : false;
+    chrome.storage.sync.set({ showScheduledCollection: show });
+    if (scheduledCollectionSection) {
+      scheduledCollectionSection.style.display = show ? 'block' : 'none';
+    }
+    console.log('[設定保存] showScheduledCollection:', show);
   }
 
   async function downloadCSV() {
