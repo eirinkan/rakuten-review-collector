@@ -290,21 +290,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 収集オプションのイベントリスナー
     const rakutenSortByNewCheckbox = document.getElementById('rakutenSortByNew');
-    const enableDateFilterCheckbox = document.getElementById('enableDateFilter');
-    const dateFilterFromInput = document.getElementById('dateFilterFrom');
-    const dateFilterToInput = document.getElementById('dateFilterTo');
 
     if (rakutenSortByNewCheckbox) {
       rakutenSortByNewCheckbox.addEventListener('change', saveCollectionOptions);
-    }
-    if (enableDateFilterCheckbox) {
-      enableDateFilterCheckbox.addEventListener('change', toggleDateFilterOptions);
-    }
-    if (dateFilterFromInput) {
-      dateFilterFromInput.addEventListener('change', saveCollectionOptions);
-    }
-    if (dateFilterToInput) {
-      dateFilterToInput.addEventListener('change', saveCollectionOptions);
     }
 
     // スプレッドシートURL入力（自動保存 - Sheets API直接連携）
@@ -340,7 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function loadSettings() {
-    chrome.storage.sync.get(['separateSheets', 'separateCsvFiles', 'spreadsheetUrl', 'amazonSpreadsheetUrl', 'enableNotification', 'notifyPerProduct', 'showScheduledCollection', 'rakutenSortByNew', 'enableDateFilter', 'dateFilterFrom', 'dateFilterTo'], (result) => {
+    chrome.storage.sync.get(['separateSheets', 'separateCsvFiles', 'spreadsheetUrl', 'amazonSpreadsheetUrl', 'enableNotification', 'notifyPerProduct', 'showScheduledCollection', 'rakutenSortByNew'], (result) => {
       // 楽天用スプレッドシートURL（Sheets API直接連携）
       if (result.spreadsheetUrl && spreadsheetUrlInput) {
         spreadsheetUrlInput.value = result.spreadsheetUrl;
@@ -388,26 +376,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // 収集オプション設定
       const rakutenSortByNewCheckbox = document.getElementById('rakutenSortByNew');
-      const enableDateFilterCheckbox = document.getElementById('enableDateFilter');
-      const dateFilterFromInput = document.getElementById('dateFilterFrom');
-      const dateFilterToInput = document.getElementById('dateFilterTo');
-      const dateFilterOptions = document.getElementById('dateFilterOptions');
 
       if (rakutenSortByNewCheckbox) {
         // デフォルト: ON（新着順）
         rakutenSortByNewCheckbox.checked = result.rakutenSortByNew !== false;
-      }
-      if (enableDateFilterCheckbox) {
-        enableDateFilterCheckbox.checked = result.enableDateFilter === true;
-      }
-      if (dateFilterFromInput && result.dateFilterFrom) {
-        dateFilterFromInput.value = result.dateFilterFrom;
-      }
-      if (dateFilterToInput && result.dateFilterTo) {
-        dateFilterToInput.value = result.dateFilterTo;
-      }
-      if (dateFilterOptions) {
-        dateFilterOptions.style.display = result.enableDateFilter === true ? 'block' : 'none';
       }
     });
   }
@@ -827,27 +799,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // 収集オプション設定を保存
   function saveCollectionOptions() {
     const rakutenSortByNew = document.getElementById('rakutenSortByNew')?.checked ?? true;
-    const enableDateFilter = document.getElementById('enableDateFilter')?.checked ?? false;
-    const dateFilterFrom = document.getElementById('dateFilterFrom')?.value || '';
-    const dateFilterTo = document.getElementById('dateFilterTo')?.value || '';
 
     chrome.storage.sync.set({
-      rakutenSortByNew,
-      enableDateFilter,
-      dateFilterFrom,
-      dateFilterTo
+      rakutenSortByNew
     });
-    console.log('[設定保存] 収集オプション:', { rakutenSortByNew, enableDateFilter, dateFilterFrom, dateFilterTo });
-  }
-
-  // 期間指定の表示/非表示を切り替え
-  function toggleDateFilterOptions() {
-    const enableDateFilter = document.getElementById('enableDateFilter')?.checked ?? false;
-    const dateFilterOptions = document.getElementById('dateFilterOptions');
-    if (dateFilterOptions) {
-      dateFilterOptions.style.display = enableDateFilter ? 'block' : 'none';
-    }
-    saveCollectionOptions();
+    console.log('[設定保存] 収集オプション:', { rakutenSortByNew });
   }
 
   async function downloadCSV() {
