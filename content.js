@@ -156,6 +156,12 @@
    * @returns {boolean} ソートを変更した場合はtrue（ページ遷移が発生する）
    */
   async function ensureNewestSort() {
+    // URLに既にsort=6がある場合は何もしない（ページ遷移後の再実行防止）
+    if (window.location.href.includes('sort=6')) {
+      console.log('[楽天レビュー収集] URLで既に新着順です');
+      return false;
+    }
+
     // 並び替えセレクトボックスを探す
     const sortSelect = document.querySelector('select.link-dropdown--3uu_U') ||
                        document.querySelector('select[class*="link-dropdown"]') ||
@@ -191,13 +197,14 @@
     // セレクトボックスの値を変更
     sortSelect.value = '6';
 
-    // changeイベントを発火（これでページが更新される）
+    // changeイベントを発火（これでページ遷移が発生する）
     const event = new Event('change', { bubbles: true });
     sortSelect.dispatchEvent(event);
 
     log('新着順に並び替えています...');
 
-    return true; // ページ遷移が発生する
+    // ページ遷移が発生するので、新しいページで収集が再開される
+    return true;
   }
 
   /**
