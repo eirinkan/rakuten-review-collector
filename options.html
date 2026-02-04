@@ -121,10 +121,11 @@
     }
 
     .version-display {
-      font-size: 11px;
-      opacity: 0.6;
-      margin-left: 8px;
-      font-weight: normal;
+      font-size: 10px;
+      color: var(--text-muted);
+      opacity: 0.5;
+      text-align: center;
+      padding: 8px 0 4px;
     }
 
     .header-stats {
@@ -2231,7 +2232,6 @@
     <div class="header">
       <div class="header-top">
         <h1 id="headerTitle" style="cursor: pointer;">レビュー収集</h1>
-        <span id="versionDisplay" class="version-display"></span>
         <div class="header-actions">
           <div class="spreadsheet-link-wrapper">
             <button id="spreadsheetLinkBtn" class="header-icon-btn disabled" title="スプレッドシートを開く">
@@ -2353,6 +2353,7 @@
         </div>
       </div>
       <div id="logContainer" class="log-container"></div>
+      <div id="versionDisplay" class="version-display"></div>
     </div>
     </div><!-- /main-view -->
 
