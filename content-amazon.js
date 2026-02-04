@@ -6,6 +6,9 @@
 (function() {
   'use strict';
 
+  // バージョン確認用ログ（拡張機能が正しくリロードされたか確認）
+  console.log('[Amazonレビュー収集] content-amazon.js v2.0.17 loaded');
+
   // ===== ボット対策: 定数 =====
   const MAX_PAGES_PER_SESSION = 999999;  // 1セッションあたりの最大ページ数（実質無制限）
   const MICRO_BREAK_PROBABILITY = 0.05;  // 各ページで休憩する確率（5%）
@@ -2009,12 +2012,20 @@
    * 正確なセレクターのみ使用（フォールバック処理は削除）
    */
   function getTotalReviewCount() {
+    console.log('========== getTotalReviewCount DEBUG ==========');
+    console.log('URL:', window.location.href);
+
     // 正確なセレクターのみ使用
     const totalElem = document.querySelector(AMAZON_SELECTORS.totalReviews);
+    console.log('要素:', totalElem ? 'あり' : 'なし');
+
     if (!totalElem) {
-      console.log('[Amazonレビュー収集] getTotalReviewCount: 件数表示要素が見つかりません');
+      console.log('==============================================');
       return 0;
     }
+
+    console.log('outerHTML:', totalElem.outerHTML);
+    console.log('textContent:', totalElem.textContent);
 
     const text = totalElem.textContent || '';
 
@@ -2022,7 +2033,8 @@
     const matchKen = text.match(/([\d,]+)\s*件/);
     if (matchKen) {
       const count = parseInt(matchKen[1].replace(/,/g, ''), 10);
-      console.log(`[Amazonレビュー収集] getTotalReviewCount: ${count}件`);
+      console.log(`マッチ: 「件」パターン → ${count}`);
+      console.log('==============================================');
       return count;
     }
 
@@ -2030,11 +2042,13 @@
     const matchItchi = text.match(/([\d,]+)\s*一致/);
     if (matchItchi) {
       const count = parseInt(matchItchi[1].replace(/,/g, ''), 10);
-      console.log(`[Amazonレビュー収集] getTotalReviewCount: ${count}件`);
+      console.log(`マッチ: 「一致」パターン → ${count}`);
+      console.log('==============================================');
       return count;
     }
 
-    console.log(`[Amazonレビュー収集] getTotalReviewCount: パターンマッチできず - "${text.substring(0, 50)}"`);
+    console.log(`パターンマッチなし: "${text.substring(0, 100)}"`);
+    console.log('==============================================');
     return 0;
   }
 
