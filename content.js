@@ -214,7 +214,7 @@
 
     // 設定を読み込み
     const settings = await new Promise(resolve => {
-      chrome.storage.sync.get(['rakutenSortByNew', 'enableDateFilter', 'dateFilterFrom', 'dateFilterTo'], resolve);
+      chrome.storage.sync.get(['enableDateFilter', 'dateFilterFrom', 'dateFilterTo'], resolve);
     });
 
     // 期間指定フィルター設定をグローバル変数に反映
@@ -222,12 +222,11 @@
     dateFilterFrom = settings.dateFilterFrom || null;
     dateFilterTo = settings.dateFilterTo || null;
 
-    // 新着順ソートが有効で、まだsort=6パラメータがない場合は遷移
-    const rakutenSortByNew = settings.rakutenSortByNew !== false; // デフォルト: ON
+    // 常に新着順ソート（sort=6）を使用
     const currentUrl = new URL(window.location.href);
     const currentSort = currentUrl.searchParams.get('sort');
 
-    if (rakutenSortByNew && currentSort !== '6') {
+    if (currentSort !== '6') {
       console.log('[楽天レビュー収集] 新着順でソートするためページを遷移します');
       // 収集状態を保存
       chrome.storage.local.get(['collectionState'], (result) => {

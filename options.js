@@ -288,13 +288,6 @@ document.addEventListener('DOMContentLoaded', () => {
       showScheduledCollectionCheckbox.addEventListener('change', saveScheduledCollectionVisibility);
     }
 
-    // 収集オプションのイベントリスナー
-    const rakutenSortByNewCheckbox = document.getElementById('rakutenSortByNew');
-
-    if (rakutenSortByNewCheckbox) {
-      rakutenSortByNewCheckbox.addEventListener('change', saveCollectionOptions);
-    }
-
     // スプレッドシートURL入力（自動保存 - Sheets API直接連携）
     if (spreadsheetUrlInput) {
       let spreadsheetUrlSaveTimeout = null;
@@ -328,7 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function loadSettings() {
-    chrome.storage.sync.get(['separateSheets', 'separateCsvFiles', 'spreadsheetUrl', 'amazonSpreadsheetUrl', 'enableNotification', 'notifyPerProduct', 'showScheduledCollection', 'rakutenSortByNew'], (result) => {
+    chrome.storage.sync.get(['separateSheets', 'separateCsvFiles', 'spreadsheetUrl', 'amazonSpreadsheetUrl', 'enableNotification', 'notifyPerProduct', 'showScheduledCollection'], (result) => {
       // 楽天用スプレッドシートURL（Sheets API直接連携）
       if (result.spreadsheetUrl && spreadsheetUrlInput) {
         spreadsheetUrlInput.value = result.spreadsheetUrl;
@@ -372,14 +365,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const show = result.showScheduledCollection === true;
         showScheduledCollectionCheckbox.checked = show;
         scheduledCollectionSection.style.display = show ? 'block' : 'none';
-      }
-
-      // 収集オプション設定
-      const rakutenSortByNewCheckbox = document.getElementById('rakutenSortByNew');
-
-      if (rakutenSortByNewCheckbox) {
-        // デフォルト: ON（新着順）
-        rakutenSortByNewCheckbox.checked = result.rakutenSortByNew !== false;
       }
     });
   }
@@ -794,16 +779,6 @@ document.addEventListener('DOMContentLoaded', () => {
       scheduledCollectionSection.style.display = show ? 'block' : 'none';
     }
     console.log('[設定保存] showScheduledCollection:', show);
-  }
-
-  // 収集オプション設定を保存
-  function saveCollectionOptions() {
-    const rakutenSortByNew = document.getElementById('rakutenSortByNew')?.checked ?? true;
-
-    chrome.storage.sync.set({
-      rakutenSortByNew
-    });
-    console.log('[設定保存] 収集オプション:', { rakutenSortByNew });
   }
 
   async function downloadCSV() {
