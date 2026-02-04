@@ -518,7 +518,8 @@
           if (message.productId) {
             currentProductId = message.productId;
           }
-          autoResumeExecuted = false;
+          // 重要: autoResumeExecutedをtrueに設定してcheckAndResumeCollectionとの競合を防ぐ
+          autoResumeExecuted = true;
           const resumePage = getCurrentPageNumber();
           log(`ページ${resumePage}の収集を再開します`);
           startCollection();
