@@ -6,6 +6,10 @@
 (function() {
   'use strict';
 
+  // バージョン（manifest.jsonと同期）
+  const VERSION = '2.0.26';
+  console.log(`[楽天レビュー収集] v${VERSION} 読み込み完了`);
+
   // 収集状態
   let isCollecting = false;
   let shouldStop = false;
