@@ -642,6 +642,27 @@
       accent-color: #666;
     }
 
+    .checkbox-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 6px 12px;
+    }
+
+    .checkbox-grid .checkbox-label {
+      font-size: 12px;
+    }
+
+    .checkbox-grid .checkbox-label input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+    }
+
+    .settings-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin: 0 0 10px 0;
+    }
+
     /* === Buttons === */
     .btn {
       padding: 10px 20px;
@@ -2377,6 +2398,56 @@
             <input type="checkbox" id="notifyPerProduct">
             <span>商品ごとに通知（全体完了のみの場合はOFF）</span>
           </label>
+        </div>
+
+        <!-- 収集項目 -->
+        <div class="settings-section">
+          <h3>収集項目（楽天）</h3>
+          <p class="settings-hint">AIに渡す際のトークン数削減のため、必要な項目のみ選択してください</p>
+          <div class="checkbox-grid" id="rakutenFieldsGrid">
+            <label class="checkbox-label"><input type="checkbox" data-field="reviewDate"><span>レビュー日</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="productId"><span>商品管理番号</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="productName"><span>商品名</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="productUrl" checked><span>商品URL</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="rating" checked><span>評価</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="title" checked><span>タイトル</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="body" checked><span>本文</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="author"><span>投稿者</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="age"><span>年代</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="gender"><span>性別</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="orderDate"><span>注文日</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="variation"><span>バリエーション</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="usage"><span>用途</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="recipient"><span>贈り先</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="purchaseCount"><span>購入回数</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="helpfulCount"><span>参考になった数</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="shopReply"><span>ショップからの返信</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="shopName"><span>ショップ名</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="pageUrl"><span>レビュー掲載URL</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="collectedAt"><span>収集日時</span></label>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>収集項目（Amazon）</h3>
+          <div class="checkbox-grid" id="amazonFieldsGrid">
+            <label class="checkbox-label"><input type="checkbox" data-field="reviewDate"><span>レビュー日</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="productId"><span>ASIN</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="productName"><span>商品名</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="productUrl"><span>商品URL</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="rating" checked><span>評価</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="title" checked><span>タイトル</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="body" checked><span>本文</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="author"><span>投稿者</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="variation"><span>バリエーション</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="helpfulCount"><span>参考になった数</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="country"><span>国</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="isVerified"><span>認証購入</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="isVine"><span>Vineレビュー</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="hasImage"><span>画像あり</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="pageUrl"><span>レビュー掲載URL</span></label>
+            <label class="checkbox-label"><input type="checkbox" data-field="collectedAt"><span>収集日時</span></label>
+          </div>
         </div>
 
         <!-- テーマ -->

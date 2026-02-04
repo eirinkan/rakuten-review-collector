@@ -4,6 +4,77 @@
  * 楽天市場・Amazon両対応
  */
 
+// ===== 収集項目の定義 =====
+// 楽天のフィールド定義（順序固定）
+const RAKUTEN_FIELD_DEFINITIONS = [
+  { key: 'reviewDate', header: 'レビュー日', getValue: (r, esc) => esc(r.reviewDate || '') },
+  { key: 'productId', header: '商品管理番号', getValue: (r, esc) => esc(r.productId || '') },
+  { key: 'productName', header: '商品名', getValue: (r, esc) => esc(r.productName || '') },
+  { key: 'productUrl', header: '商品URL', getValue: (r) => r.productUrl || '' },
+  { key: 'rating', header: '評価', getValue: (r) => r.rating || '' },
+  { key: 'title', header: 'タイトル', getValue: (r, esc) => esc(r.title || '') },
+  { key: 'body', header: '本文', getValue: (r, esc) => esc(r.body || '') },
+  { key: 'author', header: '投稿者', getValue: (r, esc) => esc(r.author || '') },
+  { key: 'age', header: '年代', getValue: (r, esc) => esc(r.age || '') },
+  { key: 'gender', header: '性別', getValue: (r, esc) => esc(r.gender || '') },
+  { key: 'orderDate', header: '注文日', getValue: (r, esc) => esc(r.orderDate || '') },
+  { key: 'variation', header: 'バリエーション', getValue: (r, esc) => esc(r.variation || '') },
+  { key: 'usage', header: '用途', getValue: (r, esc) => esc(r.usage || '') },
+  { key: 'recipient', header: '贈り先', getValue: (r, esc) => esc(r.recipient || '') },
+  { key: 'purchaseCount', header: '購入回数', getValue: (r, esc) => esc(r.purchaseCount || '') },
+  { key: 'helpfulCount', header: '参考になった数', getValue: (r) => r.helpfulCount || 0 },
+  { key: 'shopReply', header: 'ショップからの返信', getValue: (r, esc) => esc(r.shopReply || '') },
+  { key: 'shopName', header: 'ショップ名', getValue: (r, esc) => esc(r.shopName || '') },
+  { key: 'pageUrl', header: 'レビュー掲載URL', getValue: (r) => r.pageUrl || '' },
+  { key: 'collectedAt', header: '収集日時', getValue: (r, esc) => esc(r.collectedAt || '') }
+];
+
+// Amazonのフィールド定義（順序固定）
+const AMAZON_FIELD_DEFINITIONS = [
+  { key: 'reviewDate', header: 'レビュー日', getValue: (r, esc) => esc(r.reviewDate || '') },
+  { key: 'productId', header: 'ASIN', getValue: (r, esc) => esc(r.productId || '') },
+  { key: 'productName', header: '商品名', getValue: (r, esc) => esc(r.productName || '') },
+  { key: 'productUrl', header: '商品URL', getValue: (r) => r.productUrl || '' },
+  { key: 'rating', header: '評価', getValue: (r) => r.rating || '' },
+  { key: 'title', header: 'タイトル', getValue: (r, esc) => esc(r.title || '') },
+  { key: 'body', header: '本文', getValue: (r, esc) => esc(r.body || '') },
+  { key: 'author', header: '投稿者', getValue: (r, esc) => esc(r.author || '') },
+  { key: 'variation', header: 'バリエーション', getValue: (r, esc) => esc(r.variation || '') },
+  { key: 'helpfulCount', header: '参考になった数', getValue: (r) => r.helpfulCount || 0 },
+  { key: 'country', header: '国', getValue: (r, esc) => esc(r.country || '') },
+  { key: 'isVerified', header: '認証購入', getValue: (r) => r.isVerified ? '○' : '' },
+  { key: 'isVine', header: 'Vineレビュー', getValue: (r) => r.isVine ? '○' : '' },
+  { key: 'hasImage', header: '画像あり', getValue: (r) => r.hasImage ? '○' : '' },
+  { key: 'pageUrl', header: 'レビュー掲載URL', getValue: (r) => r.pageUrl || '' },
+  { key: 'collectedAt', header: '収集日時', getValue: (r, esc) => esc(r.collectedAt || '') }
+];
+
+// デフォルトの収集項目
+const DEFAULT_RAKUTEN_FIELDS = ['rating', 'title', 'body', 'productUrl'];
+const DEFAULT_AMAZON_FIELDS = ['rating', 'title', 'body'];
+
+/**
+ * 選択されたフィールドからヘッダーとデータを生成
+ */
+function getSelectedFieldsData(reviews, source, selectedFields, escapeFormula) {
+  const definitions = source === 'amazon' ? AMAZON_FIELD_DEFINITIONS : RAKUTEN_FIELD_DEFINITIONS;
+  const defaultFields = source === 'amazon' ? DEFAULT_AMAZON_FIELDS : DEFAULT_RAKUTEN_FIELDS;
+  const fields = selectedFields && selectedFields.length > 0 ? selectedFields : defaultFields;
+
+  // 選択されたフィールドのみをフィルタリング（定義順を維持）
+  const activeDefinitions = definitions.filter(def => fields.includes(def.key));
+
+  // ヘッダー生成
+  const headers = activeDefinitions.map(def => def.header);
+
+  // データ行生成
+  const dataValues = reviews.map(review =>
+    activeDefinitions.map(def => def.getValue(review, escapeFormula))
+  );
+
+  return { headers, dataValues, columnCount: activeDefinitions.length };
+}
+
 // アクティブな収集タブを追跡
 let activeCollectionTabs = new Set();
 // 収集用ウィンドウのID
@@ -1386,11 +1457,13 @@ async function formatUrlColumns(token, spreadsheetId, sheetId, reviews, source =
  * Amazon: 黒背景・オレンジテキスト (#ff9900)
  * @param {string} source - 販路 ('rakuten' | 'amazon')
  */
-async function formatHeaderRow(token, spreadsheetId, sheetId, source = 'rakuten') {
-  // 販路別の色設定と列数
-  // 楽天: 22列（A-V）、Amazon: 16列（A-P）
+async function formatHeaderRow(token, spreadsheetId, sheetId, source = 'rakuten', columnCount = null) {
+  // 販路別の色設定
   let backgroundColor, textColor;
-  const columnCount = source === 'amazon' ? 16 : 22;
+  // 列数が指定されていない場合はデフォルト値を使用
+  if (!columnCount) {
+    columnCount = source === 'amazon' ? 16 : 22;
+  }
 
   if (source === 'amazon') {
     // Amazon: 黒背景・オレンジテキスト (#ff9900)
@@ -1486,77 +1559,30 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 
     return str;
   };
 
-  // 販路別のヘッダーとデータマッピング
-  let headers;
-  let dataValues;
+  // 設定から選択されたフィールドを取得
+  const settings = await chrome.storage.sync.get(['rakutenFields', 'amazonFields']);
+  const selectedFields = source === 'amazon' ? settings.amazonFields : settings.rakutenFields;
 
-  if (source === 'amazon') {
-    // Amazon用ヘッダー（16項目）
-    headers = [
-      'レビュー日', 'ASIN', '商品名', '商品URL', '評価', 'タイトル', '本文',
-      '投稿者', 'バリエーション', '参考になった数', '国', '認証購入', 'Vineレビュー',
-      '画像あり', 'レビュー掲載URL', '収集日時'
-    ];
-    dataValues = reviews.map(review => [
-      escapeFormula(review.reviewDate || ''),
-      escapeFormula(review.productId || ''),
-      escapeFormula(review.productName || ''),
-      review.productUrl || '',
-      review.rating || '',
-      escapeFormula(review.title || ''),
-      escapeFormula(review.body || ''),
-      escapeFormula(review.author || ''),
-      escapeFormula(review.variation || ''),
-      review.helpfulCount || 0,
-      escapeFormula(review.country || ''),
-      review.isVerified ? '○' : '',
-      review.isVine ? '○' : '',
-      review.hasImage ? '○' : '',
-      review.pageUrl || '',
-      escapeFormula(review.collectedAt || '')
-    ]);
-  } else {
-    // 楽天用ヘッダー（22項目）
-    headers = [
-      'レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文',
-      '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先',
-      '購入回数', '参考になった数', 'ショップからの返信', 'ショップ名', 'レビュー掲載URL', '収集日時',
-      '販路', '国'
-    ];
-    dataValues = reviews.map(review => [
-      escapeFormula(review.reviewDate || ''),
-      escapeFormula(review.productId || ''),
-      escapeFormula(review.productName || ''),
-      review.productUrl || '',
-      review.rating || '',
-      escapeFormula(review.title || ''),
-      escapeFormula(review.body || ''),
-      escapeFormula(review.author || ''),
-      escapeFormula(review.age || ''),
-      escapeFormula(review.gender || ''),
-      escapeFormula(review.orderDate || ''),
-      escapeFormula(review.variation || ''),
-      escapeFormula(review.usage || ''),
-      escapeFormula(review.recipient || ''),
-      escapeFormula(review.purchaseCount || ''),
-      review.helpfulCount || 0,
-      escapeFormula(review.shopReply || ''),
-      escapeFormula(review.shopName || ''),
-      review.pageUrl || '',
-      escapeFormula(review.collectedAt || ''),
-      '楽天',
-      escapeFormula(review.country || '日本')
-    ]);
-  }
+  // 選択されたフィールドからヘッダーとデータを生成
+  const { headers, dataValues, columnCount } = getSelectedFieldsData(reviews, source, selectedFields, escapeFormula);
 
   // ヘッダー + データを結合
   const allValues = [headers, ...dataValues];
   const totalRows = allValues.length;
 
-  // 販路別の最終列（楽天: V、Amazon: P）
-  const lastColumn = source === 'amazon' ? 'P' : 'V';
+  // 列数から最終列を計算（A=1, B=2, ..., Z=26）
+  const getColumnLetter = (num) => {
+    let letter = '';
+    while (num > 0) {
+      const remainder = (num - 1) % 26;
+      letter = String.fromCharCode(65 + remainder) + letter;
+      num = Math.floor((num - 1) / 26);
+    }
+    return letter;
+  };
+  const lastColumn = getColumnLetter(columnCount);
 
-  // 1. シートの全データをクリア（販路別の列範囲）
+  // 1. シートの全データをクリア
   await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A:${lastColumn}:clear`,
     {
@@ -1620,7 +1646,7 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 
   }
 
   // 4. ヘッダー書式を適用（販路別の色）
-  await formatHeaderRow(token, spreadsheetId, sheetId, source);
+  await formatHeaderRow(token, spreadsheetId, sheetId, source, columnCount);
 
   // 5. データ行に書式を適用（白背景・黒テキスト・垂直中央揃え）
   if (dataValues.length > 0) {
@@ -1754,68 +1780,24 @@ async function appendToSheetWithoutClear(token, spreadsheetId, sheetName, review
     return str;
   };
 
-  // 販路別のヘッダーとデータマッピング
-  let headers;
-  let dataValues;
+  // 設定から選択されたフィールドを取得
+  const settings = await chrome.storage.sync.get(['rakutenFields', 'amazonFields']);
+  const selectedFields = source === 'amazon' ? settings.amazonFields : settings.rakutenFields;
 
-  if (source === 'amazon') {
-    headers = [
-      'レビュー日', 'ASIN', '商品名', '商品URL', '評価', 'タイトル', '本文',
-      '投稿者', 'バリエーション', '参考になった数', '国', '認証購入', 'Vineレビュー',
-      '画像あり', 'レビュー掲載URL', '収集日時'
-    ];
-    dataValues = reviews.map(review => [
-      escapeFormula(review.reviewDate || ''),
-      escapeFormula(review.productId || ''),
-      escapeFormula(review.productName || ''),
-      review.productUrl || '',
-      review.rating || '',
-      escapeFormula(review.title || ''),
-      escapeFormula(review.body || ''),
-      escapeFormula(review.author || ''),
-      escapeFormula(review.variation || ''),
-      review.helpfulCount || 0,
-      escapeFormula(review.country || ''),
-      review.isVerified ? '○' : '',
-      review.isVine ? '○' : '',
-      review.hasImage ? '○' : '',
-      review.pageUrl || '',
-      escapeFormula(review.collectedAt || '')
-    ]);
-  } else {
-    headers = [
-      'レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文',
-      '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先',
-      '購入回数', '参考になった数', 'ショップからの返信', 'ショップ名', 'レビュー掲載URL', '収集日時',
-      '販路', '国'
-    ];
-    dataValues = reviews.map(review => [
-      escapeFormula(review.reviewDate || ''),
-      escapeFormula(review.productId || ''),
-      escapeFormula(review.productName || ''),
-      review.productUrl || '',
-      review.rating || '',
-      escapeFormula(review.title || ''),
-      escapeFormula(review.body || ''),
-      escapeFormula(review.author || ''),
-      escapeFormula(review.age || ''),
-      escapeFormula(review.gender || ''),
-      escapeFormula(review.orderDate || ''),
-      escapeFormula(review.variation || ''),
-      escapeFormula(review.usage || ''),
-      escapeFormula(review.recipient || ''),
-      escapeFormula(review.purchaseCount || ''),
-      review.helpfulCount || 0,
-      escapeFormula(review.shopReply || ''),
-      escapeFormula(review.shopName || ''),
-      review.pageUrl || '',
-      escapeFormula(review.collectedAt || ''),
-      '楽天',
-      escapeFormula(review.country || '日本')
-    ]);
-  }
+  // 選択されたフィールドからヘッダーとデータを生成
+  const { headers, dataValues, columnCount } = getSelectedFieldsData(reviews, source, selectedFields, escapeFormula);
 
-  const lastColumn = source === 'amazon' ? 'P' : 'V';
+  // 列数から最終列を計算
+  const getColumnLetter = (num) => {
+    let letter = '';
+    while (num > 0) {
+      const remainder = (num - 1) % 26;
+      letter = String.fromCharCode(65 + remainder) + letter;
+      num = Math.floor((num - 1) / 26);
+    }
+    return letter;
+  };
+  const lastColumn = getColumnLetter(columnCount);
 
   // 現在のシートの行数を取得
   const getResponse = await fetch(
@@ -1840,7 +1822,7 @@ async function appendToSheetWithoutClear(token, spreadsheetId, sheetName, review
       }
     );
     // ヘッダー書式を適用
-    await formatHeaderRow(token, spreadsheetId, sheetId, source);
+    await formatHeaderRow(token, spreadsheetId, sheetId, source, columnCount);
     // データ行に書式を適用
     if (dataValues.length > 0) {
       await formatDataRows(token, spreadsheetId, sheetId, 1, allValues.length, source);
@@ -1860,7 +1842,7 @@ async function appendToSheetWithoutClear(token, spreadsheetId, sheetName, review
       }
     );
     // ヘッダー書式を適用
-    await formatHeaderRow(token, spreadsheetId, sheetId, source);
+    await formatHeaderRow(token, spreadsheetId, sheetId, source, columnCount);
 
     // 2. データを最後の行の次に追記
     const startRow = existingRows + 1;
@@ -1967,8 +1949,9 @@ async function trimEmptyRows(token, spreadsheetId, sheetId, encodedSheetName) {
  */
 async function handleDownloadCSV() {
   return new Promise((resolve, reject) => {
-    chrome.storage.local.get(['collectionState'], async (result) => {
-      const state = result.collectionState;
+    // 収集状態と選択フィールドを取得
+    chrome.storage.local.get(['collectionState'], async (localResult) => {
+      const state = localResult.collectionState;
 
       if (!state || !state.reviews || state.reviews.length === 0) {
         reject(new Error('ダウンロードするデータがありません'));
@@ -1976,12 +1959,18 @@ async function handleDownloadCSV() {
       }
 
       try {
-        const csv = convertToCSV(state.reviews);
+        // 選択されたフィールドを取得
+        const syncResult = await chrome.storage.sync.get(['rakutenFields', 'amazonFields']);
+        const source = state.source || 'rakuten';
+        const selectedFields = source === 'amazon'
+          ? (syncResult.amazonFields || DEFAULT_AMAZON_FIELDS)
+          : (syncResult.rakutenFields || DEFAULT_RAKUTEN_FIELDS);
+
+        const csv = convertToCSV(state.reviews, selectedFields);
         const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
         const url = URL.createObjectURL(blob);
 
         // 販路別のファイル名
-        const source = state.source || 'rakuten';
         const prefix = source === 'amazon' ? 'amazon' : 'rakuten';
         const filename = `${prefix}_reviews_${formatDate(new Date())}.csv`;
 
@@ -2000,9 +1989,9 @@ async function handleDownloadCSV() {
 }
 
 /**
- * レビューデータをCSV形式に変換（販路別ヘッダー）
+ * レビューデータをCSV形式に変換（選択項目のみ）
  */
-function convertToCSV(reviews) {
+function convertToCSV(reviews, selectedFields) {
   const escapeCSV = (value) => {
     if (value === null || value === undefined) return '';
     const str = String(value);
@@ -2015,45 +2004,13 @@ function convertToCSV(reviews) {
   // 販路を判定（最初のレビューのsourceから判断）
   const source = reviews[0]?.source || 'rakuten';
 
-  let headers;
-  let rows;
-
-  if (source === 'amazon') {
-    // Amazon用（16項目）
-    headers = [
-      'レビュー日', 'ASIN', '商品名', '商品URL', '評価', 'タイトル', '本文',
-      '投稿者', 'バリエーション', '参考になった数', '国', '認証購入', 'Vineレビュー',
-      '画像あり', 'レビュー掲載URL', '収集日時'
-    ];
-    rows = reviews.map(review => [
-      review.reviewDate || '', review.productId || '', review.productName || '',
-      review.productUrl || '', review.rating || '', review.title || '', review.body || '',
-      review.author || '', review.variation || '', review.helpfulCount || 0,
-      review.country || '', review.isVerified ? '○' : '', review.isVine ? '○' : '',
-      review.hasImage ? '○' : '', review.pageUrl || '', review.collectedAt || ''
-    ]);
-  } else {
-    // 楽天用（22項目）
-    headers = [
-      'レビュー日', '商品管理番号', '商品名', '商品URL', '評価', 'タイトル', '本文',
-      '投稿者', '年代', '性別', '注文日', 'バリエーション', '用途', '贈り先',
-      '購入回数', '参考になった数', 'ショップからの返信', 'ショップ名', 'レビュー掲載URL', '収集日時',
-      '販路', '国'
-    ];
-    rows = reviews.map(review => [
-      review.reviewDate || '', review.productId || '', review.productName || '',
-      review.productUrl || '', review.rating || '', review.title || '', review.body || '',
-      review.author || '', review.age || '', review.gender || '', review.orderDate || '',
-      review.variation || '', review.usage || '', review.recipient || '',
-      review.purchaseCount || '', review.helpfulCount || 0, review.shopReply || '',
-      review.shopName || '', review.pageUrl || '', review.collectedAt || '',
-      '楽天', review.country || '日本'
-    ]);
-  }
+  // getSelectedFieldsDataを使用して動的にヘッダーとデータを生成
+  // CSVではescapeCSVをそのまま使用（数式エスケープ不要）
+  const { headers, dataValues } = getSelectedFieldsData(reviews, source, selectedFields, escapeCSV);
 
   return [
     headers.map(escapeCSV).join(','),
-    ...rows.map(row => row.map(escapeCSV).join(','))
+    ...dataValues.map(row => row.map(escapeCSV).join(','))
   ].join('\r\n');
 }
 

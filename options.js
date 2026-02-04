@@ -398,6 +398,66 @@ document.addEventListener('DOMContentLoaded', () => {
         dateFilterToInput.value = result.dateFilterTo;
       }
     });
+
+    // 収集項目の設定を読み込み
+    loadCollectionFields();
+  }
+
+  // 収集項目の設定を読み込み
+  function loadCollectionFields() {
+    chrome.storage.sync.get(['rakutenFields', 'amazonFields'], (result) => {
+      // 楽天のデフォルト項目
+      const defaultRakutenFields = ['rating', 'title', 'body', 'productUrl'];
+      const rakutenFields = result.rakutenFields || defaultRakutenFields;
+
+      // Amazonのデフォルト項目
+      const defaultAmazonFields = ['rating', 'title', 'body'];
+      const amazonFields = result.amazonFields || defaultAmazonFields;
+
+      // 楽天のチェックボックスを更新
+      const rakutenGrid = document.getElementById('rakutenFieldsGrid');
+      if (rakutenGrid) {
+        rakutenGrid.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+          cb.checked = rakutenFields.includes(cb.dataset.field);
+          cb.addEventListener('change', saveCollectionFields);
+        });
+      }
+
+      // Amazonのチェックボックスを更新
+      const amazonGrid = document.getElementById('amazonFieldsGrid');
+      if (amazonGrid) {
+        amazonGrid.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+          cb.checked = amazonFields.includes(cb.dataset.field);
+          cb.addEventListener('change', saveCollectionFields);
+        });
+      }
+    });
+  }
+
+  // 収集項目の設定を保存
+  function saveCollectionFields() {
+    const rakutenFields = [];
+    const amazonFields = [];
+
+    // 楽天のチェックされた項目を収集
+    const rakutenGrid = document.getElementById('rakutenFieldsGrid');
+    if (rakutenGrid) {
+      rakutenGrid.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+        rakutenFields.push(cb.dataset.field);
+      });
+    }
+
+    // Amazonのチェックされた項目を収集
+    const amazonGrid = document.getElementById('amazonFieldsGrid');
+    if (amazonGrid) {
+      amazonGrid.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+        amazonFields.push(cb.dataset.field);
+      });
+    }
+
+    chrome.storage.sync.set({ rakutenFields, amazonFields }, () => {
+      console.log('[設定保存] 収集項目:', { rakutenFields, amazonFields });
+    });
   }
 
   function loadState() {
