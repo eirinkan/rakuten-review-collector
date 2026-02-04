@@ -151,6 +151,56 @@
   }
 
   /**
+   * 新着順ソートを確認・設定
+   * セレクトボックスを操作して新着レビュー順（value=6）に変更
+   * @returns {boolean} ソートを変更した場合はtrue（ページ遷移が発生する）
+   */
+  async function ensureNewestSort() {
+    // 並び替えセレクトボックスを探す
+    const sortSelect = document.querySelector('select.link-dropdown--3uu_U') ||
+                       document.querySelector('select[class*="link-dropdown"]') ||
+                       document.querySelector('.rv-sort-wrap select') ||
+                       document.querySelector('[class*="sort"] select');
+
+    if (!sortSelect) {
+      console.log('[楽天レビュー収集] 並び替えセレクトボックスが見つかりません');
+      return false;
+    }
+
+    // 既に新着順（value=6）の場合は何もしない
+    if (sortSelect.value === '6') {
+      console.log('[楽天レビュー収集] 既に新着順です');
+      return false;
+    }
+
+    console.log('[楽天レビュー収集] 新着順に変更します（現在: ' + sortSelect.value + '）');
+
+    // 収集状態を保存
+    await new Promise(resolve => {
+      chrome.storage.local.get(['collectionState'], (result) => {
+        const state = result.collectionState || {};
+        state.isRunning = true;
+        state.incrementalOnly = incrementalOnly;
+        state.lastCollectedDate = lastCollectedDate;
+        state.queueName = currentQueueName;
+        state.source = 'rakuten';
+        chrome.storage.local.set({ collectionState: state }, resolve);
+      });
+    });
+
+    // セレクトボックスの値を変更
+    sortSelect.value = '6';
+
+    // changeイベントを発火（これでページが更新される）
+    const event = new Event('change', { bubbles: true });
+    sortSelect.dispatchEvent(event);
+
+    log('新着順に並び替えています...');
+
+    return true; // ページ遷移が発生する
+  }
+
+  /**
    * 商品管理番号を取得
    */
   function getProductId() {
@@ -222,26 +272,10 @@
     dateFilterFrom = settings.dateFilterFrom || null;
     dateFilterTo = settings.dateFilterTo || null;
 
-    // 常に新着順ソート（sort=6）を使用
-    const currentUrl = new URL(window.location.href);
-    const currentSort = currentUrl.searchParams.get('sort');
-
-    if (currentSort !== '6') {
-      console.log('[楽天レビュー収集] 新着順でソートするためページを遷移します');
-      // 収集状態を保存
-      chrome.storage.local.get(['collectionState'], (result) => {
-        const state = result.collectionState || {};
-        state.isRunning = true;
-        state.incrementalOnly = incrementalOnly;
-        state.lastCollectedDate = lastCollectedDate;
-        state.queueName = currentQueueName;
-        state.source = 'rakuten';
-        chrome.storage.local.set({ collectionState: state }, () => {
-          // sort=6を追加してリダイレクト
-          currentUrl.searchParams.set('sort', '6');
-          window.location.href = currentUrl.toString();
-        });
-      });
+    // 常に新着順ソートを使用（ページ上のセレクトボックスを操作）
+    const sortChanged = await ensureNewestSort();
+    if (sortChanged) {
+      // ソート変更後、ページが更新されるので収集は新しいインスタンスで再開される
       return;
     }
 
