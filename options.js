@@ -78,6 +78,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const showScheduledCollectionCheckbox = document.getElementById('showScheduledCollection');
   const scheduledCollectionSection = document.getElementById('scheduledCollectionSection');
 
+  // 期間指定フィルター
+  const dateFilterFromInput = document.getElementById('dateFilterFrom');
+  const dateFilterToInput = document.getElementById('dateFilterTo');
+
   const queueList = document.getElementById('queueList');
   const startQueueBtn = document.getElementById('startQueueBtn');
   const stopQueueBtn = document.getElementById('stopQueueBtn');
@@ -288,6 +292,14 @@ document.addEventListener('DOMContentLoaded', () => {
       showScheduledCollectionCheckbox.addEventListener('change', saveScheduledCollectionVisibility);
     }
 
+    // 期間指定フィルターの変更時に自動保存
+    if (dateFilterFromInput) {
+      dateFilterFromInput.addEventListener('change', saveDateFilter);
+    }
+    if (dateFilterToInput) {
+      dateFilterToInput.addEventListener('change', saveDateFilter);
+    }
+
     // スプレッドシートURL入力（自動保存 - Sheets API直接連携）
     if (spreadsheetUrlInput) {
       let spreadsheetUrlSaveTimeout = null;
@@ -321,7 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function loadSettings() {
-    chrome.storage.sync.get(['separateSheets', 'separateCsvFiles', 'spreadsheetUrl', 'amazonSpreadsheetUrl', 'enableNotification', 'notifyPerProduct', 'showScheduledCollection'], (result) => {
+    chrome.storage.sync.get(['separateSheets', 'separateCsvFiles', 'spreadsheetUrl', 'amazonSpreadsheetUrl', 'enableNotification', 'notifyPerProduct', 'showScheduledCollection', 'dateFilterFrom', 'dateFilterTo'], (result) => {
       // 楽天用スプレッドシートURL（Sheets API直接連携）
       if (result.spreadsheetUrl && spreadsheetUrlInput) {
         spreadsheetUrlInput.value = result.spreadsheetUrl;
@@ -365,6 +377,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const show = result.showScheduledCollection === true;
         showScheduledCollectionCheckbox.checked = show;
         scheduledCollectionSection.style.display = show ? 'block' : 'none';
+      }
+      // 期間指定フィルター
+      if (dateFilterFromInput && result.dateFilterFrom) {
+        dateFilterFromInput.value = result.dateFilterFrom;
+      }
+      if (dateFilterToInput && result.dateFilterTo) {
+        dateFilterToInput.value = result.dateFilterTo;
       }
     });
   }
@@ -779,6 +798,22 @@ document.addEventListener('DOMContentLoaded', () => {
       scheduledCollectionSection.style.display = show ? 'block' : 'none';
     }
     console.log('[設定保存] showScheduledCollection:', show);
+  }
+
+  // 期間指定フィルターを保存
+  function saveDateFilter() {
+    const dateFilterFrom = dateFilterFromInput?.value || '';
+    const dateFilterTo = dateFilterToInput?.value || '';
+
+    // 値が入力されている場合のみenableDateFilterをtrueに
+    const enableDateFilter = !!(dateFilterFrom || dateFilterTo);
+
+    chrome.storage.sync.set({
+      enableDateFilter,
+      dateFilterFrom,
+      dateFilterTo
+    });
+    console.log('[設定保存] 期間指定:', { enableDateFilter, dateFilterFrom, dateFilterTo });
   }
 
   async function downloadCSV() {

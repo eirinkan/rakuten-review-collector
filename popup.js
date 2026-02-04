@@ -261,9 +261,6 @@ document.addEventListener('DOMContentLoaded', () => {
       queueBtn.disabled = true;
     }
 
-    // 期間指定フィールドの初期化
-    initDateFilter();
-
     // 状態を復元
     restoreState();
 
@@ -277,49 +274,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // バックグラウンドからのメッセージ
     chrome.runtime.onMessage.addListener(handleMessage);
-  }
-
-  /**
-   * 期間指定フィールドの初期化
-   */
-  function initDateFilter() {
-    const dateFilterFromInput = document.getElementById('dateFilterFrom');
-    const dateFilterToInput = document.getElementById('dateFilterTo');
-
-    // 保存された値を読み込み
-    chrome.storage.sync.get(['dateFilterFrom', 'dateFilterTo'], (result) => {
-      if (dateFilterFromInput && result.dateFilterFrom) {
-        dateFilterFromInput.value = result.dateFilterFrom;
-      }
-      if (dateFilterToInput && result.dateFilterTo) {
-        dateFilterToInput.value = result.dateFilterTo;
-      }
-    });
-
-    // 変更時に自動保存
-    if (dateFilterFromInput) {
-      dateFilterFromInput.addEventListener('change', saveDateFilter);
-    }
-    if (dateFilterToInput) {
-      dateFilterToInput.addEventListener('change', saveDateFilter);
-    }
-  }
-
-  /**
-   * 期間指定を保存
-   */
-  function saveDateFilter() {
-    const dateFilterFrom = document.getElementById('dateFilterFrom')?.value || '';
-    const dateFilterTo = document.getElementById('dateFilterTo')?.value || '';
-
-    // 値が入力されている場合のみenableDateFilterをtrueに
-    const enableDateFilter = !!(dateFilterFrom || dateFilterTo);
-
-    chrome.storage.sync.set({
-      enableDateFilter,
-      dateFilterFrom,
-      dateFilterTo
-    });
   }
 
   async function restoreState() {
