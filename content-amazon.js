@@ -2335,6 +2335,18 @@
           const currentASIN = getASIN();
 
           if (storedProductId === currentASIN) {
+            // 重複実行防止: 既に自動再開が実行されている場合はスキップ
+            if (autoResumeExecuted || startCollectionLock || isCollecting) {
+              console.log('[Amazonレビュー収集] 既に再開処理中のためスキップ:', {
+                autoResumeExecuted, startCollectionLock, isCollecting
+              });
+              return;
+            }
+
+            // 即座にロックを設定（他の呼び出しをブロック）
+            autoResumeExecuted = true;
+            startCollectionLock = true;
+
             console.log('[Amazonレビュー収集] 収集を自動再開します');
 
             // 状態を復元
@@ -2387,10 +2399,12 @@
           });
           lastUrl = currentUrl;
 
-          // 既に収集中の場合は、URL変更監視からの再開は行わない
+          // 既に収集中またはロック中の場合は、URL変更監視からの再開は行わない
           // （収集ロジック内でページ遷移を処理しているため）
-          if (isCollecting) {
-            console.log('[Amazonレビュー収集] 収集中のため、URL変更監視からの再開はスキップ');
+          if (isCollecting || startCollectionLock) {
+            console.log('[Amazonレビュー収集] 収集中/ロック中のため、URL変更監視からの再開はスキップ', {
+              isCollecting, startCollectionLock
+            });
             return;
           }
 
@@ -2403,11 +2417,8 @@
             console.log('[Amazonレビュー収集] レビューページへのURL変更、自動再開をチェックします');
             urlChangeHandling = true;
 
-            // フラグをリセットして再開を許可
-            startCollectionLock = false;
-            autoResumeExecuted = false;
-
             // DOMが完全に更新されるまで待機（1.5秒）
+            // 注意: フラグのリセットは行わない（checkAndResumeCollection内でチェックするため）
             setTimeout(() => {
               urlChangeHandling = false;
               checkAndResumeCollection();
