@@ -904,7 +904,9 @@
       return;
     }
 
-    // レビュー総数を取得
+    // レビュー総数を取得（件数表示要素の読み込みを待ってから）
+    // フィルター遷移直後はDOM更新が遅れる場合があるため、待機が必要
+    await waitForReviewCount(3000);
     const expectedTotal = getTotalReviewCount();
 
     // 星フィルター情報を取得（ログ表示用）
@@ -2278,6 +2280,30 @@
       await sleep(intervalMs);
     }
     console.log(`[Amazonレビュー収集] レビュー要素が見つかりませんでした（${maxWaitMs}ms待機後）`);
+    return false;
+  }
+
+  /**
+   * 件数表示要素のテキストが更新されるまで待機
+   * フィルター遷移後、DOMが完全に更新されるまで待つ
+   * @param {number} maxWaitMs - 最大待機時間（ミリ秒）
+   * @returns {Promise<boolean>} - 件数が取得できたかどうか
+   */
+  async function waitForReviewCount(maxWaitMs = 3000) {
+    const startTime = Date.now();
+    while (Date.now() - startTime < maxWaitMs) {
+      const totalElem = document.querySelector(AMAZON_SELECTORS.totalReviews);
+      if (totalElem) {
+        const text = totalElem.textContent || '';
+        // 「XX件」または「XX一致」パターンがあれば更新完了
+        if (text.match(/\d+\s*(件|一致)/)) {
+          console.log(`[Amazonレビュー収集] waitForReviewCount: 件数表示を検出（${Date.now() - startTime}ms） - "${text.substring(0, 50)}"`);
+          return true;
+        }
+      }
+      await sleep(200);
+    }
+    console.log(`[Amazonレビュー収集] waitForReviewCount: タイムアウト（${maxWaitMs}ms）`);
     return false;
   }
 
