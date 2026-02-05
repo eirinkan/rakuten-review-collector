@@ -53,11 +53,6 @@ const AMAZON_FIELD_DEFINITIONS = [
 const DEFAULT_RAKUTEN_FIELDS = ['rating', 'title', 'body', 'productUrl'];
 const DEFAULT_AMAZON_FIELDS = ['rating', 'title', 'body'];
 
-// シート1枚あたりの行数上限（ヘッダー除く）
-// 本番: 50000, テスト: 10
-const SHEET_ROW_LIMIT = 50000;
-// const SHEET_ROW_LIMIT = 10; // テスト用
-
 /**
  * 選択されたフィールドからヘッダーとデータを生成
  */
@@ -78,36 +73,6 @@ function getSelectedFieldsData(reviews, source, selectedFields, escapeFormula) {
   );
 
   return { headers, dataValues, columnCount: activeDefinitions.length };
-}
-
-/**
- * ベースシート名から次のシート名を生成
- * 例: "Amazon" → "Amazon-02", "Amazon-02" → "Amazon-03"
- * @param {string} baseName - ベースシート名（例: "Amazon", "楽天"）
- * @param {number} index - シート番号（2以上）
- * @returns {string} 新しいシート名
- */
-function generateNextSheetName(baseName, index) {
-  // ベース名から既存の番号サフィックスを除去
-  const cleanBaseName = baseName.replace(/-\d+$/, '');
-  return `${cleanBaseName}-${String(index).padStart(2, '0')}`;
-}
-
-/**
- * シート名からベース名を抽出
- * 例: "Amazon-02" → "Amazon", "楽天" → "楽天"
- */
-function extractBaseSheetName(sheetName) {
-  return sheetName.replace(/-\d+$/, '');
-}
-
-/**
- * シート名から現在の番号を抽出
- * 例: "Amazon-02" → 2, "Amazon" → 1
- */
-function extractSheetNumber(sheetName) {
-  const match = sheetName.match(/-(\d+)$/);
-  return match ? parseInt(match[1], 10) : 1;
 }
 
 // アクティブな収集タブを追跡
@@ -1873,6 +1838,11 @@ function sortReviewsByDate(reviews) {
  * シートを分けない設定の場合に使用
  */
 async function appendToSheetWithoutClear(token, spreadsheetId, sheetName, reviews, source = 'rakuten') {
+  // シートが存在しなければ作成
+  const actualSheetName = await ensureSheetExists(token, spreadsheetId, sheetName);
+  const encodedSheetName = encodeURIComponent(actualSheetName);
+  const sheetId = await getSheetId(token, spreadsheetId, actualSheetName);
+
   // テキストが=で始まる場合はエスケープ
   const escapeFormula = (text) => {
     if (!text) return '';
@@ -1891,7 +1861,7 @@ async function appendToSheetWithoutClear(token, spreadsheetId, sheetName, review
   // 選択されたフィールドからヘッダーとデータを生成
   const { headers, dataValues, columnCount } = getSelectedFieldsData(reviews, source, selectedFields, escapeFormula);
   console.log(`[appendToSheetWithoutClear] headers:`, headers);
-  console.log(`[appendToSheetWithoutClear] データ件数: ${dataValues.length}件`);
+  console.log(`[appendToSheetWithoutClear] 最初のデータ行:`, dataValues[0]);
 
   // 列数から最終列を計算
   const getColumnLetter = (num) => {
@@ -1905,153 +1875,125 @@ async function appendToSheetWithoutClear(token, spreadsheetId, sheetName, review
   };
   const lastColumn = getColumnLetter(columnCount);
 
-  // ベースシート名を取得
-  const baseSheetName = extractBaseSheetName(sheetName);
-  let currentSheetName = sheetName;
-  let remainingData = [...dataValues];
-  let currentSheetNumber = extractSheetNumber(sheetName);
+  // 現在のシートの行数を取得
+  const getResponse = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A:A`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const getData = await getResponse.json();
+  const existingRows = getData.values?.length || 0;
 
-  // データがなくなるまでループ
-  while (remainingData.length > 0) {
-    // シートが存在しなければ作成
-    const actualSheetName = await ensureSheetExists(token, spreadsheetId, currentSheetName);
-    const encodedSheetName = encodeURIComponent(actualSheetName);
-    const sheetId = await getSheetId(token, spreadsheetId, actualSheetName);
-
-    // 現在のシートの行数を取得（ヘッダー除く）
-    const getResponse = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A:A`,
+  if (existingRows === 0) {
+    // シートが空の場合はヘッダー + データを書き込み
+    const allValues = [headers, ...dataValues];
+    await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A1:${lastColumn}${allValues.length}?valueInputOption=USER_ENTERED`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ values: allValues })
+      }
+    );
+    // ヘッダー書式を適用
+    await formatHeaderRow(token, spreadsheetId, sheetId, source, columnCount);
+    // データ行に書式を適用
+    if (dataValues.length > 0) {
+      await formatDataRows(token, spreadsheetId, sheetId, 1, allValues.length, source, columnCount);
+    }
+    // 評価列に「書式なしテキスト」を適用（日付自動変換を防止）
+    const ratingColumnIndexEmpty = getFieldColumnIndex(selectedFields, 'rating', source);
+    if (ratingColumnIndexEmpty >= 0) {
+      await formatColumnAsPlainText(token, spreadsheetId, sheetId, ratingColumnIndexEmpty, 1, allValues.length);
+      console.log(`[appendToSheetWithoutClear] 評価列（${ratingColumnIndexEmpty}列目）に書式なしテキストを適用`);
+    }
+  } else {
+    // 既存データがある場合
+    // 1. 既存のヘッダーを取得して比較
+    const existingHeaderResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!1:1`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
-    const getData = await getResponse.json();
-    const existingRows = getData.values?.length || 0;
-    const existingDataRows = existingRows > 0 ? existingRows - 1 : 0; // ヘッダー除く
+    const existingHeaderData = await existingHeaderResponse.json();
+    const existingHeaders = existingHeaderData.values?.[0] || [];
 
-    console.log(`[appendToSheetWithoutClear] シート「${actualSheetName}」: 既存データ ${existingDataRows}件, 追加予定 ${remainingData.length}件, 上限 ${SHEET_ROW_LIMIT}件`);
+    // ヘッダーが異なる場合は警告
+    const headersMatch = headers.length === existingHeaders.length &&
+      headers.every((h, i) => h === existingHeaders[i]);
 
-    // このシートに追加可能な行数を計算
-    const availableRows = SHEET_ROW_LIMIT - existingDataRows;
-
-    if (availableRows <= 0) {
-      // 既に上限に達している場合、次のシートへ
-      console.log(`[appendToSheetWithoutClear] シート「${actualSheetName}」は上限到達。次のシートへ`);
-      currentSheetNumber++;
-      currentSheetName = generateNextSheetName(baseSheetName, currentSheetNumber);
-      continue;
+    if (!headersMatch && existingHeaders.length > 0) {
+      console.warn('[appendToSheetWithoutClear] 警告: 収集項目が変更されています。');
+      console.warn('  既存ヘッダー:', existingHeaders);
+      console.warn('  新しいヘッダー:', headers);
+      console.warn('  既存データとの整合性が取れなくなる可能性があります。');
     }
 
-    // このシートに書き込むデータと残りのデータを分割
-    const dataForThisSheet = remainingData.slice(0, availableRows);
-    remainingData = remainingData.slice(availableRows);
-
-    console.log(`[appendToSheetWithoutClear] シート「${actualSheetName}」に ${dataForThisSheet.length}件を書き込み`);
-    if (remainingData.length > 0) {
-      console.log(`[appendToSheetWithoutClear] 残り ${remainingData.length}件は次のシートへ`);
-    }
-
-    if (existingRows === 0) {
-      // シートが空の場合はヘッダー + データを書き込み
-      const allValues = [headers, ...dataForThisSheet];
-      await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A1:${lastColumn}${allValues.length}?valueInputOption=USER_ENTERED`,
-        {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ values: allValues })
-        }
-      );
-      // ヘッダー書式を適用
-      await formatHeaderRow(token, spreadsheetId, sheetId, source, columnCount);
-      // データ行に書式を適用
-      if (dataForThisSheet.length > 0) {
-        await formatDataRows(token, spreadsheetId, sheetId, 1, allValues.length, source, columnCount);
+    // ヘッダー行を上書き（書式も適用）
+    await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A1:${lastColumn}1?valueInputOption=USER_ENTERED`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ values: [headers] })
       }
-      // 評価列に「書式なしテキスト」を適用（日付自動変換を防止）
-      const ratingColumnIndexEmpty = getFieldColumnIndex(selectedFields, 'rating', source);
-      if (ratingColumnIndexEmpty >= 0) {
-        await formatColumnAsPlainText(token, spreadsheetId, sheetId, ratingColumnIndexEmpty, 1, allValues.length);
-      }
-    } else {
-      // 既存データがある場合
-      // ヘッダー行を上書き（書式も適用）
-      await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A1:${lastColumn}1?valueInputOption=USER_ENTERED`,
-        {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ values: [headers] })
-        }
-      );
-      // ヘッダー書式を適用
-      await formatHeaderRow(token, spreadsheetId, sheetId, source, columnCount);
-
-      // データを最後の行の次に追記
-      const startRow = existingRows + 1;
-      const endRow = startRow + dataForThisSheet.length - 1;
-
-      // 必要な行数を確保（行が足りない場合は自動追加）
-      await ensureSheetRows(token, spreadsheetId, sheetId, endRow);
-
-      const appendResponse = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A${startRow}:${lastColumn}${endRow}?valueInputOption=USER_ENTERED`,
-        {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ values: dataForThisSheet })
-        }
-      );
-
-      if (!appendResponse.ok) {
-        const error = await appendResponse.json();
-        throw new Error(error.error?.message || 'スプレッドシートへの追記に失敗しました');
-      }
-
-      // 追記した行にデータ書式を適用
-      if (dataForThisSheet.length > 0) {
-        await formatDataRows(token, spreadsheetId, sheetId, startRow - 1, endRow, source, columnCount);
-      }
-
-      // 評価列に「書式なしテキスト」を適用（日付自動変換を防止）
-      const ratingColumnIndex = getFieldColumnIndex(selectedFields, 'rating', source);
-      if (ratingColumnIndex >= 0) {
-        const totalRows = existingRows + dataForThisSheet.length;
-        await formatColumnAsPlainText(token, spreadsheetId, sheetId, ratingColumnIndex, 1, totalRows);
-      }
-    }
-
-    // URL列にクリック可能なリンク書式を適用
-    // reviewsからこのシート分のデータに対応するレビューを取得
-    const reviewsForThisSheet = reviews.slice(
-      dataValues.length - remainingData.length - dataForThisSheet.length,
-      dataValues.length - remainingData.length
     );
-    if (reviewsForThisSheet.length > 0) {
-      await formatUrlColumns(token, spreadsheetId, sheetId, reviewsForThisSheet, source);
+    // ヘッダー書式を適用
+    await formatHeaderRow(token, spreadsheetId, sheetId, source, columnCount);
+
+    // 2. データを最後の行の次に追記
+    const startRow = existingRows + 1;
+    const endRow = startRow + dataValues.length - 1;
+
+    // 必要な行数を確保（行が足りない場合は自動追加）
+    await ensureSheetRows(token, spreadsheetId, sheetId, endRow);
+
+    const appendResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A${startRow}:${lastColumn}${endRow}?valueInputOption=USER_ENTERED`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ values: dataValues })
+      }
+    );
+
+    if (!appendResponse.ok) {
+      const error = await appendResponse.json();
+      throw new Error(error.error?.message || 'スプレッドシートへの追記に失敗しました');
     }
 
-    // シートの余分な行を削除（空白行をなくす）
-    await trimEmptyRows(token, spreadsheetId, sheetId, encodedSheetName);
-
-    // シートの列数を設定した列数に調整（余分な列を削除）
-    await adjustSheetColumns(token, spreadsheetId, sheetId, columnCount);
-
-    // 残りのデータがある場合、次のシートへ
-    if (remainingData.length > 0) {
-      currentSheetNumber++;
-      currentSheetName = generateNextSheetName(baseSheetName, currentSheetNumber);
+    // 追記した行にデータ書式を適用
+    if (dataValues.length > 0) {
+      await formatDataRows(token, spreadsheetId, sheetId, startRow - 1, endRow, source, columnCount);
     }
   }
 
-  console.log(`[appendToSheetWithoutClear] 全データの書き込み完了`);
+  // 評価列に「書式なしテキスト」を適用（日付自動変換を防止）
+  const ratingColumnIndex = getFieldColumnIndex(selectedFields, 'rating', source);
+  if (ratingColumnIndex >= 0) {
+    // シート全体の評価列に適用（ヘッダー除く）
+    const totalRows = existingRows + dataValues.length;
+    await formatColumnAsPlainText(token, spreadsheetId, sheetId, ratingColumnIndex, 1, totalRows);
+    console.log(`[appendToSheetWithoutClear] 評価列（${ratingColumnIndex}列目）に書式なしテキストを適用`);
+  }
+
+  // URL列にクリック可能なリンク書式を適用
+  if (reviews.length > 0) {
+    await formatUrlColumns(token, spreadsheetId, sheetId, reviews, source);
+  }
+
+  // シートの余分な行を削除（空白行をなくす）
+  await trimEmptyRows(token, spreadsheetId, sheetId, encodedSheetName);
+
+  // シートの列数を設定した列数に調整（余分な列を削除）
+  await adjustSheetColumns(token, spreadsheetId, sheetId, columnCount);
 }
 
 /**
