@@ -1684,6 +1684,9 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 
 
   // 8. 空白行を削除（シートの行数を調整）
   await trimEmptyRows(token, spreadsheetId, sheetId, encodedSheetName);
+
+  // 9. シートの列数を設定した列数に調整（余分な列を削除）
+  await adjustSheetColumns(token, spreadsheetId, sheetId, columnCount);
 }
 
 /**
@@ -1903,6 +1906,9 @@ async function appendToSheetWithoutClear(token, spreadsheetId, sheetName, review
 
   // シートの余分な行を削除（空白行をなくす）
   await trimEmptyRows(token, spreadsheetId, sheetId, encodedSheetName);
+
+  // シートの列数を設定した列数に調整（余分な列を削除）
+  await adjustSheetColumns(token, spreadsheetId, sheetId, columnCount);
 }
 
 /**
@@ -2014,6 +2020,82 @@ async function ensureSheetRows(token, spreadsheetId, sheetId, requiredRows) {
   } catch (e) {
     console.error('[ensureSheetRows] エラー:', e);
     throw e;
+  }
+}
+
+/**
+ * シートの列数を設定した列数に調整（余分な列を削除）
+ */
+async function adjustSheetColumns(token, spreadsheetId, sheetId, requiredColumns) {
+  try {
+    // シートの現在の列数を取得
+    const sheetPropsResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets(properties)`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const sheetPropsData = await sheetPropsResponse.json();
+    const sheetProps = sheetPropsData.sheets?.find(s => s.properties.sheetId === sheetId);
+    const currentColumnCount = sheetProps?.properties?.gridProperties?.columnCount || 26;
+
+    console.log(`[adjustSheetColumns] 現在の列数: ${currentColumnCount}, 必要な列数: ${requiredColumns}`);
+
+    // 余分な列がある場合は削除
+    if (currentColumnCount > requiredColumns) {
+      console.log(`[adjustSheetColumns] ${currentColumnCount - requiredColumns}列を削除します`);
+
+      await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            requests: [{
+              deleteDimension: {
+                range: {
+                  sheetId: sheetId,
+                  dimension: 'COLUMNS',
+                  startIndex: requiredColumns,
+                  endIndex: currentColumnCount
+                }
+              }
+            }]
+          })
+        }
+      );
+      console.log(`[adjustSheetColumns] 列削除完了`);
+    }
+    // 列が足りない場合は追加
+    else if (currentColumnCount < requiredColumns) {
+      const columnsToAdd = requiredColumns - currentColumnCount;
+      console.log(`[adjustSheetColumns] ${columnsToAdd}列を追加します`);
+
+      await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            requests: [{
+              appendDimension: {
+                sheetId: sheetId,
+                dimension: 'COLUMNS',
+                length: columnsToAdd
+              }
+            }]
+          })
+        }
+      );
+      console.log(`[adjustSheetColumns] 列追加完了`);
+    }
+  } catch (e) {
+    console.error('[adjustSheetColumns] エラー:', e);
+    // エラーが発生しても処理を続行（列調整は必須ではない）
   }
 }
 
