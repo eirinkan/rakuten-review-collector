@@ -1783,9 +1783,12 @@ async function appendToSheetWithoutClear(token, spreadsheetId, sheetName, review
   // 設定から選択されたフィールドを取得
   const settings = await chrome.storage.sync.get(['rakutenFields', 'amazonFields']);
   const selectedFields = source === 'amazon' ? settings.amazonFields : settings.rakutenFields;
+  console.log(`[appendToSheetWithoutClear] source: ${source}, selectedFields:`, selectedFields);
 
   // 選択されたフィールドからヘッダーとデータを生成
   const { headers, dataValues, columnCount } = getSelectedFieldsData(reviews, source, selectedFields, escapeFormula);
+  console.log(`[appendToSheetWithoutClear] headers:`, headers);
+  console.log(`[appendToSheetWithoutClear] 最初のデータ行:`, dataValues[0]);
 
   // 列数から最終列を計算
   const getColumnLetter = (num) => {
@@ -1829,7 +1832,26 @@ async function appendToSheetWithoutClear(token, spreadsheetId, sheetName, review
     }
   } else {
     // 既存データがある場合
-    // 1. ヘッダー行を上書き（書式も適用）
+    // 1. 既存のヘッダーを取得して比較
+    const existingHeaderResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!1:1`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const existingHeaderData = await existingHeaderResponse.json();
+    const existingHeaders = existingHeaderData.values?.[0] || [];
+
+    // ヘッダーが異なる場合は警告
+    const headersMatch = headers.length === existingHeaders.length &&
+      headers.every((h, i) => h === existingHeaders[i]);
+
+    if (!headersMatch && existingHeaders.length > 0) {
+      console.warn('[appendToSheetWithoutClear] 警告: 収集項目が変更されています。');
+      console.warn('  既存ヘッダー:', existingHeaders);
+      console.warn('  新しいヘッダー:', headers);
+      console.warn('  既存データとの整合性が取れなくなる可能性があります。');
+    }
+
+    // ヘッダー行を上書き（書式も適用）
     await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A1:${lastColumn}1?valueInputOption=USER_ENTERED`,
       {
@@ -1847,6 +1869,9 @@ async function appendToSheetWithoutClear(token, spreadsheetId, sheetName, review
     // 2. データを最後の行の次に追記
     const startRow = existingRows + 1;
     const endRow = startRow + dataValues.length - 1;
+
+    // 必要な行数を確保（行が足りない場合は自動追加）
+    await ensureSheetRows(token, spreadsheetId, sheetId, endRow);
 
     const appendResponse = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'!A${startRow}:${lastColumn}${endRow}?valueInputOption=USER_ENTERED`,
@@ -1941,6 +1966,54 @@ async function trimEmptyRows(token, spreadsheetId, sheetId, encodedSheetName) {
   } catch (e) {
     console.error('空白行削除エラー:', e);
     // エラーが発生しても処理を続行
+  }
+}
+
+/**
+ * シートの行数を確保（必要に応じて行を追加）
+ */
+async function ensureSheetRows(token, spreadsheetId, sheetId, requiredRows) {
+  try {
+    // シートの現在の行数を取得
+    const sheetPropsResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets(properties)`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const sheetPropsData = await sheetPropsResponse.json();
+    const sheetProps = sheetPropsData.sheets?.find(s => s.properties.sheetId === sheetId);
+    const currentRowCount = sheetProps?.properties?.gridProperties?.rowCount || 1000;
+
+    console.log(`[ensureSheetRows] 現在の行数: ${currentRowCount}, 必要な行数: ${requiredRows}`);
+
+    // 必要な行数が現在の行数より多い場合、行を追加
+    if (requiredRows > currentRowCount) {
+      const rowsToAdd = requiredRows - currentRowCount + 100; // 余裕を持って100行追加
+      console.log(`[ensureSheetRows] ${rowsToAdd}行を追加します`);
+
+      await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            requests: [{
+              appendDimension: {
+                sheetId: sheetId,
+                dimension: 'ROWS',
+                length: rowsToAdd
+              }
+            }]
+          })
+        }
+      );
+      console.log(`[ensureSheetRows] 行追加完了`);
+    }
+  } catch (e) {
+    console.error('[ensureSheetRows] エラー:', e);
+    throw e;
   }
 }
 

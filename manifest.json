@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "レビュー収集",
-  "version": "2.0.34",
+  "version": "2.0.35",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAo1d1u9c1bNW5ykBQ8Byc6M8x6DdBOk02MfMKWyxVOBrQyFbTr4tyDMXTKHKBBZqqEaEOmm4z7+GfLU3uSvSPDZUkem8+iB4+couYiSziZt0yzslJvGOg4tr5t7Wzd24ecxeAZ6HMm93H5jEFzzfPOMnGLJ82yU4jR1CTOsmMLVyDiz2+MFm3V+mM5cPBce72N3NanlZm+K9/laxd+Va/tdFqdZ2Sr+WDRG2d6M0chrBJmU89cQRrZIaJvH9c+KkO1NINMVhPTssQ7LkU1T1snNgFFOUzWG6BGcTgAmD/CWOtswMXz5i3BWLFvhHWZ0+TSl8/9IbIebK00AlnMZpWHwIDAQAB",
   "description": "楽天市場・Amazonの商品レビューを収集してスプレッドシートに保存またはCSVダウンロードします",
   "permissions": [
