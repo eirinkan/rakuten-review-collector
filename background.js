@@ -1298,9 +1298,9 @@ async function getSheetId(token, spreadsheetId, sheetName) {
  * データ行に書式を適用（白背景・黒文字・垂直中央揃え）
  * @param {string} source - 販路 ('rakuten' | 'amazon')
  */
-async function formatDataRows(token, spreadsheetId, sheetId, startRow, endRow, source = 'rakuten') {
-  // 販路別の列数
-  const columnCount = source === 'amazon' ? 16 : 22;
+async function formatDataRows(token, spreadsheetId, sheetId, startRow, endRow, source = 'rakuten', columnCount = null) {
+  // 列数が指定されていない場合は販路別のデフォルト値を使用
+  const cols = columnCount || (source === 'amazon' ? 16 : 22);
 
   const requests = [
     {
@@ -1310,7 +1310,7 @@ async function formatDataRows(token, spreadsheetId, sheetId, startRow, endRow, s
           startRowIndex: startRow,
           endRowIndex: endRow,
           startColumnIndex: 0,
-          endColumnIndex: columnCount  // 販路別の列数
+          endColumnIndex: cols
         },
         cell: {
           userEnteredFormat: {
@@ -1345,6 +1345,69 @@ async function formatDataRows(token, spreadsheetId, sheetId, startRow, endRow, s
       body: JSON.stringify({ requests })
     }
   );
+}
+
+/**
+ * 特定の列に「書式なしテキスト」を適用（日付自動変換を防止）
+ * @param {string} token - OAuth token
+ * @param {string} spreadsheetId - スプレッドシートID
+ * @param {number} sheetId - シートID
+ * @param {number} columnIndex - 列インデックス（0始まり）
+ * @param {number} startRow - 開始行インデックス（0始まり）
+ * @param {number} endRow - 終了行インデックス（0始まり、この行は含まない）
+ */
+async function formatColumnAsPlainText(token, spreadsheetId, sheetId, columnIndex, startRow, endRow) {
+  const requests = [
+    {
+      repeatCell: {
+        range: {
+          sheetId: sheetId,
+          startRowIndex: startRow,
+          endRowIndex: endRow,
+          startColumnIndex: columnIndex,
+          endColumnIndex: columnIndex + 1
+        },
+        cell: {
+          userEnteredFormat: {
+            numberFormat: {
+              type: 'TEXT'
+            }
+          }
+        },
+        fields: 'userEnteredFormat.numberFormat'
+      }
+    }
+  ];
+
+  await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ requests })
+    }
+  );
+}
+
+/**
+ * 選択されたフィールドから特定のフィールドの列インデックスを取得
+ * @param {Array} selectedFields - 選択されたフィールドのキー配列
+ * @param {string} fieldKey - 探すフィールドのキー
+ * @param {string} source - 販路 ('rakuten' | 'amazon')
+ * @returns {number} 列インデックス（見つからない場合は-1）
+ */
+function getFieldColumnIndex(selectedFields, fieldKey, source) {
+  const definitions = source === 'amazon' ? AMAZON_FIELD_DEFINITIONS : RAKUTEN_FIELD_DEFINITIONS;
+  const defaultFields = source === 'amazon' ? DEFAULT_AMAZON_FIELDS : DEFAULT_RAKUTEN_FIELDS;
+  const fields = selectedFields && selectedFields.length > 0 ? selectedFields : defaultFields;
+
+  // 選択されたフィールドのみをフィルタリング（定義順を維持）
+  const activeFields = definitions.filter(def => fields.includes(def.key)).map(def => def.key);
+
+  return activeFields.indexOf(fieldKey);
 }
 
 /**
@@ -1650,15 +1713,22 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 
 
   // 5. データ行に書式を適用（白背景・黒テキスト・垂直中央揃え）
   if (dataValues.length > 0) {
-    await formatDataRows(token, spreadsheetId, sheetId, 1, totalRows, source);
+    await formatDataRows(token, spreadsheetId, sheetId, 1, totalRows, source, columnCount);
   }
 
-  // 6. URL列にクリック可能なリンク書式を適用（販路別）
+  // 6. 評価列に「書式なしテキスト」を適用（日付自動変換を防止）
+  const ratingColumnIndex = getFieldColumnIndex(selectedFields, 'rating', source);
+  if (ratingColumnIndex >= 0) {
+    await formatColumnAsPlainText(token, spreadsheetId, sheetId, ratingColumnIndex, 1, totalRows);
+    console.log(`[appendToSheet] 評価列（${ratingColumnIndex}列目）に書式なしテキストを適用`);
+  }
+
+  // 7. URL列にクリック可能なリンク書式を適用（販路別）
   if (reviews.length > 0) {
     await formatUrlColumns(token, spreadsheetId, sheetId, reviews, source);
   }
 
-  // 7. C列（商品名）の列幅をデータに合わせて自動調整
+  // 8. C列（商品名）の列幅をデータに合わせて自動調整
   await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
     {
@@ -1682,10 +1752,10 @@ async function appendToSheet(token, spreadsheetId, sheetName, reviews, source = 
     }
   );
 
-  // 8. 空白行を削除（シートの行数を調整）
+  // 9. 空白行を削除（シートの行数を調整）
   await trimEmptyRows(token, spreadsheetId, sheetId, encodedSheetName);
 
-  // 9. シートの列数を設定した列数に調整（余分な列を削除）
+  // 10. シートの列数を設定した列数に調整（余分な列を削除）
   await adjustSheetColumns(token, spreadsheetId, sheetId, columnCount);
 }
 
@@ -1831,7 +1901,13 @@ async function appendToSheetWithoutClear(token, spreadsheetId, sheetName, review
     await formatHeaderRow(token, spreadsheetId, sheetId, source, columnCount);
     // データ行に書式を適用
     if (dataValues.length > 0) {
-      await formatDataRows(token, spreadsheetId, sheetId, 1, allValues.length, source);
+      await formatDataRows(token, spreadsheetId, sheetId, 1, allValues.length, source, columnCount);
+    }
+    // 評価列に「書式なしテキスト」を適用（日付自動変換を防止）
+    const ratingColumnIndexEmpty = getFieldColumnIndex(selectedFields, 'rating', source);
+    if (ratingColumnIndexEmpty >= 0) {
+      await formatColumnAsPlainText(token, spreadsheetId, sheetId, ratingColumnIndexEmpty, 1, allValues.length);
+      console.log(`[appendToSheetWithoutClear] 評価列（${ratingColumnIndexEmpty}列目）に書式なしテキストを適用`);
     }
   } else {
     // 既存データがある場合
@@ -1895,8 +1971,17 @@ async function appendToSheetWithoutClear(token, spreadsheetId, sheetName, review
 
     // 追記した行にデータ書式を適用
     if (dataValues.length > 0) {
-      await formatDataRows(token, spreadsheetId, sheetId, startRow - 1, endRow, source);
+      await formatDataRows(token, spreadsheetId, sheetId, startRow - 1, endRow, source, columnCount);
     }
+  }
+
+  // 評価列に「書式なしテキスト」を適用（日付自動変換を防止）
+  const ratingColumnIndex = getFieldColumnIndex(selectedFields, 'rating', source);
+  if (ratingColumnIndex >= 0) {
+    // シート全体の評価列に適用（ヘッダー除く）
+    const totalRows = existingRows + dataValues.length;
+    await formatColumnAsPlainText(token, spreadsheetId, sheetId, ratingColumnIndex, 1, totalRows);
+    console.log(`[appendToSheetWithoutClear] 評価列（${ratingColumnIndex}列目）に書式なしテキストを適用`);
   }
 
   // URL列にクリック可能なリンク書式を適用
