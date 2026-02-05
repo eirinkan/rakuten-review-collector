@@ -961,7 +961,8 @@ async function saveReviewsToSpreadsheet(completedItem, logPrefix) {
   const isAmazon = completedItem?.url?.includes('amazon.co.jp');
   const productId = extractProductIdFromUrl(completedItem?.url || '');
 
-  log(`${logPrefix} [DEBUG] バッチ保存開始 isAmazon=${isAmazon}`);
+  const sourceName = isAmazon ? 'Amazon' : '楽天';
+  log(`${logPrefix} スプレッドシートへの保存を開始（販路: ${sourceName}）`);
 
   // スプレッドシートURLを取得
   let spreadsheetUrl = completedItem?.spreadsheetUrl || null;
@@ -970,11 +971,10 @@ async function saveReviewsToSpreadsheet(completedItem, logPrefix) {
   if (!spreadsheetUrl && !isScheduled) {
     const syncSettings = await chrome.storage.sync.get(['spreadsheetUrl', 'amazonSpreadsheetUrl']);
     spreadsheetUrl = isAmazon ? syncSettings.amazonSpreadsheetUrl : syncSettings.spreadsheetUrl;
-    log(`${logPrefix} [DEBUG] 設定から取得 URL=${spreadsheetUrl ? '設定済み' : '未設定'}`);
   }
 
   if (!spreadsheetUrl) {
-    log(`${logPrefix} [DEBUG] スプレッドシートURL未設定で終了`, 'error');
+    log(`${logPrefix} スプレッドシートURLが未設定のため保存をスキップ`, 'error');
     return;
   }
 
@@ -983,10 +983,8 @@ async function saveReviewsToSpreadsheet(completedItem, logPrefix) {
     const stateResult = await chrome.storage.local.get(['collectionState']);
     const allReviews = stateResult.collectionState?.reviews || [];
 
-    log(`${logPrefix} [DEBUG] ローカルストレージのレビュー数: ${allReviews.length}件`);
-
     if (allReviews.length === 0) {
-      log(`${logPrefix} [DEBUG] レビュー0件で終了`);
+      log(`${logPrefix} 保存するレビューがありません`);
       return;
     }
 
@@ -996,10 +994,10 @@ async function saveReviewsToSpreadsheet(completedItem, logPrefix) {
       ? allReviews.filter(r => r.productId === productId)
       : allReviews;
 
-    log(`${logPrefix} [DEBUG] フィルタ後: ${productReviews.length}件`);
+    log(`${logPrefix} 保存対象: ${productReviews.length}件`);
 
     if (productReviews.length === 0) {
-      log(`${logPrefix} [DEBUG] フィルタ後0件で終了`);
+      log(`${logPrefix} この商品のレビューが見つかりません`);
       return;
     }
 

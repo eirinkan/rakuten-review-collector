@@ -285,8 +285,8 @@
     const expectedTotal = getTotalReviewCount();
     if (expectedTotal > 0) {
       chrome.storage.local.set({ expectedReviewTotal: expectedTotal });
-      // 総ページ数を計算（1ページ15件）
-      totalPages = Math.ceil(expectedTotal / 15);
+      // 総ページ数を計算（1ページ30件）
+      totalPages = Math.ceil(expectedTotal / 30);
       if (incrementalOnly && lastCollectedDate) {
         log(`差分収集を開始します（前回: ${lastCollectedDate}、全${expectedTotal.toLocaleString()}件中新着のみ）`);
       } else {
