@@ -213,8 +213,10 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   const url = tab.url || '';
 
   // Amazonページかどうか確認（商品ページまたはレビューページ）
-  const isAmazonProductPage = url.includes('amazon.co.jp/dp/') || url.includes('amazon.co.jp/gp/product/');
-  const isAmazonReviewPage = url.includes('amazon.co.jp/product-reviews/');
+  // 注意: Amazon商品URLは amazon.co.jp/商品名スラッグ/dp/ASIN の形式が多い
+  // amazon.co.jp/dp/ だけでなく /dp/ を含むかで判定する
+  const isAmazonProductPage = url.includes('amazon.co.jp') && (url.includes('/dp/') || url.includes('/gp/product/'));
+  const isAmazonReviewPage = url.includes('amazon.co.jp') && url.includes('/product-reviews/');
   const isAmazonPage = isAmazonProductPage || isAmazonReviewPage;
 
   if (!isAmazonPage) return;
