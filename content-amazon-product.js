@@ -139,13 +139,15 @@
   /**
    * サムネイルURLを高解像度URLに変換
    * Amazon画像URLのサイズ指定部分を大サイズに置換
+   * 例: ._AC_US100_.jpg → ._AC_SL1500_.jpg
+   *     ._SX300_.jpg → ._SL1500_.jpg
+   *     .__CR0,0,970,600_PT0_SX970_V1___.jpg → ._SL1500_.jpg
    */
   function toHighResUrl(url) {
     if (!url) return '';
-    // _SX38_SY50_CR,0,0,38,50_ のようなサイズ指定を _SL1500_ に置換
-    return url.replace(/\._[A-Z]{2}\d+_[A-Z]{2}\d+_[A-Z]{2},\d+,\d+,\d+,\d+_/, '._SL1500_')
-              .replace(/\._S[A-Z]\d+_/, '._SL1500_')
-              .replace(/\._[A-Z]{2}\d+_[A-Z]{2}\d+_/, '._SL1500_');
+    // ファイル名中の「.」から拡張子前の「.」までのサイズ指定部分を丸ごと置換
+    // 例: 51zKH8u9AlL._AC_US100_.jpg → 51zKH8u9AlL._SL1500_.jpg
+    return url.replace(/\._{1,2}[A-Z]{2}[^.]+_*\./, '._SL1500_.');
   }
 
   /**
