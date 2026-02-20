@@ -3209,30 +3209,47 @@ function forwardToAll(message) {
 }
 
 /**
- * ログをoptions.jsに直接送信
- * options.jsがインメモリ管理＋ストレージ保存＋DOM更新を一括担当
- * options.jsが開いていない場合のみストレージに直接保存（フォールバック）
+ * ログをストレージに保存
+ * バッファ方式: 複数のlog()呼び出しを200msごとにまとめて1回で書き込み
+ * → get→push→setの競合を構造的に排除
  */
+const _logBuffer = [];
+let _logFlushTimer = null;
+
 function log(text, type = '', category = 'review') {
   console.log(`[収集] ${text}`);
 
   const time = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const entry = { time, text, type };
+  const storageKey = category === 'product' ? 'productLogs' : 'logs';
 
-  // options.jsにログデータを直接送信（即時表示 + ストレージ保存はoptions.js側で実行）
-  chrome.runtime.sendMessage({
-    action: 'appendLog',
-    entry,
-    category
-  }).catch(() => {
-    // options.jsが開いていない場合、直接ストレージに保存（フォールバック）
-    const storageKey = category === 'product' ? 'productLogs' : 'logs';
+  _logBuffer.push({ entry: { time, text, type }, storageKey });
+
+  // バッファを200ms後にまとめてフラッシュ（初回即時実行）
+  if (!_logFlushTimer) {
+    _logFlushTimer = setTimeout(flushLogBuffer, 200);
+  }
+}
+
+function flushLogBuffer() {
+  _logFlushTimer = null;
+  if (_logBuffer.length === 0) return;
+
+  // バッファからエントリーを取り出し、カテゴリ別にグループ化
+  const entries = _logBuffer.splice(0);
+  const grouped = {};
+  for (const item of entries) {
+    if (!grouped[item.storageKey]) grouped[item.storageKey] = [];
+    grouped[item.storageKey].push(item.entry);
+  }
+
+  // カテゴリごとに1回だけget→push→set（競合なし）
+  for (const [storageKey, newEntries] of Object.entries(grouped)) {
     chrome.storage.local.get([storageKey], (result) => {
       const logs = result[storageKey] || [];
-      logs.push(entry);
+      logs.push(...newEntries);
       chrome.storage.local.set({ [storageKey]: logs });
     });
-  });
+  }
 }
 
 // 拡張機能インストール時の初期化

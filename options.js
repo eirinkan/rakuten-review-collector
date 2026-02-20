@@ -727,6 +727,58 @@ document.addEventListener('DOMContentLoaded', () => {
   let _memProductLogs = [];
   let _logSaveTimer = null;
 
+  // ===== 商品ログのストレージポーリング =====
+  // background.jsはストレージにログを書き込む。options.jsはポーリングで拾う。
+  // chrome.runtime.sendMessageは信頼できないため、ストレージ経由で同期する。
+  let _productLogPollTimer = null;
+  let _lastPolledProductLogCount = 0;
+  let _productCollectionActive = false;
+
+  function startProductLogPolling() {
+    stopProductLogPolling();
+    _productCollectionActive = true;
+    // 現在のストレージログ数を記録（ベースライン）
+    chrome.storage.local.get(['productLogs'], (result) => {
+      _lastPolledProductLogCount = (result.productLogs || []).length;
+      _productLogPollTimer = setInterval(pollProductLogs, 500);
+    });
+  }
+
+  function pollProductLogs() {
+    chrome.storage.local.get(['productLogs'], (result) => {
+      const storageLogs = result.productLogs || [];
+      if (storageLogs.length > _lastPolledProductLogCount) {
+        // background.jsが書いた新しいエントリーをメモリに追加
+        const newEntries = storageLogs.slice(_lastPolledProductLogCount);
+        _memProductLogs.push(...newEntries);
+        _lastPolledProductLogCount = storageLogs.length;
+        renderLogs('product');
+      }
+    });
+  }
+
+  function stopProductLogPolling() {
+    _productCollectionActive = false;
+    if (_productLogPollTimer) {
+      clearInterval(_productLogPollTimer);
+      _productLogPollTimer = null;
+    }
+  }
+
+  // 最終同期: ストレージから残りのログを取得
+  function finalSyncProductLogs(callback) {
+    chrome.storage.local.get(['productLogs'], (result) => {
+      const storageLogs = result.productLogs || [];
+      if (storageLogs.length > _lastPolledProductLogCount) {
+        const newEntries = storageLogs.slice(_lastPolledProductLogCount);
+        _memProductLogs.push(...newEntries);
+        _lastPolledProductLogCount = storageLogs.length;
+        renderLogs('product');
+      }
+      if (callback) callback();
+    });
+  }
+
   // ページ読み込み時にストレージからメモリに復元
   function initLogsFromStorage() {
     chrome.storage.local.get(['logs', 'productLogs'], (result) => {
@@ -777,13 +829,15 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ストレージ保存（デバウンス: 最後の書き込みから300ms後に1回だけ実行）
+  // 商品収集中はproductLogsを書かない（background.jsが管轄するため競合防止）
   function scheduleLogSave() {
     if (_logSaveTimer) clearTimeout(_logSaveTimer);
     _logSaveTimer = setTimeout(() => {
-      chrome.storage.local.set({
-        logs: _memReviewLogs,
-        productLogs: _memProductLogs
-      });
+      const data = { logs: _memReviewLogs };
+      if (!_productCollectionActive) {
+        data.productLogs = _memProductLogs;
+      }
+      chrome.storage.local.set(data);
     }, 300);
   }
 
@@ -2628,12 +2682,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const asins = [...batchProductQueue];
 
+    // ローカルで即時ログ表示（ストレージ経由ではなく直接メモリに追加）
+    addLog(`${asins.length}件の商品情報収集を開始します...`, 'info', 'product');
+
+    // ストレージポーリング開始（background.jsのログをリアルタイムで拾う）
+    startProductLogPolling();
+
     // UIを更新（ボタン切り替え）
     if (startBatchProductRunBtn) startBatchProductRunBtn.style.display = 'none';
     if (cancelBatchProductBtn) cancelBatchProductBtn.style.display = 'block';
     if (batchProductStatus) batchProductStatus.textContent = '';
 
-    // バックグラウンドに送信（ログはbackground.jsが出力する）
+    // バックグラウンドに送信（ログはbackground.jsがストレージに書き込む）
     chrome.runtime.sendMessage({
       action: 'startBatchProductCollection',
       asins
@@ -2644,6 +2704,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function cancelBatchProductCollection() {
     chrome.runtime.sendMessage({ action: 'cancelBatchProductCollection' });
 
+    // ポーリング停止
+    stopProductLogPolling();
+
     // 即座にボタンを戻す
     if (startBatchProductRunBtn) {
       startBatchProductRunBtn.style.display = 'block';
@@ -2651,11 +2714,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (cancelBatchProductBtn) cancelBatchProductBtn.style.display = 'none';
 
-    // ログに中止メッセージを出力
-    addLog('収集を中止しました', 'warning', 'product');
+    // 最終同期してから中止メッセージを追加
+    finalSyncProductLogs(() => {
+      addLog('収集を中止しました', 'warning', 'product');
+    });
   }
 
-  // 一括収集の進捗更新（ログはbackground.jsが出力済み、ここではUI状態の管理のみ）
+  // 一括収集の進捗更新（ログはbackground.jsがストレージに書き込み、ポーリングで表示済み）
   function updateBatchProductProgress(progress) {
     if (!progress) return;
 
@@ -2663,6 +2728,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 完了時のUI更新
     if (!isRunning) {
+      // ポーリング停止
+      stopProductLogPolling();
+
       if (startBatchProductRunBtn) {
         startBatchProductRunBtn.style.display = 'block';
         startBatchProductRunBtn.disabled = batchProductQueue.length === 0;
@@ -2677,6 +2745,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       }
       renderBatchProductQueue();
+
+      // 最終同期（background.jsの完了ログを拾う。バッファフラッシュ待ちのため少し遅延）
+      setTimeout(() => {
+        finalSyncProductLogs();
+      }, 500);
     }
   }
 
