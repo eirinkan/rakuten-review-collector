@@ -3211,23 +3211,31 @@ function forwardToAll(message) {
 /**
  * ログを保存＆転送
  * ストレージに直接保存し、options.jsにも通知して表示を更新
+ * キュー方式で書き込み競合を防止（複数のlog()が同時に呼ばれてもデータが消えない）
  */
+let _logWriteChain = Promise.resolve();
+
 function log(text, type = '', category = 'review') {
   console.log(`[収集] ${text}`);
 
   const time = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const storageKey = category === 'product' ? 'productLogs' : 'logs';
 
-  chrome.storage.local.get([storageKey], (result) => {
-    const logs = result[storageKey] || [];
-    logs.push({ time, text, type });
-    // ストレージ書き込み完了後にoptions.jsへ通知（表示更新用）
-    chrome.storage.local.set({ [storageKey]: logs }, () => {
-      forwardToAll({
-        action: 'logUpdated',
-        category: category
+  // 前の書き込みが完了してから次を実行（get→push→setの競合を防止）
+  _logWriteChain = _logWriteChain.then(() => new Promise((resolve) => {
+    chrome.storage.local.get([storageKey], (result) => {
+      const logs = result[storageKey] || [];
+      logs.push({ time, text, type });
+      chrome.storage.local.set({ [storageKey]: logs }, () => {
+        forwardToAll({
+          action: 'logUpdated',
+          category: category
+        });
+        resolve();
       });
     });
+  })).catch((err) => {
+    console.error('[収集] ログ書き込みエラー:', err);
   });
 }
 

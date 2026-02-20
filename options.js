@@ -414,6 +414,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // バックグラウンドからのメッセージ
     chrome.runtime.onMessage.addListener(handleMessage);
 
+    // ストレージ変更を監視（logUpdatedメッセージが届かない場合のバックアップ）
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local') return;
+      if (changes.productLogs) loadLogs('product');
+      if (changes.logs) loadLogs('review');
+    });
+
     // 定期更新
     setInterval(() => {
       loadState();
