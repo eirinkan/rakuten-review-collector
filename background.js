@@ -3035,73 +3035,116 @@ async function fetchRankingProducts(url, count) {
 }
 
 /**
- * 楽天ランキングから商品を取得
- * Service WorkerではDOMParserが使えないため、正規表現でパース
+ * 楽天ランキングHTMLから商品リストを抽出（キュー操作なし）
+ * @returns {Array} [{url, title, source: 'rakuten'}]
+ */
+async function parseRakutenRankingPage(url, count) {
+  const response = await fetch(url);
+  const html = await response.text();
+
+  const products = [];
+  const seenUrls = new Set();
+
+  const linkPattern = /href="(https?:\/\/item\.rakuten\.co\.jp\/[^"]+)"/g;
+  let match;
+
+  while ((match = linkPattern.exec(html)) !== null && products.length < count) {
+    try {
+      const urlObj = new URL(match[1]);
+      const cleanUrl = `${urlObj.origin}${urlObj.pathname}`;
+      if (seenUrls.has(cleanUrl)) continue;
+      seenUrls.add(cleanUrl);
+
+      const pathMatch = cleanUrl.match(/item\.rakuten\.co\.jp\/([^\/]+)\/([^\/]+)/);
+      const title = pathMatch ? `${pathMatch[1]} - ${pathMatch[2]}` : '商品';
+
+      products.push({
+        url: cleanUrl,
+        title: title.substring(0, 100),
+        addedAt: new Date().toISOString(),
+        source: 'rakuten'
+      });
+    } catch (e) {
+      continue;
+    }
+  }
+
+  return products;
+}
+
+/**
+ * AmazonランキングHTMLからASIN/商品リストを抽出（キュー操作なし）
+ * @returns {Array} [{url, title, asin, source: 'amazon'}]
+ */
+async function parseAmazonRankingPage(url, count) {
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+      'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8'
+    }
+  });
+  const html = await response.text();
+
+  const products = [];
+  const seenAsins = new Set();
+
+  // data-asin属性からASINを抽出
+  const asinPattern = /data-asin="([A-Z0-9]{10})"/g;
+  let match;
+  while ((match = asinPattern.exec(html)) !== null && products.length < count) {
+    const asin = match[1].toUpperCase();
+    if (!asin || seenAsins.has(asin)) continue;
+    seenAsins.add(asin);
+    products.push({
+      url: `https://www.amazon.co.jp/dp/${asin}`,
+      title: asin,
+      asin,
+      addedAt: new Date().toISOString(),
+      source: 'amazon'
+    });
+  }
+
+  // フォールバック: /dp/ASINパターン
+  if (products.length < count) {
+    const dpPattern = /\/dp\/([A-Z0-9]{10})/gi;
+    while ((match = dpPattern.exec(html)) !== null && products.length < count) {
+      const asin = match[1].toUpperCase();
+      if (!asin || seenAsins.has(asin)) continue;
+      seenAsins.add(asin);
+      products.push({
+        url: `https://www.amazon.co.jp/dp/${asin}`,
+        title: asin,
+        asin,
+        addedAt: new Date().toISOString(),
+        source: 'amazon'
+      });
+    }
+  }
+
+  return products;
+}
+
+/**
+ * 楽天ランキングからレビューキューに追加
  */
 async function fetchRakutenRankingProducts(url, count) {
   try {
-    // ランキングページをfetchで取得
-    const response = await fetch(url);
-    const html = await response.text();
-
-    const products = [];
-    const seenUrls = new Set();
-
-    // 正規表現でitem.rakuten.co.jpへのリンクを抽出
-    // パターン: href="https://item.rakuten.co.jp/ショップ名/商品ID/"
-    const linkPattern = /href="(https?:\/\/item\.rakuten\.co\.jp\/[^"]+)"/g;
-    let match;
-
-    while ((match = linkPattern.exec(html)) !== null && products.length < count) {
-      let href = match[1];
-
-      // クエリパラメータを除去してURLを正規化
-      try {
-        const urlObj = new URL(href);
-        const cleanUrl = `${urlObj.origin}${urlObj.pathname}`;
-
-        // 重複チェック
-        if (seenUrls.has(cleanUrl)) continue;
-        seenUrls.add(cleanUrl);
-
-        // URLからショップ名と商品IDを取得してタイトルにする
-        const pathMatch = cleanUrl.match(/item\.rakuten\.co\.jp\/([^\/]+)\/([^\/]+)/);
-        let title = '商品';
-        if (pathMatch) {
-          title = `${pathMatch[1]} - ${pathMatch[2]}`;
-        }
-
-        products.push({
-          url: cleanUrl,
-          title: title.substring(0, 100),
-          addedAt: new Date().toISOString(),
-          source: 'rakuten'
-        });
-      } catch (e) {
-        // URL解析エラーは無視
-        continue;
-      }
-    }
-
+    const products = await parseRakutenRankingPage(url, count);
     if (products.length === 0) {
       return { success: false, error: '商品が見つかりませんでした' };
     }
 
-    // キューに追加
     const result = await chrome.storage.local.get(['queue']);
     const queue = result.queue || [];
-
     let addedCount = 0;
     for (const product of products) {
-      const exists = queue.some(item => item.url === product.url);
-      if (!exists) {
+      if (!queue.some(item => item.url === product.url)) {
         queue.push(product);
         addedCount++;
       }
     }
-
     await chrome.storage.local.set({ queue });
-
     forwardToAll({ action: 'queueUpdated' });
 
     if (addedCount > 0) {
@@ -3109,7 +3152,6 @@ async function fetchRakutenRankingProducts(url, count) {
     } else {
       log('追加する商品がありません（全て重複）', 'info');
     }
-
     return { success: true, addedCount };
   } catch (error) {
     log(`楽天ランキング取得エラー: ${error.message}`, 'error');
@@ -3118,86 +3160,25 @@ async function fetchRakutenRankingProducts(url, count) {
 }
 
 /**
- * Amazonランキングから商品を取得
- * data-asin属性からASINを抽出
+ * Amazonランキングからレビューキューに追加
  */
 async function fetchAmazonRankingProducts(url, count) {
   try {
-    // ランキングページをfetchで取得
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8'
-      }
-    });
-    const html = await response.text();
-
-    const products = [];
-    const seenAsins = new Set();
-
-    // 方法1: data-asin属性からASINを抽出
-    // パターン: data-asin="B0XXXXXXXX"
-    const asinPattern = /data-asin="([A-Z0-9]{10})"/g;
-    let match;
-
-    while ((match = asinPattern.exec(html)) !== null && products.length < count) {
-      const asin = match[1].toUpperCase();
-
-      // 空のASINや重複をスキップ
-      if (!asin || seenAsins.has(asin)) continue;
-      seenAsins.add(asin);
-
-      // 商品URLを構築
-      const productUrl = `https://www.amazon.co.jp/dp/${asin}`;
-
-      products.push({
-        url: productUrl,
-        title: asin,
-        addedAt: new Date().toISOString(),
-        source: 'amazon'
-      });
-    }
-
-    // 方法2: /dp/ASINパターンからも抽出（フォールバック）
-    if (products.length < count) {
-      const dpPattern = /\/dp\/([A-Z0-9]{10})/gi;
-      while ((match = dpPattern.exec(html)) !== null && products.length < count) {
-        const asin = match[1].toUpperCase();
-
-        if (!asin || seenAsins.has(asin)) continue;
-        seenAsins.add(asin);
-
-        const productUrl = `https://www.amazon.co.jp/dp/${asin}`;
-
-        products.push({
-          url: productUrl,
-          title: asin,
-          addedAt: new Date().toISOString(),
-          source: 'amazon'
-        });
-      }
-    }
-
+    const products = await parseAmazonRankingPage(url, count);
     if (products.length === 0) {
       return { success: false, error: '商品が見つかりませんでした' };
     }
 
-    // キューに追加
     const result = await chrome.storage.local.get(['queue']);
     const queue = result.queue || [];
-
     let addedCount = 0;
     for (const product of products) {
-      const exists = queue.some(item => item.url === product.url);
-      if (!exists) {
+      if (!queue.some(item => item.url === product.url)) {
         queue.push(product);
         addedCount++;
       }
     }
-
     await chrome.storage.local.set({ queue });
-
     forwardToAll({ action: 'queueUpdated' });
 
     if (addedCount > 0) {
@@ -3205,7 +3186,6 @@ async function fetchAmazonRankingProducts(url, count) {
     } else {
       log('追加する商品がありません（全て重複）', 'info');
     }
-
     return { success: true, addedCount };
   } catch (error) {
     log(`Amazonランキング取得エラー: ${error.message}`, 'error');
@@ -3239,52 +3219,20 @@ async function addRankingToProductQueue(url, count) {
 }
 
 /**
- * Amazonランキングから商品キューにASINを追加
+ * Amazonランキングから商品キュー(batchProductQueue)にASINを追加
+ * ※ レビューキュー(queue)には触れない
  */
 async function addAmazonRankingToProductQueue(url, count) {
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-      'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8'
-    }
-  });
-  const html = await response.text();
-
-  const asins = [];
-  const seenAsins = new Set();
-
-  // data-asin属性からASINを抽出
-  const asinPattern = /data-asin="([A-Z0-9]{10})"/g;
-  let match;
-  while ((match = asinPattern.exec(html)) !== null && asins.length < count) {
-    const asin = match[1].toUpperCase();
-    if (!asin || seenAsins.has(asin)) continue;
-    seenAsins.add(asin);
-    asins.push(asin);
-  }
-
-  // フォールバック: /dp/ASINパターン
-  if (asins.length < count) {
-    const dpPattern = /\/dp\/([A-Z0-9]{10})/gi;
-    while ((match = dpPattern.exec(html)) !== null && asins.length < count) {
-      const asin = match[1].toUpperCase();
-      if (!asin || seenAsins.has(asin)) continue;
-      seenAsins.add(asin);
-      asins.push(asin);
-    }
-  }
-
-  if (asins.length === 0) {
+  const products = await parseAmazonRankingPage(url, count);
+  if (products.length === 0) {
     return { success: false, error: '商品が見つかりませんでした' };
   }
 
-  // batchProductQueueに追加（重複排除）
   const result = await chrome.storage.local.get(['batchProductQueue']);
   const queue = result.batchProductQueue || [];
-
   let addedCount = 0;
-  for (const asin of asins) {
+  for (const product of products) {
+    const asin = product.asin;
     if (!queue.includes(asin)) {
       queue.push(asin);
       addedCount++;
@@ -3304,41 +3252,28 @@ async function addAmazonRankingToProductQueue(url, count) {
 }
 
 /**
- * 楽天ランキングから商品キューにASINを追加
- * 楽天商品URLからAmazon ASINを取得する方法はないため、
- * 商品URLを使ってfetchRankingProducts経由で商品情報を取得し、
- * レビューキューと同じ形式でbatchProductQueueに追加する（楽天URLを商品キューに追加）
+ * 楽天ランキングから商品キュー(batchProductQueue)に楽天URLを追加
+ * ※ レビューキュー(queue)には触れない
  */
 async function addRakutenRankingToProductQueue(url, count) {
-  // 楽天ランキングから商品URLを取得（既存のfetchRakutenRankingProducts関数を活用）
-  const rankingResult = await fetchRakutenRankingProducts(url, count);
-  if (!rankingResult.success || rankingResult.addedCount === 0) {
-    return { success: false, error: rankingResult.error || '商品が見つかりませんでした' };
+  const products = await parseRakutenRankingPage(url, count);
+  if (products.length === 0) {
+    return { success: false, error: '商品が見つかりませんでした' };
   }
 
-  // レビューキュー（queue）から追加されたばかりの楽天商品URLを取得
-  const queueResult = await chrome.storage.local.get(['queue', 'batchProductQueue']);
-  const reviewQueue = queueResult.queue || [];
-  const productQueue = queueResult.batchProductQueue || [];
-
-  // 楽天レビューキューの商品URLからASINは取れないが、URLベースで商品キューに追加
-  // 楽天商品のURLを商品キューにも追加する（URLとして格納）
-  const existingUrls = new Set(productQueue.map(item =>
-    typeof item === 'string' ? item : (item.url || item)
-  ));
-
+  const result = await chrome.storage.local.get(['batchProductQueue']);
+  const queue = result.batchProductQueue || [];
+  const existingUrls = new Set(queue);
   let addedCount = 0;
-  const rakutenItems = reviewQueue.filter(item => item.source === 'rakuten');
-  for (const item of rakutenItems) {
-    if (!existingUrls.has(item.url)) {
-      productQueue.push(item.url);
-      existingUrls.add(item.url);
+  for (const product of products) {
+    if (!existingUrls.has(product.url)) {
+      queue.push(product.url);
+      existingUrls.add(product.url);
       addedCount++;
-      if (addedCount >= count) break;
     }
   }
 
-  await chrome.storage.local.set({ batchProductQueue: productQueue });
+  await chrome.storage.local.set({ batchProductQueue: queue });
   forwardToAll({ action: 'batchProductQueueUpdated' });
 
   if (addedCount > 0) {
@@ -3347,7 +3282,7 @@ async function addRakutenRankingToProductQueue(url, count) {
     log('追加する商品がありません（全て重複）', 'info', 'product');
   }
 
-  return { success: true, addedCount, totalCount: productQueue.length };
+  return { success: true, addedCount, totalCount: queue.length };
 }
 
 /**
