@@ -201,14 +201,21 @@
     const originalPrice = origEl ? origEl.textContent.trim().replace(/円$/, '') : '';
 
     // レビュー情報
-    // 新UIのCSS moduleセレクタ
-    const scoreEl = document.querySelector('[class*="review-score--"]');
-    let totalEl = document.querySelector('[class*="review-total--"]');
+    // 1. itemprop（新旧UI共通・最も確実）
+    const ratingMeta = document.querySelector('meta[itemprop="ratingValue"]');
+    const reviewCountMeta = document.querySelector('meta[itemprop="reviewCount"]');
+    // 2. 新UIのCSS moduleセレクタ
+    const scoreEl = ratingMeta?.content
+      ? { textContent: ratingMeta.content }
+      : document.querySelector('[class*="review-score--"]');
+    let totalEl = reviewCountMeta?.content
+      ? { textContent: reviewCountMeta.content + '件' }
+      : document.querySelector('[class*="review-total--"]');
     // フォールバック: 旧UI (.normal-reserve-review内の件数リンク)
     if (!totalEl) {
-      const reviewLink = document.querySelector('.normal-reserve-review a[aria-label]');
+      const reviewLink = document.querySelector('.normal-reserve-review a:not([aria-label="レビューを書く"])');
       if (reviewLink) {
-        totalEl = { textContent: reviewLink.getAttribute('aria-label') };
+        totalEl = { textContent: reviewLink.textContent.trim() };
       }
     }
     if (!totalEl) {
@@ -241,7 +248,9 @@
     const varButtons = document.querySelectorAll('[class*="button-multiline--"]');
     const variations = Array.from(varButtons)
       .map(b => b.textContent.trim().replace(/\s+/g, ' '))
-      .filter(t => t.length > 0 && t.length < 50 && t !== '―');
+      .filter(t => t.length > 0 && t.length < 50 && t !== '―')
+      // 末尾の価格パターンを除去（例: "【XL】27-30cm2,480円" → "【XL】27-30cm"）
+      .map(t => t.replace(/\d{1,3}(,\d{3})*円$/, '').trim());
 
     // 商品説明テキスト
     const descEl = document.querySelector('.item_desc');

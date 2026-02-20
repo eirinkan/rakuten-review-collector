@@ -42,7 +42,13 @@
     "https://review.rakuten.co.jp/*",
     "https://item.rakuten.co.jp/*",
     "https://ranking.rakuten.co.jp/*",
+    "https://image.rakuten.co.jp/*",
+    "https://shop.r10s.jp/*",
+    "https://tshop.r10s.jp/*",
+    "https://thumbnail.image.rakuten.co.jp/*",
     "https://www.amazon.co.jp/*",
+    "https://images-na.ssl-images-amazon.com/*",
+    "https://m.media-amazon.com/*",
     "https://script.google.com/*",
     "https://sheets.googleapis.com/*",
     "https://www.googleapis.com/*"

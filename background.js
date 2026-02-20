@@ -3616,10 +3616,16 @@ let batchProductCancelled = false;
  */
 async function fetchImageAsBase64(imageUrl) {
   try {
+    // 画像URLのドメインに応じたRefererを設定
+    let referer = 'https://www.amazon.co.jp/';
+    if (imageUrl.includes('rakuten.co.jp') || imageUrl.includes('r10s.jp')) {
+      referer = 'https://item.rakuten.co.jp/';
+    }
+
     const response = await fetch(imageUrl, {
       headers: {
         'Accept': 'image/*',
-        'Referer': 'https://www.amazon.co.jp/'
+        'Referer': referer
       }
     });
 
