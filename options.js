@@ -2698,6 +2698,17 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.runtime.sendMessage({
       action: 'startBatchProductCollection',
       asins
+    }, (response) => {
+      // エラー時（設定未完了、認証失敗など）はUI・ポーリングを戻す
+      if (response && !response.success) {
+        stopProductLogPolling();
+        addLog(`エラー: ${response.error}`, 'error', 'product');
+        if (startBatchProductRunBtn) {
+          startBatchProductRunBtn.style.display = 'block';
+          startBatchProductRunBtn.disabled = false;
+        }
+        if (cancelBatchProductBtn) cancelBatchProductBtn.style.display = 'none';
+      }
     });
   }
 
