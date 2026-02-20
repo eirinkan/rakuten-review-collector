@@ -292,18 +292,19 @@
       // 末尾の価格パターンを除去（例: "【XL】27-30cm2,480円" → "【XL】27-30cm"）
       .map(t => t.replace(/\d{1,3}(,\d{3})*円$/, '').trim());
 
-    // 商品説明テキスト（.item_desc → og:description のフォールバック）
-    const descEl = document.querySelector('.item_desc');
-    let description = '';
-    if (descEl) {
-      // style要素とscript要素を除外したクローンを作成してテキスト取得
-      const clone = descEl.cloneNode(true);
+    // 商品説明テキスト（.item_desc → .sale_desc → og:description のフォールバック）
+    function extractDescText(container) {
+      if (!container) return '';
+      const clone = container.cloneNode(true);
       clone.querySelectorAll('style, script').forEach(el => el.remove());
-      description = clone.textContent.trim()
-        // HTMLコメント内のCSS（<!--...-->）が残る場合の除去
+      return clone.textContent.trim()
         .replace(/<!--[\s\S]*?-->/g, '')
         .replace(/\s{3,}/g, '\n')
         .trim();
+    }
+    let description = extractDescText(document.querySelector('.item_desc'));
+    if (!description) {
+      description = extractDescText(document.querySelector('.sale_desc'));
     }
     if (!description) {
       const ogDesc = document.querySelector('meta[property="og:description"]');
@@ -330,25 +331,15 @@
       seen.add(url);
     }
 
-    // 2. ショップの商品画像（複数CDNドメイン対応）
-    // image.rakuten.co.jp/{shop}/cabinet/、tshop.r10s.jp/{shop}/cabinet/、shop.r10s.jp/{shop}/cabinet/
-    // rakuten.ne.jp/gold/{shop}/ （ショップ独自のLP画像配置）
-    document.querySelectorAll('img').forEach(img => {
+    // 2. ギャラリー画像（商品画像ギャラリーコンテナ内のみ）
+    // ページ上部の商品画像スライダー内の画像だけを収集（おすすめ・ランキング等を除外）
+    document.querySelectorAll('[class*="r-image--"] img, [class*="image-wrapper--"] img').forEach(img => {
       const src = img.src || '';
       if (!src || src.includes('data:image')) return;
-      const isShopCdn = (
-        src.includes(`image.rakuten.co.jp/${shopSlug}/cabinet/`) ||
-        src.includes(`tshop.r10s.jp/${shopSlug}/cabinet/`) ||
-        src.includes(`shop.r10s.jp/${shopSlug}/cabinet/`) ||
-        src.includes(`rakuten.ne.jp/gold/${shopSlug}/`)
-      );
-      if (!isShopCdn) return;
       const url = toHighResUrl(src);
       if (seen.has(url)) return;
-      // naturalWidthが0の場合はロード前の可能性があるため、サイズチェックを緩和
-      // 1x1のトラッキングピクセルのみ除外
       if (img.naturalWidth > 0 && img.naturalWidth <= 2) return;
-      images.push({ url, type: 'product' });
+      images.push({ url, type: 'gallery' });
       seen.add(url);
     });
 
