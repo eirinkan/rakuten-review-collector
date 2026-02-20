@@ -3664,8 +3664,14 @@ async function fetchImageAsBase64(imageUrl) {
  */
 async function fetchMediaAsBlob(mediaUrl) {
   try {
+    // blob: URLはbackground.jsからアクセスできない
+    if (mediaUrl.startsWith('blob:')) {
+      console.warn(`[商品情報] blob URLはダウンロード不可: ${mediaUrl.substring(0, 80)}`);
+      return null;
+    }
+
     let referer = 'https://www.amazon.co.jp/';
-    if (mediaUrl.includes('rakuten.co.jp') || mediaUrl.includes('r10s.jp')) {
+    if (mediaUrl.includes('rakuten.co.jp') || mediaUrl.includes('r10s.jp') || mediaUrl.includes('rakuten.ne.jp')) {
       referer = 'https://item.rakuten.co.jp/';
     }
 
@@ -4122,6 +4128,34 @@ async function collectAndSaveProductInfo(tabId) {
           originalUrl: video.url,
           saved: false,
           reason: 'HLSストリーミングのためダウンロード不可',
+          thumbnailFileName: thumbFileName,
+          thumbnailDriveFileId: thumbDriveId
+        });
+        continue;
+      }
+
+      // blob: URLはダウンロード不可
+      if (video.url.startsWith('blob:')) {
+        let thumbFileName = null;
+        let thumbDriveId = null;
+        if (videoThumbs[videoOrder - 1]) {
+          const thumbResult = await fetchMediaAsBlob(videoThumbs[videoOrder - 1]);
+          if (thumbResult) {
+            thumbFileName = `video_${String(videoOrder).padStart(2, '0')}_thumb.jpg`;
+            try {
+              const thumbUploaded = await uploadMediaToDrive(token, productFolderId, thumbFileName, thumbResult.blob, thumbResult.mimeType);
+              thumbDriveId = thumbUploaded.id;
+            } catch (e) {
+              console.warn(`[商品情報] 動画サムネイルアップロード失敗: ${e.message}`);
+            }
+          }
+        }
+        videoMetadata.push({
+          order: videoOrder,
+          description: '商品紹介動画',
+          originalUrl: video.url,
+          saved: false,
+          reason: 'ストリーミング配信のためダウンロード不可',
           thumbnailFileName: thumbFileName,
           thumbnailDriveFileId: thumbDriveId
         });

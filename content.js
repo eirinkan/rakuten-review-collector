@@ -294,7 +294,17 @@
 
     // 商品説明テキスト（.item_desc → og:description のフォールバック）
     const descEl = document.querySelector('.item_desc');
-    let description = descEl ? descEl.textContent.trim() : '';
+    let description = '';
+    if (descEl) {
+      // style要素とscript要素を除外したクローンを作成してテキスト取得
+      const clone = descEl.cloneNode(true);
+      clone.querySelectorAll('style, script').forEach(el => el.remove());
+      description = clone.textContent.trim()
+        // HTMLコメント内のCSS（<!--...-->）が残る場合の除去
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/\s{3,}/g, '\n')
+        .trim();
+    }
     if (!description) {
       const ogDesc = document.querySelector('meta[property="og:description"]');
       if (ogDesc?.content) description = ogDesc.content.trim();
@@ -322,13 +332,15 @@
 
     // 2. ショップの商品画像（複数CDNドメイン対応）
     // image.rakuten.co.jp/{shop}/cabinet/、tshop.r10s.jp/{shop}/cabinet/、shop.r10s.jp/{shop}/cabinet/
+    // rakuten.ne.jp/gold/{shop}/ （ショップ独自のLP画像配置）
     document.querySelectorAll('img').forEach(img => {
       const src = img.src || '';
       if (!src || src.includes('data:image')) return;
       const isShopCdn = (
         src.includes(`image.rakuten.co.jp/${shopSlug}/cabinet/`) ||
         src.includes(`tshop.r10s.jp/${shopSlug}/cabinet/`) ||
-        src.includes(`shop.r10s.jp/${shopSlug}/cabinet/`)
+        src.includes(`shop.r10s.jp/${shopSlug}/cabinet/`) ||
+        src.includes(`rakuten.ne.jp/gold/${shopSlug}/`)
       );
       if (!isShopCdn) return;
       const url = toHighResUrl(src);
@@ -340,9 +352,10 @@
       seen.add(url);
     });
 
-    // 3. item_desc内の画像
-    if (descEl) {
-      descEl.querySelectorAll('img').forEach(img => {
+    // 3. 商品説明欄の画像（.item_desc / .sale_desc）
+    const descContainers = document.querySelectorAll('.item_desc, .sale_desc');
+    descContainers.forEach(container => {
+      container.querySelectorAll('img').forEach(img => {
         const src = img.src || '';
         if (!src || src.includes('data:image')) return;
         const url = toHighResUrl(src);
@@ -351,7 +364,7 @@
         images.push({ url, type: 'description' });
         seen.add(url);
       });
-    }
+    });
 
     // 送料情報
     let shipping = '';
@@ -372,16 +385,29 @@
       }
     });
 
-    // item_desc内の動画
-    if (descEl) {
-      descEl.querySelectorAll('video source, video[src]').forEach(el => {
-        const src = el.src || el.getAttribute('src') || '';
-        if (src && !videoSeen.has(src)) {
-          videos.push({ url: src, type: src.includes('.m3u8') ? 'hls' : 'mp4', source: 'description' });
-          videoSeen.add(src);
+    // 商品説明欄内の動画（.item_desc / .sale_desc）
+    document.querySelectorAll('.item_desc video source, .item_desc video[src], .sale_desc video source, .sale_desc video[src]').forEach(el => {
+      const src = el.src || el.getAttribute('src') || '';
+      if (src && !videoSeen.has(src)) {
+        videos.push({ url: src, type: src.includes('.m3u8') ? 'hls' : 'mp4', source: 'description' });
+        videoSeen.add(src);
+      }
+    });
+
+    // スクリプトタグ内のMP4 URLを探す（blob: URLの代わりに実際のURLを取得）
+    document.querySelectorAll('script:not([src])').forEach(script => {
+      const text = script.textContent || '';
+      if (text.length > 500000) return;
+      const mp4Regex = /https?:\/\/[^"'\s,]+\.mp4[^"'\s,]*/g;
+      let match;
+      while ((match = mp4Regex.exec(text)) !== null) {
+        const url = match[0];
+        if (!videoSeen.has(url)) {
+          videos.push({ url, type: 'mp4', source: 'script' });
+          videoSeen.add(url);
         }
-      });
-    }
+      }
+    });
 
     // 動画サムネイル（楽天は動画ボタン付きの画像がある場合）
     const videoThumbnails = [];
