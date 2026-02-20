@@ -420,6 +420,15 @@
   }
 
   /**
+   * 要素内のテキストをscript/style要素を除外して取得
+   */
+  function getCleanText(element) {
+    const clone = element.cloneNode(true);
+    clone.querySelectorAll('script, style').forEach(el => el.remove());
+    return clone.textContent.trim().replace(/\s+/g, ' ');
+  }
+
+  /**
    * 技術仕様を収集
    */
   function collectTechSpecs() {
@@ -434,8 +443,8 @@
         const th = row.querySelector('th');
         const td = row.querySelector('td');
         if (th && td) {
-          const key = th.textContent.trim().replace(/\s+/g, ' ');
-          const value = td.textContent.trim().replace(/\s+/g, ' ');
+          const key = getCleanText(th);
+          const value = getCleanText(td);
           if (key && value) {
             specs[key] = value;
           }
@@ -449,7 +458,7 @@
       if (detailContent) {
         const items = detailContent.querySelectorAll('.a-list-item, li');
         for (const item of items) {
-          const text = item.textContent.trim().replace(/\s+/g, ' ');
+          const text = getCleanText(item);
           const colonIndex = text.indexOf(':');
           if (colonIndex > 0 && colonIndex < text.length - 1) {
             const key = text.substring(0, colonIndex).trim();
@@ -465,7 +474,7 @@
     // 箇条書き形式の詳細情報
     const detailItems = queryAllFirst(SELECTORS.detailBullets);
     for (const item of detailItems) {
-      const text = item.textContent.trim().replace(/\s+/g, ' ');
+      const text = getCleanText(item);
       const colonIndex = text.indexOf(':');
       if (colonIndex > 0 && colonIndex < text.length - 1) {
         const key = text.substring(0, colonIndex).trim();

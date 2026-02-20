@@ -237,7 +237,7 @@
     // 商品名: og:titleから加工（PC/スマホ共通）
     const ogTitle = document.querySelector('meta[property="og:title"]');
     let title = ogTitle ? ogTitle.content : document.title;
-    title = title.replace(/^【楽天市場】/, '').replace(/：[^：]+$/, '').trim();
+    title = title.replace(/^【楽天市場】/, '').replace(/：[^：]+$/, '').replace(/\s*:\s*[^:]+$/, '').trim();
     // スマホ版のフォールバック: item-name-- クラスから取得
     if (!title && mobile) {
       const mobileTitle = document.querySelector('[class*="item-name--"]');
@@ -308,9 +308,17 @@
       }
     }
 
-    // ショップ名
-    const titleParts = document.title.split('：');
-    const shopName = titleParts.length > 1 ? titleParts[titleParts.length - 1].trim() : '';
+    // ショップ名（PC版は全角コロン「：」、スマホ版は半角「 : 」で区切り）
+    let shopName = '';
+    const fullColonParts = document.title.split('：');
+    if (fullColonParts.length > 1) {
+      shopName = fullColonParts[fullColonParts.length - 1].trim();
+    } else {
+      const halfColonParts = document.title.split(' : ');
+      if (halfColonParts.length > 1) {
+        shopName = halfColonParts[halfColonParts.length - 1].trim();
+      }
+    }
 
     // カテゴリ（JSON-LD BreadcrumbListから）
     let categories = [];
@@ -352,6 +360,11 @@
       for (const container of mobileDescContainers) {
         const text = extractDescText(container);
         if (text && text.length > description.length) description = text;
+      }
+      // タイトルとほぼ同じテキストしか取れなかった場合はリセット（モバイルのhtml-hostはタイトル文を含むことがある）
+      if (description && title && description.length < title.length * 1.2) {
+        const overlap = description.substring(0, 50) === title.substring(0, 50);
+        if (overlap) description = '';
       }
     } else {
       // PC版: .item_desc → .sale_desc
