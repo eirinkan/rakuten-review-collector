@@ -207,6 +207,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (clearProductLogBtn) clearProductLogBtn.addEventListener('click', clearProductLogs);
     if (copyProductLogBtn) copyProductLogBtn.addEventListener('click', copyProductLogs);
 
+    // マージボタン
+    const mergeQueuesBtn = document.getElementById('mergeQueuesBtn');
+    if (mergeQueuesBtn) {
+      mergeQueuesBtn.addEventListener('click', mergeQueues);
+    }
+
     // キュー保存イベント（ヘッダーアイコン）
     if (saveQueueBtn) {
       saveQueueBtn.addEventListener('click', saveCurrentQueue);
@@ -2702,6 +2708,117 @@ document.addEventListener('DOMContentLoaded', () => {
       if (addedCount > 0) {
         renderBatchProductQueue();
       }
+    });
+  }
+
+  // レビューキューと商品キューをマージ（両方の和集合にする）
+  function mergeQueues() {
+    chrome.storage.local.get(['queue', 'batchProductQueue'], (result) => {
+      const reviewQueue = result.queue || [];
+      const productQueue = result.batchProductQueue || [];
+
+      // 商品キューの正規化キーセットを作成
+      const productKeys = new Set();
+      for (const item of productQueue) {
+        if (item.includes('item.rakuten.co.jp')) {
+          // 楽天商品URL → そのまま
+          productKeys.add(item);
+        } else {
+          // ASIN → 大文字正規化
+          productKeys.add(item.toUpperCase());
+        }
+      }
+
+      // レビューキューの正規化キーセットを作成
+      const reviewKeys = new Map(); // key → reviewQueueItem
+      for (const item of reviewQueue) {
+        const source = item.source || detectSourceFromUrl(item.url);
+        if (source === 'amazon') {
+          const asin = extractAsinFromUrl(item.url);
+          if (asin) reviewKeys.set(asin, item);
+        } else if (source === 'rakuten') {
+          // 楽天item URLが取れる場合のみ
+          const itemUrlMatch = item.url && item.url.match(/item\.rakuten\.co\.jp\/[^\/]+\/[^\/\?]+/);
+          if (itemUrlMatch) {
+            const itemUrl = 'https://' + itemUrlMatch[0] + '/';
+            reviewKeys.set(itemUrl, item);
+          }
+        }
+      }
+
+      let addedToProduct = 0;
+      let addedToReview = 0;
+
+      // レビューキューにだけある商品 → 商品キューに追加
+      for (const [key, item] of reviewKeys) {
+        if (!productKeys.has(key)) {
+          const source = item.source || detectSourceFromUrl(item.url);
+          // 楽天レビューURL（review.rakuten.co.jp）はitem URLに逆変換できないのでスキップ
+          if (source === 'rakuten' && item.url && item.url.includes('review.rakuten.co.jp')) {
+            continue;
+          }
+          productQueue.push(key);
+          productKeys.add(key);
+          addedToProduct++;
+        }
+      }
+
+      // 商品キューにだけある商品 → レビューキューに追加
+      for (const item of result.batchProductQueue || []) {
+        let normalizedKey;
+        if (item.includes('item.rakuten.co.jp')) {
+          normalizedKey = item;
+        } else {
+          normalizedKey = item.toUpperCase();
+        }
+
+        if (!reviewKeys.has(normalizedKey)) {
+          // 商品キューのアイテムからレビューキュー形式に変換
+          let url, title, source, productId;
+
+          if (item.includes('item.rakuten.co.jp')) {
+            // 楽天商品URL → レビューURLには変換できないが、item URLをそのまま使う
+            url = item.startsWith('http') ? item : 'https://' + item;
+            const pathMatch = item.match(/item\.rakuten\.co\.jp\/([^\/]+)\/([^\/\?]+)/);
+            title = pathMatch ? `${pathMatch[1]} - ${pathMatch[2]}` : '商品';
+            source = 'rakuten';
+            productId = pathMatch ? pathMatch[2] : null;
+          } else {
+            // ASIN → Amazon レビューURL
+            const asin = item.toUpperCase();
+            url = `https://www.amazon.co.jp/product-reviews/${asin}/`;
+            title = asin;
+            source = 'amazon';
+            productId = asin;
+          }
+
+          reviewQueue.push({
+            id: Date.now().toString() + '_merge_' + addedToReview,
+            url: url,
+            title: title.substring(0, 100),
+            productId: productId,
+            source: source,
+            addedAt: new Date().toISOString()
+          });
+          addedToReview++;
+        }
+      }
+
+      if (addedToProduct === 0 && addedToReview === 0) {
+        addLog('マージ: 追加する商品はありません（既に同期済み）', 'info');
+        return;
+      }
+
+      // 両方のキューを保存
+      batchProductQueue = productQueue;
+      chrome.storage.local.set({ queue: reviewQueue, batchProductQueue: [...productQueue] }, () => {
+        loadQueue();
+        renderBatchProductQueue();
+        const msgs = [];
+        if (addedToProduct > 0) msgs.push(`商品キューに${addedToProduct}件追加`);
+        if (addedToReview > 0) msgs.push(`レビューキューに${addedToReview}件追加`);
+        addLog(`マージ完了: ${msgs.join('、')}`, 'success');
+      });
     });
   }
 
