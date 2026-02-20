@@ -177,6 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadSettings();
     loadState();
     loadQueue();
+    loadBatchProductQueue();
     initLogsFromStorage();
     loadSavedQueues();
     loadScheduledSettings();
@@ -1568,6 +1569,9 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'batchProductProgressUpdate':
         updateBatchProductProgress(msg.progress);
         break;
+      case 'batchProductQueueUpdated':
+        loadBatchProductQueue();
+        break;
     }
   }
 
@@ -2641,6 +2645,24 @@ document.addEventListener('DOMContentLoaded', () => {
       autoResizeTextarea(batchProductAsins);
     }
     renderBatchProductQueue();
+  }
+
+  // ストレージから商品キューを読み込み（ポップアップからの追加を反映）
+  function loadBatchProductQueue() {
+    chrome.storage.local.get(['batchProductQueue'], (result) => {
+      const stored = result.batchProductQueue || [];
+      // ストレージのASINをメモリに反映（重複排除）
+      let addedCount = 0;
+      for (const asin of stored) {
+        if (!batchProductQueue.includes(asin)) {
+          batchProductQueue.push(asin);
+          addedCount++;
+        }
+      }
+      if (addedCount > 0) {
+        renderBatchProductQueue();
+      }
+    });
   }
 
   // キューの表示を更新

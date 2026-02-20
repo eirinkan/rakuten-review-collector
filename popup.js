@@ -70,6 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const settingsBtn = document.getElementById('settingsBtn');
   const startRankingBtn = document.getElementById('startRankingBtn');
   const addRankingBtn = document.getElementById('addRankingBtn');
+  const addRankingProductBtn = document.getElementById('addRankingProductBtn');
   const rankingCountInput = document.getElementById('rankingCount');
 
   // ログインボタン
@@ -267,6 +268,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // Amazonランキングページの場合
       normalMode.style.display = 'none';
       rankingMode.style.display = 'block';
+      // 商品キューボタンを表示（Amazon専用）
+      if (addRankingProductBtn) addRankingProductBtn.style.display = 'block';
     } else if (!isSupportedPage) {
       // 楽天・Amazon以外のページ
       pageWarning.style.display = 'block';
@@ -284,6 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
     settingsBtn.addEventListener('click', openSettings);
     startRankingBtn.addEventListener('click', startRankingCollection);
     addRankingBtn.addEventListener('click', addRankingToQueue);
+    if (addRankingProductBtn) addRankingProductBtn.addEventListener('click', addRankingToProductQueue);
 
     // バックグラウンドからのメッセージ
     chrome.runtime.onMessage.addListener(handleMessage);
@@ -510,10 +514,37 @@ document.addEventListener('DOMContentLoaded', () => {
     }, (response) => {
       addRankingBtn.disabled = false;
       startRankingBtn.disabled = false;
-      addRankingBtn.textContent = 'キューに追加';
+      addRankingBtn.textContent = 'レビューキューに追加';
 
       if (response && response.success) {
         showRankingMessage(`${response.addedCount}件追加しました`, 'success');
+      } else {
+        showRankingMessage(response?.error || '追加に失敗しました', 'error');
+      }
+    });
+  }
+
+  async function addRankingToProductQueue() {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const count = parseInt(rankingCountInput.value) || 10;
+
+    addRankingProductBtn.disabled = true;
+    addRankingBtn.disabled = true;
+    startRankingBtn.disabled = true;
+    addRankingProductBtn.textContent = '追加中...';
+
+    chrome.runtime.sendMessage({
+      action: 'addRankingToProductQueue',
+      url: tab.url,
+      count: count
+    }, (response) => {
+      addRankingProductBtn.disabled = false;
+      addRankingBtn.disabled = false;
+      startRankingBtn.disabled = false;
+      addRankingProductBtn.textContent = '商品キューに追加';
+
+      if (response && response.success) {
+        showRankingMessage(`商品キューに${response.addedCount}件追加しました`, 'success');
       } else {
         showRankingMessage(response?.error || '追加に失敗しました', 'error');
       }

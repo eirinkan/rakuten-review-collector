@@ -275,6 +275,22 @@
       color: var(--text-primary);
     }
 
+    .btn-product-queue {
+      background: rgba(108, 92, 231, 0.12);
+      border: 1px solid rgba(108, 92, 231, 0.3);
+    }
+
+    .btn-product-queue:hover {
+      background: rgba(108, 92, 231, 0.2);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(108, 92, 231, 0.15);
+    }
+
+    [data-theme="dark"] .btn-product-queue {
+      background: rgba(108, 92, 231, 0.15);
+      border-color: rgba(108, 92, 231, 0.3);
+    }
+
     .btn:disabled {
       background: rgba(128, 128, 128, 0.3);
       color: rgba(255, 255, 255, 0.5);
@@ -634,7 +650,8 @@
           <label>件</label>
         </div>
         <button id="startRankingBtn" class="btn btn-start">収集開始</button>
-        <button id="addRankingBtn" class="btn btn-queue">キューに追加</button>
+        <button id="addRankingBtn" class="btn btn-queue">レビューキューに追加</button>
+        <button id="addRankingProductBtn" class="btn btn-queue btn-product-queue" style="display: none;">商品キューに追加</button>
         <div id="rankingMessage" class="message"></div>
       </div>
 
