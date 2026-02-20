@@ -32,21 +32,21 @@
    * スマホ版の特徴: item-description-- クラスが存在、.item_desc が存在しない
    */
   function isMobilePage() {
+    // PC版にのみ存在する要素を先にチェック（PC版でもCSS moduleクラスが共存するため）
+    if (document.querySelector('.item_desc') || document.querySelector('.sale_desc') ||
+        document.querySelector('span.normal_reserve_item_name')) {
+      return false;
+    }
     // スマホ版にのみ存在する要素
     const mobileIndicators = [
       '[class*="item-description--"]',  // スマホ版の商品説明
-      '[class*="slideshow-container--"]', // スマホ版の画像スライダー
       '[class*="item-name--"]'  // スマホ版の商品名
     ];
     for (const sel of mobileIndicators) {
       if (document.querySelector(sel)) return true;
     }
-    // PC版にのみ存在する要素がない場合もスマホ版と判断
-    if (!document.querySelector('.item_desc') && !document.querySelector('.sale_desc') &&
-        !document.querySelector('span.normal_reserve_item_name')) {
-      // ただしページが十分に読み込まれている場合のみ
-      if (document.querySelector('meta[property="og:title"]')) return true;
-    }
+    // PC版固有要素もスマホ指標もない場合、ページ読み込み済みならスマホ版と判断
+    if (document.querySelector('meta[property="og:title"]')) return true;
     return false;
   }
 
@@ -249,7 +249,7 @@
     const shopSlug = pathParts[0] || '';
     const itemSlug = pathParts[1] || '';
 
-    // 販売価格
+    // 販売価格（CSS module → PC版セレクタ → meta itemprop の順にフォールバック）
     let sellingPrice = '';
     const priceEl = document.querySelector(
       '[class*="number-display--"][class*="color-crimson--"][class*="size-l--"] [class*="number--"][class*="primary--"]'
@@ -260,7 +260,18 @@
       const priceFb = document.querySelector(
         '[class*="number-display--"][class*="color-crimson--"] [class*="number--"][class*="primary--"]'
       );
-      if (priceFb) sellingPrice = priceFb.textContent.trim();
+      if (priceFb) {
+        sellingPrice = priceFb.textContent.trim();
+      } else {
+        // PC版フォールバック: meta itemprop="price" → lossleader_price2
+        const metaPrice = document.querySelector('meta[itemprop="price"]');
+        if (metaPrice && metaPrice.content) {
+          sellingPrice = Number(metaPrice.content).toLocaleString();
+        } else {
+          const pcPriceEl = document.querySelector('span.lossleader_price2');
+          if (pcPriceEl) sellingPrice = pcPriceEl.textContent.trim().replace(/円.*$/, '');
+        }
+      }
     }
 
     // 元価格（メーカー希望小売価格）

@@ -19,14 +19,16 @@
    * AmazonはUAに基づいてサーバーサイドで異なるHTMLを返す
    */
   function isMobilePage() {
-    // スマホ版にのみ存在する要素
-    if (document.querySelector('#corePriceDisplay_mobile_feature_div')) return true;
-    if (document.querySelector('#mobile_buybox')) return true;
-    if (document.querySelector('#immersive-main')) return true;
-    // PC版にのみ存在する要素がある場合はPC版
+    // PC版にのみ存在する要素を先にチェック
     if (document.querySelector('#dp-container')) return false;
     if (document.querySelector('#landingImage')) return false;
     if (document.querySelector('#corePriceDisplay_desktop_feature_div')) return false;
+    // スマホ版にのみ存在する要素（IDバリエーションも含む）
+    if (document.querySelector('#corePriceDisplay_mobile_feature_div')) return true;
+    if (document.querySelector('#corePrice_mobile_feature_div')) return true;
+    if (document.querySelector('#mobile_buybox')) return true;
+    if (document.querySelector('#mobile_buybox_feature_div')) return true;
+    if (document.querySelector('#immersive-main')) return true;
     return false;
   }
 
@@ -43,9 +45,11 @@
     price: [
       '#corePriceDisplay_desktop_feature_div .a-price .a-offscreen',
       '#corePriceDisplay_mobile_feature_div .a-price .a-offscreen',
+      '#corePrice_mobile_feature_div .a-price .a-offscreen',
       '#corePrice_feature_div .a-price .a-offscreen',
       '#tp_price_block_total_price_ww .a-price .a-offscreen',
       '#mobile_buybox .a-price .a-offscreen',
+      '#mobile_buybox_feature_div .a-price .a-offscreen',
       '#priceblock_ourprice',
       '#priceblock_dealprice',
       '.a-color-price',
@@ -69,7 +73,9 @@
       '#altImages li.a-spacing-small.item img',
       '.imageThumbnail img',
       '#imageGallery img.product-image',
-      '#imageGallery_feature_div img[src*="images-amazon.com"]'
+      '#imageGallery_feature_div img[src*="images-amazon.com"]',
+      '#imageGallery_feature_div img[src*="m.media-amazon.com"]',
+      '[id^="image-block-product-image-"] img'
     ],
     // ブランド
     brand: [
@@ -205,8 +211,8 @@
 
     if (mobile) {
       // === スマホ版の画像収集 ===
-      // 1. immersive-view内の商品画像
-      const ivImages = document.querySelectorAll('#immersive-main img, [id^="image-block-iv-product-image-"] img');
+      // 1. immersive-view / image-block内の商品画像
+      const ivImages = document.querySelectorAll('#immersive-main img, [id^="image-block-iv-product-image-"] img, [id^="image-block-product-image-"] img');
       if (ivImages.length > 0) {
         let first = true;
         for (const img of ivImages) {
@@ -528,9 +534,28 @@
     const ratingEl = queryFirst(SELECTORS.rating);
     const rating = ratingEl ? ratingEl.textContent.trim() : '';
 
-    // レビュー数
+    // レビュー数（PC版セレクタ → モバイル版フォールバック）
+    let reviewCount = '';
     const reviewCountEl = queryFirst(SELECTORS.reviewCount);
-    const reviewCount = reviewCountEl ? reviewCountEl.textContent.trim() : '';
+    if (reviewCountEl) {
+      reviewCount = reviewCountEl.textContent.trim();
+    } else {
+      // モバイル版: #acrCustomerReviewLink内のテキストから括弧内の数字を抽出
+      // HTML例: <span aria-label="44,362 レビュー">(44,362)</span>
+      const reviewLink = document.querySelector('#acrCustomerReviewLink');
+      if (reviewLink) {
+        const match = reviewLink.textContent.match(/\(([\d,]+)\)/);
+        if (match) reviewCount = match[1] + '件';
+      }
+      // さらにフォールバック: aria-label属性から取得
+      if (!reviewCount) {
+        const ariaEl = document.querySelector('[aria-label*="レビュー"]');
+        if (ariaEl) {
+          const ariaMatch = ariaEl.getAttribute('aria-label').match(/([\d,]+)/);
+          if (ariaMatch) reviewCount = ariaMatch[1] + '件';
+        }
+      }
+    }
 
     // バリエーション
     const variationEls = queryAllFirst(SELECTORS.variations);
