@@ -61,7 +61,7 @@
     }
 
     body {
-      width: 300px;
+      width: 340px;
       min-height: 200px;
       font-family: 'Segoe UI', 'Hiragino Sans', 'Yu Gothic', sans-serif;
       background: linear-gradient(135deg, var(--bg-gradient-1) 0%, var(--bg-gradient-2) 100%);
@@ -200,9 +200,25 @@
       transform: translateY(-1px);
     }
 
+    /* === Focus Visible (キーボードアクセシビリティ) === */
+    .btn:focus-visible,
+    .header-btn:focus-visible,
+    .btn-logout:focus-visible,
+    .warning-link:focus-visible {
+      outline: 2px solid #4A90D9;
+      outline-offset: 2px;
+      box-shadow: 0 0 0 4px rgba(74, 144, 217, 0.25);
+    }
+
+    [data-theme="dark"] .btn:focus-visible,
+    [data-theme="dark"] .header-btn:focus-visible {
+      outline-color: #74b9ff;
+      box-shadow: 0 0 0 4px rgba(116, 185, 255, 0.25);
+    }
+
     /* === Content === */
     .content {
-      padding: 14px 16px 8px;
+      padding: 16px 16px 10px;
     }
 
     /* === Buttons === */
@@ -293,14 +309,20 @@
 
     .btn:disabled {
       background: rgba(128, 128, 128, 0.3);
-      color: rgba(255, 255, 255, 0.5);
+      color: rgba(128, 128, 128, 0.6);
       cursor: not-allowed;
       transform: none;
       box-shadow: none;
+      opacity: 0.7;
+    }
+
+    [data-theme="dark"] .btn:disabled {
+      color: rgba(255, 255, 255, 0.35);
     }
 
     .btn:active:not(:disabled) {
-      transform: translateY(0);
+      transform: translateY(1px);
+      transition-duration: 0.05s;
     }
 
     /* === Page Warning === */
@@ -332,12 +354,14 @@
 
     .page-warning .warning-link {
       display: inline-block;
-      padding: 6px 10px;
-      border-radius: 6px;
+      padding: 8px 12px;
+      border-radius: 8px;
       font-size: 12px;
       font-weight: 500;
       text-decoration: none;
       transition: all 0.2s;
+      min-height: 36px;
+      line-height: 1.3;
     }
 
     .page-warning .warning-link.rakuten {
@@ -420,24 +444,30 @@
     }
 
     .ranking-input input {
-      width: 60px;
-      padding: 8px 10px;
+      width: 64px;
+      padding: 10px 12px;
       background: var(--bg-glass);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       border: 1px solid var(--border-glass);
       border-radius: 8px;
       text-align: center;
-      font-size: 14px;
+      font-size: 15px;
       font-weight: 600;
       color: var(--text-primary);
       transition: all var(--transition);
+      min-height: 44px;
     }
 
     .ranking-input input:focus {
       outline: none;
       border-color: var(--rakuten-red);
       box-shadow: 0 0 0 3px rgba(191, 0, 0, 0.15);
+    }
+
+    .ranking-input input:focus-visible {
+      outline: 2px solid #4A90D9;
+      outline-offset: 2px;
     }
 
     /* === Animations === */
@@ -476,25 +506,42 @@
 
     /* === Button Group (3ボタン横並び) === */
     .group-label {
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
-      color: var(--text-secondary);
+      color: var(--text-muted);
       margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* セクション区切り線 */
+    .section-divider {
+      height: 1px;
+      background: var(--border-glass);
+      margin: 12px 0;
+    }
+
+    [data-theme="dark"] .section-divider {
+      background: rgba(255, 255, 255, 0.08);
     }
 
     .btn-group {
       display: flex;
-      gap: 6px;
-      margin-bottom: 10px;
+      gap: 8px;
+      margin-bottom: 12px;
     }
 
     .btn-group .btn {
       flex: 1;
-      padding: 10px 4px;
-      font-size: 11px;
+      padding: 12px 6px;
+      font-size: 13px;
       font-weight: 600;
       margin-bottom: 0;
       white-space: nowrap;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     /* === Progress Bar === */
@@ -623,9 +670,10 @@
       color: var(--text-muted);
       font-size: 12px;
       cursor: pointer;
-      padding: 6px 10px;
-      border-radius: 4px;
+      padding: 8px 12px;
+      border-radius: 6px;
       transition: all var(--transition);
+      min-height: 36px;
     }
 
     .btn-logout:hover {
@@ -640,7 +688,7 @@
     <div class="header">
       <h1>収集</h1>
       <div class="header-actions">
-        <button id="settingsBtn" class="header-btn">管理</button>
+        <button id="settingsBtn" class="header-btn" aria-label="設定画面を開く">管理</button>
       </div>
     </div>
 
@@ -667,48 +715,50 @@
       <div id="normalMode">
         <div id="startGroup">
           <div class="group-label">収集開始</div>
-          <div class="btn-group">
-            <button id="startBtn" class="btn btn-start">レビュー</button>
-            <button id="productInfoBtn" class="btn btn-product-info">商品情報</button>
-            <button id="startBothBtn" class="btn btn-both">両方</button>
+          <div class="btn-group" role="group" aria-label="今すぐ収集を開始">
+            <button id="startBtn" class="btn btn-start" aria-label="レビューを今すぐ収集">レビュー</button>
+            <button id="productInfoBtn" class="btn btn-product-info" aria-label="商品情報を今すぐ収集">商品情報</button>
+            <button id="startBothBtn" class="btn btn-both" aria-label="レビューと商品情報を両方収集">両方</button>
           </div>
         </div>
-        <button id="stopBtn" class="btn btn-stop" style="display: none;">収集停止</button>
-        <div id="productInfoProgress" class="progress-container">
+        <button id="stopBtn" class="btn btn-stop" style="display: none;" aria-label="収集を停止">収集停止</button>
+        <div id="productInfoProgress" class="progress-container" role="progressbar" aria-valuemin="0" aria-valuemax="100">
           <div class="progress-bar-wrapper">
             <div id="productInfoProgressBar" class="progress-bar-fill"></div>
           </div>
           <div id="productInfoProgressText" class="progress-text"></div>
         </div>
+        <div class="section-divider"></div>
         <div class="group-label">キューに追加</div>
-        <div class="btn-group">
-          <button id="queueBtn" class="btn btn-queue">レビュー</button>
-          <button id="productQueueBtn" class="btn btn-queue btn-product-queue">商品情報</button>
-          <button id="queueBothBtn" class="btn btn-queue btn-both">両方</button>
+        <div class="btn-group" role="group" aria-label="キューに追加して後で収集">
+          <button id="queueBtn" class="btn btn-queue" aria-label="レビューをキューに追加">レビュー</button>
+          <button id="productQueueBtn" class="btn btn-queue btn-product-queue" aria-label="商品情報をキューに追加">商品情報</button>
+          <button id="queueBothBtn" class="btn btn-queue btn-both" aria-label="レビューと商品情報を両方キューに追加">両方</button>
         </div>
-        <div id="message" class="message"></div>
+        <div id="message" class="message" role="alert"></div>
       </div>
 
       <!-- ランキングモード -->
       <div id="rankingMode" style="display: none;">
         <div class="ranking-input">
-          <label>上位</label>
-          <input type="number" id="rankingCount" value="10" min="1" max="100">
+          <label for="rankingCount">上位</label>
+          <input type="number" id="rankingCount" value="10" min="1" max="100" aria-label="取得件数">
           <label>件</label>
         </div>
         <div class="group-label">収集開始</div>
-        <div class="btn-group">
-          <button id="startRankingBtn" class="btn btn-start">レビュー</button>
-          <button id="startRankingProductBtn" class="btn btn-product-info">商品情報</button>
-          <button id="startRankingBothBtn" class="btn btn-both">両方</button>
+        <div class="btn-group" role="group" aria-label="ランキングから今すぐ収集">
+          <button id="startRankingBtn" class="btn btn-start" aria-label="ランキングのレビューを収集">レビュー</button>
+          <button id="startRankingProductBtn" class="btn btn-product-info" aria-label="ランキングの商品情報を収集">商品情報</button>
+          <button id="startRankingBothBtn" class="btn btn-both" aria-label="ランキングの両方を収集">両方</button>
         </div>
+        <div class="section-divider"></div>
         <div class="group-label">キューに追加</div>
-        <div class="btn-group">
-          <button id="addRankingBtn" class="btn btn-queue">レビュー</button>
-          <button id="addRankingProductBtn" class="btn btn-queue btn-product-queue">商品情報</button>
-          <button id="addRankingBothBtn" class="btn btn-queue btn-both">両方</button>
+        <div class="btn-group" role="group" aria-label="ランキングからキューに追加">
+          <button id="addRankingBtn" class="btn btn-queue" aria-label="ランキングのレビューをキューに追加">レビュー</button>
+          <button id="addRankingProductBtn" class="btn btn-queue btn-product-queue" aria-label="ランキングの商品情報をキューに追加">商品情報</button>
+          <button id="addRankingBothBtn" class="btn btn-queue btn-both" aria-label="ランキングの両方をキューに追加">両方</button>
         </div>
-        <div id="rankingMessage" class="message"></div>
+        <div id="rankingMessage" class="message" role="alert"></div>
       </div>
 
       <div id="pageWarning" class="page-warning" style="display: none;">
