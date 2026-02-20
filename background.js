@@ -3985,11 +3985,10 @@ async function collectAndSaveProductInfo(tabId) {
     ? `rakuten_${productData.itemSlug}_${dateStr}`
     : `amazon_${productData.asin}_${dateStr}`;
 
-  // 4. メディアサブフォルダを作成
-  log(`[${productId}] メディアフォルダを作成中...`, '', 'product');
-  const mediaFolderName = `${baseName}_media`;
-  const mediaFolderResult = await createDriveFolder(mediaFolderName, folderId);
-  const mediaFolderId = mediaFolderResult.folder.id;
+  // 4. 商品フォルダを作成（JSON + メディアを同一フォルダに保存）
+  log(`[${productId}] 保存フォルダを作成中...`, '', 'product');
+  const productFolderResult = await createDriveFolder(baseName, folderId);
+  const productFolderId = productFolderResult.folder.id;
 
   // 5. 画像をダウンロード → Driveにアップロード（個別ファイル）
   const aplusImgUrls = isRakuten ? [] : (productData.aplusImages || []);
@@ -4016,7 +4015,7 @@ async function collectAndSaveProductInfo(tabId) {
       const fileName = `img_${String(imgOrder).padStart(2, '0')}_${imgSection}.${ext}`;
 
       try {
-        const uploaded = await uploadMediaToDrive(token, mediaFolderId, fileName, mediaResult.blob, mediaResult.mimeType);
+        const uploaded = await uploadMediaToDrive(token, productFolderId, fileName, mediaResult.blob, mediaResult.mimeType);
         imageMetadata.push({
           order: imgOrder,
           section: imgSection,
@@ -4061,7 +4060,7 @@ async function collectAndSaveProductInfo(tabId) {
         const fileName = `aplus_${String(aplusOrder).padStart(2, '0')}.${ext}`;
 
         try {
-          const uploaded = await uploadMediaToDrive(token, mediaFolderId, fileName, mediaResult.blob, mediaResult.mimeType);
+          const uploaded = await uploadMediaToDrive(token, productFolderId, fileName, mediaResult.blob, mediaResult.mimeType);
           aplusImageMetadata.push({
             order: aplusOrder,
             description: `A+コンテンツ画像${aplusOrder}枚目`,
@@ -4109,7 +4108,7 @@ async function collectAndSaveProductInfo(tabId) {
           if (thumbResult) {
             thumbFileName = `video_${String(videoOrder).padStart(2, '0')}_thumb.jpg`;
             try {
-              const thumbUploaded = await uploadMediaToDrive(token, mediaFolderId, thumbFileName, thumbResult.blob, thumbResult.mimeType);
+              const thumbUploaded = await uploadMediaToDrive(token, productFolderId, thumbFileName, thumbResult.blob, thumbResult.mimeType);
               thumbDriveId = thumbUploaded.id;
             } catch (e) {
               console.warn(`[商品情報] 動画サムネイルアップロード失敗: ${e.message}`);
@@ -4135,7 +4134,7 @@ async function collectAndSaveProductInfo(tabId) {
         if (videoBlob && videoBlob.size > 1000) { // 1KB未満は不正なレスポンス
           const ext = getExtensionFromMimeType(videoBlob.mimeType, video.url);
           const fileName = `video_${String(videoOrder).padStart(2, '0')}.${ext}`;
-          const uploaded = await uploadMediaToDrive(token, mediaFolderId, fileName, videoBlob.blob, videoBlob.mimeType);
+          const uploaded = await uploadMediaToDrive(token, productFolderId, fileName, videoBlob.blob, videoBlob.mimeType);
 
           videoMetadata.push({
             order: videoOrder,
@@ -4157,7 +4156,7 @@ async function collectAndSaveProductInfo(tabId) {
           if (thumbResult) {
             thumbFileName = `video_${String(videoOrder).padStart(2, '0')}_thumb.jpg`;
             try {
-              const thumbUploaded = await uploadMediaToDrive(token, mediaFolderId, thumbFileName, thumbResult.blob, thumbResult.mimeType);
+              const thumbUploaded = await uploadMediaToDrive(token, productFolderId, thumbFileName, thumbResult.blob, thumbResult.mimeType);
               thumbDriveId = thumbUploaded.id;
             } catch (e) {
               console.warn(`[商品情報] 動画サムネイルアップロード失敗: ${e.message}`);
@@ -4195,7 +4194,7 @@ async function collectAndSaveProductInfo(tabId) {
 
   const jsonData = {
     ...textData,
-    mediaFolderId,
+    productFolderId,
     images: imageMetadata,
     aplusImages: aplusImageMetadata.length > 0 ? aplusImageMetadata : undefined,
     videos: videoMetadata.length > 0 ? videoMetadata : undefined,
@@ -4213,7 +4212,7 @@ async function collectAndSaveProductInfo(tabId) {
   const cleanJsonData = JSON.parse(JSON.stringify(jsonData));
 
   const jsonFileName = `${baseName}.json`;
-  const uploadResult = await uploadJsonToDrive(token, folderId, jsonFileName, cleanJsonData);
+  const uploadResult = await uploadJsonToDrive(token, productFolderId, jsonFileName, cleanJsonData);
 
   const totalImageCount = imageMetadata.length + aplusImageMetadata.length;
   const savedVideoCount = videoMetadata.filter(v => v.saved).length;
@@ -4223,7 +4222,7 @@ async function collectAndSaveProductInfo(tabId) {
     success: true,
     fileName: jsonFileName,
     fileId: uploadResult.id,
-    mediaFolderId,
+    productFolderId,
     productId,
     source: isRakuten ? 'rakuten' : 'amazon',
     title: productData.title,

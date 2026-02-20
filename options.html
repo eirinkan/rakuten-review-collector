@@ -2894,16 +2894,23 @@
           <h3>基本的な使い方</h3>
           <ol>
             <li><strong>単一商品のレビュー収集:</strong>
-              <br>楽天市場またはAmazonの商品ページ/レビューページを開き、拡張機能アイコンをクリック → 「収集開始」ボタンを押す
+              <br>楽天市場またはAmazonの商品ページ/レビューページを開き、拡張機能アイコンをクリック → 「レビュー」ボタンを押す
               <br>※商品ページからは自動でレビューページに遷移します
             </li>
+            <li><strong>商品情報収集:</strong>
+              <br>商品ページで拡張機能アイコンをクリック → 「商品情報」ボタンを押す
+              <br>※テキスト情報と画像・動画をGoogle Driveに保存します
+            </li>
+            <li><strong>レビュー＋商品情報を同時に収集:</strong>
+              <br>商品ページで「両方」ボタンを押すと、レビュー収集と商品情報収集を同時に実行します
+            </li>
             <li><strong>複数商品の一括収集（キュー）:</strong>
-              <br>① 各商品ページで「キューに追加」ボタンを押す
+              <br>① 各商品ページで「キューに追加」の「レビュー」「商品情報」「両方」のいずれかを押す
               <br>② この管理画面で「一括収集開始」をクリック
               <br>※最大3商品を同時に収集（バックグラウンドの別ウィンドウで実行）
             </li>
-            <li><strong>ランキングから一括追加（楽天のみ）:</strong>
-              <br>【方法1】楽天ランキングページを開き、拡張機能アイコンをクリック → 商品数を指定して追加
+            <li><strong>ランキングから一括追加（楽天・Amazon）:</strong>
+              <br>【方法1】ランキングページを開き、拡張機能アイコンをクリック → 商品数を指定して「レビュー」「商品情報」「両方」のいずれかを押す
               <br>【方法2】この管理画面でランキングURLを入力 → 上位N商品を指定 → 「追加」
             </li>
           </ol>
@@ -2935,11 +2942,14 @@
 
           <h3>商品情報収集（Google Drive保存）</h3>
           <ul>
-            <li><strong>概要:</strong> Amazon商品ページのテキスト情報と画像をJSON形式でGoogle Driveに保存</li>
-            <li><strong>単体収集:</strong> Amazon商品ページで拡張機能アイコン → 「商品情報を収集」ボタン</li>
-            <li><strong>一括収集:</strong> メイン画面の「商品情報収集」カードでASINを入力して「収集開始」</li>
+            <li><strong>概要:</strong> Amazon・楽天の商品ページからテキスト情報・画像・動画をGoogle Driveに保存</li>
+            <li><strong>対応サイト:</strong> Amazon商品ページ、楽天商品ページ（item.rakuten.co.jp）</li>
+            <li><strong>単体収集:</strong> 商品ページで拡張機能アイコン → 「商品情報」ボタン</li>
+            <li><strong>一括収集:</strong> メイン画面の「商品情報収集」カードでASIN/URLを入力して「収集開始」</li>
+            <li><strong>ランキング一括:</strong> ランキングページで「商品情報」ボタン → 上位N件を指定</li>
             <li><strong>設定:</strong> 設定画面で「保存先フォルダURL」にGoogle DriveのフォルダURLを入力</li>
-            <li><strong>保存形式:</strong> 商品ごとにJSONファイル（画像はbase64埋め込み）</li>
+            <li><strong>保存形式:</strong> 商品ごとにフォルダを作成し、JSON（テキスト情報＋メタデータ）と画像・動画ファイルをまとめて保存</li>
+            <li><strong>動画:</strong> ダウンロード可能な動画はファイル保存。ストリーミング形式の場合はURLのみ記録</li>
           </ul>
 
           <h3>データの保存方法</h3>
@@ -3005,6 +3015,7 @@
             <li><strong>テーマ:</strong> ダークモードの切り替え</li>
             <li><strong>CSV:</strong> 商品ごとにCSVを分ける（ZIPでダウンロード）</li>
             <li><strong>スプレッドシート:</strong> レビュー収集用のスプレッドシートURL</li>
+            <li><strong>商品情報保存先:</strong> Google DriveのフォルダURL（商品情報収集に必須）</li>
           </ul>
 
           <h3>キーボードショートカット</h3>
@@ -3023,6 +3034,7 @@
             <li><strong>Amazon:</strong>
               <br>・商品ページ: amazon.co.jp/dp/* または amazon.co.jp/gp/product/*
               <br>・レビューページ: amazon.co.jp/product-reviews/*
+              <br>・ランキングページ: amazon.co.jp/gp/bestsellers/*
             </li>
           </ul>
 
@@ -3060,7 +3072,7 @@
             <tr>
               <td>ランキング一括追加</td>
               <td>○</td>
-              <td>×</td>
+              <td>○</td>
             </tr>
             <tr>
               <td>星評価フィルター</td>
@@ -3076,6 +3088,11 @@
               <td>収集できる最大件数</td>
               <td>全件</td>
               <td>最大500件</td>
+            </tr>
+            <tr>
+              <td>商品情報収集</td>
+              <td>○</td>
+              <td>○</td>
             </tr>
           </table>
 
