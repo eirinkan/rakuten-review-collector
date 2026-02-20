@@ -1206,7 +1206,9 @@
 
     .log-actions {
       display: flex;
-      gap: 8px;
+      gap: 6px;
+      justify-content: flex-end;
+      margin-bottom: 6px;
     }
 
     .log-container {
@@ -2596,13 +2598,6 @@
               <button id="clearQueueBtn" class="icon-btn" title="キュークリア">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
               </button>
-              <span style="width: 1px; height: 20px; background: var(--border-glass); margin: 0 2px;"></span>
-              <button id="copyLogBtn" class="icon-btn" title="ログをコピー">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-              </button>
-              <button id="clearLogBtn" class="icon-btn" title="ログクリア">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-              </button>
             </div>
           </div>
 
@@ -2638,6 +2633,14 @@
 
           <!-- ログ（キューカード内に統合） -->
           <div id="logSection" style="display: none; margin-top: 12px;">
+            <div class="log-actions">
+              <button id="copyLogBtn" class="icon-btn" title="ログをコピー">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+              </button>
+              <button id="clearLogBtn" class="icon-btn" title="ログクリア">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+              </button>
+            </div>
             <div id="logContainer" class="log-container"></div>
           </div>
           <div id="versionDisplay" class="version-display"></div>
@@ -2690,13 +2693,6 @@
               <button id="clearProductQueueBtn" class="icon-btn" title="キュークリア">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
               </button>
-              <span style="width: 1px; height: 20px; background: var(--border-glass); margin: 0 2px;"></span>
-              <button id="copyProductLogBtn" class="icon-btn" title="ログをコピー">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-              </button>
-              <button id="clearProductLogBtn" class="icon-btn" title="ログクリア">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-              </button>
             </div>
           </div>
 
@@ -2717,6 +2713,14 @@
 
           <!-- ログ（キューカード内に統合） -->
           <div id="productLogSection" style="display: none; margin-top: 12px;">
+            <div class="log-actions">
+              <button id="copyProductLogBtn" class="icon-btn" title="ログをコピー">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+              </button>
+              <button id="clearProductLogBtn" class="icon-btn" title="ログクリア">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+              </button>
+            </div>
             <div id="productLogContainer" class="log-container"></div>
           </div>
         </div>
