@@ -883,7 +883,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     // ===== 商品情報収集（Google Drive保存） =====
     case 'collectAndSaveProductInfo':
-      collectAndSaveProductInfo(message.tabId)
+      collectProductInfoWithMobile(message.tabId)
         .then(result => sendResponse(result))
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
@@ -3949,26 +3949,31 @@ async function resumableUploadToDrive(token, folderId, fileName, blob) {
  * - JSONにはテキスト + メディアメタデータ（LP構造情報）のみ保存
  * @param {number} tabId - 対象タブのID
  */
-async function collectAndSaveProductInfo(tabId) {
-  log('収集を開始します...', '', 'product');
+async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions = null) {
+  const isMobile = mode === 'mobile';
+  const filePrefix = isMobile ? 'mobile_' : '';
+  const modeLabel = isMobile ? 'スマホ版' : 'PC版';
+  log(`[${modeLabel}] 収集を開始します...`, '', 'product');
 
-  // 1. 設定からDriveフォルダURLを取得
-  const settings = await chrome.storage.sync.get(['productInfoFolderUrl']);
-  const folderUrl = settings.productInfoFolderUrl;
-  if (!folderUrl) {
-    throw new Error('Google Driveの保存先フォルダが設定されていません。管理画面の設定で「商品情報の保存先フォルダURL」を設定してください。');
-  }
-
-  const folderId = extractDriveFolderId(folderUrl);
-  if (!folderId) {
-    throw new Error('Google DriveのフォルダURLが正しくありません。');
+  // 1. 設定チェック（スマホ版は既存フォルダを再利用するため親フォルダ不要）
+  let parentFolderId = null;
+  if (!isMobile || !mobileOptions?.folderId) {
+    const settings = await chrome.storage.sync.get(['productInfoFolderUrl']);
+    const folderUrl = settings.productInfoFolderUrl;
+    if (!folderUrl) {
+      throw new Error('Google Driveの保存先フォルダが設定されていません。管理画面の設定で「商品情報の保存先フォルダURL」を設定してください。');
+    }
+    parentFolderId = extractDriveFolderId(folderUrl);
+    if (!parentFolderId) {
+      throw new Error('Google DriveのフォルダURLが正しくありません。');
+    }
   }
 
   // 2. OAuthトークンを取得（未認証なら対話型ダイアログを表示）
   const token = await getAuthTokenWithFallback();
 
   // 3. content scriptから商品情報を取得
-  log('ページから情報を読み取り中...', '', 'product');
+  log(`[${modeLabel}] ページから情報を読み取り中...`, '', 'product');
   let productData;
   try {
     const response = await chrome.tabs.sendMessage(tabId, { action: 'collectProductInfo' });
@@ -3987,21 +3992,29 @@ async function collectAndSaveProductInfo(tabId) {
     : (productData.asin || '???');
 
   const dateStr = formatDate(new Date());
-  const baseName = isRakuten
-    ? `rakuten_${productData.itemSlug}_${dateStr}`
-    : `amazon_${productData.asin}_${dateStr}`;
+  const baseName = (isMobile && mobileOptions?.baseName)
+    ? mobileOptions.baseName
+    : (isRakuten
+      ? `rakuten_${productData.itemSlug}_${dateStr}`
+      : `amazon_${productData.asin}_${dateStr}`);
 
-  // 4. 商品フォルダを作成（JSON + メディアを同一フォルダに保存）
-  log(`[${productId}] 保存フォルダを作成中...`, '', 'product');
-  const productFolderResult = await createDriveFolder(baseName, folderId);
-  const productFolderId = productFolderResult.folder.id;
+  // 4. 商品フォルダを作成（スマホ版は既存フォルダを再利用）
+  let productFolderId;
+  if (isMobile && mobileOptions?.folderId) {
+    productFolderId = mobileOptions.folderId;
+    log(`[${modeLabel}][${productId}] 既存フォルダにスマホ版を保存中...`, '', 'product');
+  } else {
+    log(`[${modeLabel}][${productId}] 保存フォルダを作成中...`, '', 'product');
+    const productFolderResult = await createDriveFolder(baseName, parentFolderId);
+    productFolderId = productFolderResult.folder.id;
+  }
 
   // 5. 画像をダウンロード → Driveにアップロード（個別ファイル）
   const aplusImgUrls = isRakuten ? [] : (productData.aplusImages || []);
   const rawVideos = productData.videos || [];
   const videoThumbs = productData.videoThumbnails || [];
   const totalMedia = productData.images.length + aplusImgUrls.length + rawVideos.length;
-  log(`[${productId}] メディアをアップロード中...（画像: ${productData.images.length}枚${aplusImgUrls.length > 0 ? ` + A+: ${aplusImgUrls.length}枚` : ''}${rawVideos.length > 0 ? ` + 動画: ${rawVideos.length}件` : ''}）`, '', 'product');
+  log(`[${modeLabel}][${productId}] メディアをアップロード中...（画像: ${productData.images.length}枚${aplusImgUrls.length > 0 ? ` + A+: ${aplusImgUrls.length}枚` : ''}${rawVideos.length > 0 ? ` + 動画: ${rawVideos.length}件` : ''}）`, '', 'product');
 
   let processedMedia = 0;
 
@@ -4018,7 +4031,7 @@ async function collectAndSaveProductInfo(tabId) {
 
     if (mediaResult) {
       const ext = getExtensionFromMimeType(mediaResult.mimeType, imgUrl);
-      const fileName = `img_${String(imgOrder).padStart(2, '0')}_${imgSection}.${ext}`;
+      const fileName = `${filePrefix}img_${String(imgOrder).padStart(2, '0')}_${imgSection}.${ext}`;
 
       try {
         const uploaded = await uploadMediaToDrive(token, productFolderId, fileName, mediaResult.blob, mediaResult.mimeType);
@@ -4063,7 +4076,7 @@ async function collectAndSaveProductInfo(tabId) {
 
       if (mediaResult) {
         const ext = getExtensionFromMimeType(mediaResult.mimeType, imgUrl);
-        const fileName = `aplus_${String(aplusOrder).padStart(2, '0')}.${ext}`;
+        const fileName = `${filePrefix}aplus_${String(aplusOrder).padStart(2, '0')}.${ext}`;
 
         try {
           const uploaded = await uploadMediaToDrive(token, productFolderId, fileName, mediaResult.blob, mediaResult.mimeType);
@@ -4112,7 +4125,7 @@ async function collectAndSaveProductInfo(tabId) {
         if (videoThumbs[videoOrder - 1]) {
           const thumbResult = await fetchMediaAsBlob(videoThumbs[videoOrder - 1]);
           if (thumbResult) {
-            thumbFileName = `video_${String(videoOrder).padStart(2, '0')}_thumb.jpg`;
+            thumbFileName = `${filePrefix}video_${String(videoOrder).padStart(2, '0')}_thumb.jpg`;
             try {
               const thumbUploaded = await uploadMediaToDrive(token, productFolderId, thumbFileName, thumbResult.blob, thumbResult.mimeType);
               thumbDriveId = thumbUploaded.id;
@@ -4141,7 +4154,7 @@ async function collectAndSaveProductInfo(tabId) {
         if (videoThumbs[videoOrder - 1]) {
           const thumbResult = await fetchMediaAsBlob(videoThumbs[videoOrder - 1]);
           if (thumbResult) {
-            thumbFileName = `video_${String(videoOrder).padStart(2, '0')}_thumb.jpg`;
+            thumbFileName = `${filePrefix}video_${String(videoOrder).padStart(2, '0')}_thumb.jpg`;
             try {
               const thumbUploaded = await uploadMediaToDrive(token, productFolderId, thumbFileName, thumbResult.blob, thumbResult.mimeType);
               thumbDriveId = thumbUploaded.id;
@@ -4167,7 +4180,7 @@ async function collectAndSaveProductInfo(tabId) {
         const videoBlob = await fetchMediaAsBlob(video.url);
         if (videoBlob && videoBlob.size > 1000) { // 1KB未満は不正なレスポンス
           const ext = getExtensionFromMimeType(videoBlob.mimeType, video.url);
-          const fileName = `video_${String(videoOrder).padStart(2, '0')}.${ext}`;
+          const fileName = `${filePrefix}video_${String(videoOrder).padStart(2, '0')}.${ext}`;
           const uploaded = await uploadMediaToDrive(token, productFolderId, fileName, videoBlob.blob, videoBlob.mimeType);
 
           videoMetadata.push({
@@ -4188,7 +4201,7 @@ async function collectAndSaveProductInfo(tabId) {
         if (videoThumbs[videoOrder - 1]) {
           const thumbResult = await fetchMediaAsBlob(videoThumbs[videoOrder - 1]);
           if (thumbResult) {
-            thumbFileName = `video_${String(videoOrder).padStart(2, '0')}_thumb.jpg`;
+            thumbFileName = `${filePrefix}video_${String(videoOrder).padStart(2, '0')}_thumb.jpg`;
             try {
               const thumbUploaded = await uploadMediaToDrive(token, productFolderId, thumbFileName, thumbResult.blob, thumbResult.mimeType);
               thumbDriveId = thumbUploaded.id;
@@ -4217,7 +4230,7 @@ async function collectAndSaveProductInfo(tabId) {
   }
 
   // 6. 軽量JSONを生成（画像バイナリなし、メタデータのみ）
-  log(`[${productId}] JSONを保存中...`, '', 'product');
+  log(`[${modeLabel}][${productId}] JSONを保存中...`, '', 'product');
   forwardToAll({
     action: 'productInfoProgress',
     progress: { phase: 'upload', productId }
@@ -4228,6 +4241,7 @@ async function collectAndSaveProductInfo(tabId) {
 
   const jsonData = {
     ...textData,
+    viewType: mode,
     productFolderId,
     images: imageMetadata,
     aplusImages: aplusImageMetadata.length > 0 ? aplusImageMetadata : undefined,
@@ -4245,25 +4259,27 @@ async function collectAndSaveProductInfo(tabId) {
   // undefinedキーを除去
   const cleanJsonData = JSON.parse(JSON.stringify(jsonData));
 
-  const jsonFileName = `${baseName}.json`;
+  const jsonFileName = `${baseName}_${mode}.json`;
   const uploadResult = await uploadJsonToDrive(token, productFolderId, jsonFileName, cleanJsonData);
 
   const totalImageCount = imageMetadata.length + aplusImageMetadata.length;
   const savedVideoCount = videoMetadata.filter(v => v.saved).length;
-  log(`[${productId}] 保存完了（画像: ${totalImageCount}枚, 動画: ${savedVideoCount}/${videoMetadata.length}件）`, 'success', 'product');
+  log(`[${modeLabel}][${productId}] 保存完了（画像: ${totalImageCount}枚, 動画: ${savedVideoCount}/${videoMetadata.length}件）`, 'success', 'product');
 
   return {
     success: true,
     fileName: jsonFileName,
     fileId: uploadResult.id,
     productFolderId,
+    baseName,
     productId,
     source: isRakuten ? 'rakuten' : 'amazon',
     title: productData.title,
     imageCount: imageMetadata.length,
     aplusImageCount: aplusImageMetadata.length,
     videoCount: videoMetadata.length,
-    savedVideoCount
+    savedVideoCount,
+    mode
   };
 }
 
@@ -4354,26 +4370,40 @@ async function startBatchProductCollection(items) {
         displayId = asin;
       }
 
-      log(`[${displayId}] (${i + 1}/${items.length}) 収集中...`, '', 'product');
+      log(`[${displayId}] (${i + 1}/${items.length}) PC版を収集中...`, '', 'product');
 
       try {
-        // タブでページを開く
+        // --- PC版の収集 ---
         await chrome.tabs.update(batchTab.id, { url: productUrl });
-
-        // ページ読み込み完了を待つ
         await waitForTabComplete(batchTab.id, 15000);
-
-        // 少し待ってDOMが安定するのを待つ
         await sleep(1500);
+        const desktopResult = await collectAndSaveProductInfo(batchTab.id, 'desktop');
 
-        // 商品情報を収集してDriveに保存
-        const result = await collectAndSaveProductInfo(batchTab.id);
+        // --- スマホ版の収集 ---
+        if (!batchProductCancelled) {
+          log(`[${displayId}] (${i + 1}/${items.length}) スマホ版を収集中...`, '', 'product');
+          try {
+            await enableMobileUA(batchTab.id);
+            await chrome.tabs.update(batchTab.id, { url: productUrl });
+            await waitForTabComplete(batchTab.id, 15000);
+            await sleep(1500);
+            await collectAndSaveProductInfo(batchTab.id, 'mobile', {
+              folderId: desktopResult.productFolderId,
+              baseName: desktopResult.baseName
+            });
+          } catch (mobileError) {
+            console.warn(`[商品情報] ${displayId} スマホ版エラー:`, mobileError);
+            log(`[${displayId}] スマホ版の収集に失敗（PC版は保存済み）: ${mobileError.message}`, 'warning', 'product');
+          } finally {
+            await disableMobileUA();
+          }
+        }
 
         batchProductProgress.completed.push({
           id: displayId,
-          source: result.source,
-          title: result.title,
-          fileName: result.fileName
+          source: desktopResult.source,
+          title: desktopResult.title,
+          fileName: desktopResult.fileName
         });
       } catch (error) {
         console.error(`[商品情報] ${displayId} エラー:`, error);
@@ -4451,6 +4481,84 @@ function waitForTabComplete(tabId, timeoutMs = 15000) {
  */
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ===== スマホUA切替機能 =====
+const MOBILE_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+const MOBILE_UA_RULE_ID = 99999;
+
+/**
+ * 指定タブのリクエストをスマホUAで送信するよう設定
+ */
+async function enableMobileUA(tabId) {
+  await chrome.declarativeNetRequest.updateSessionRules({
+    addRules: [{
+      id: MOBILE_UA_RULE_ID,
+      priority: 1,
+      action: {
+        type: 'modifyHeaders',
+        requestHeaders: [{
+          header: 'User-Agent',
+          operation: 'set',
+          value: MOBILE_USER_AGENT
+        }]
+      },
+      condition: {
+        tabIds: [tabId],
+        resourceTypes: ['main_frame', 'sub_frame', 'image', 'xmlhttprequest', 'script', 'stylesheet']
+      }
+    }],
+    removeRuleIds: [MOBILE_UA_RULE_ID]
+  });
+  console.log(`[商品情報] スマホUA有効化 (tabId: ${tabId})`);
+}
+
+/**
+ * スマホUA切替を解除して元に戻す
+ */
+async function disableMobileUA() {
+  await chrome.declarativeNetRequest.updateSessionRules({
+    removeRuleIds: [MOBILE_UA_RULE_ID]
+  });
+  console.log('[商品情報] スマホUA無効化');
+}
+
+/**
+ * PC版とスマホ版の両方を収集する（単品収集用）
+ * PC版は指定タブで収集、スマホ版はバックグラウンドタブで収集
+ */
+async function collectProductInfoWithMobile(tabId) {
+  // 現在のタブのURLを取得
+  const tab = await chrome.tabs.get(tabId);
+  const productUrl = tab.url;
+
+  // PC版を収集
+  const desktopResult = await collectAndSaveProductInfo(tabId, 'desktop');
+
+  // スマホ版をバックグラウンドタブで収集
+  let mobileTab;
+  try {
+    mobileTab = await chrome.tabs.create({ url: 'about:blank', active: false });
+    await enableMobileUA(mobileTab.id);
+    await chrome.tabs.update(mobileTab.id, { url: productUrl });
+    await waitForTabComplete(mobileTab.id, 15000);
+    await sleep(1500);
+    await collectAndSaveProductInfo(mobileTab.id, 'mobile', {
+      folderId: desktopResult.productFolderId,
+      baseName: desktopResult.baseName
+    });
+    log('PC版・スマホ版の収集完了', 'success', 'product');
+  } catch (mobileError) {
+    console.warn('[商品情報] スマホ版収集エラー:', mobileError);
+    log(`スマホ版の収集に失敗（PC版は保存済み）: ${mobileError.message}`, 'warning', 'product');
+  } finally {
+    await disableMobileUA();
+    if (mobileTab) {
+      try { await chrome.tabs.remove(mobileTab.id); } catch (e) { /* 既に閉じられている場合は無視 */ }
+    }
+  }
+
+  return desktopResult;
 }
 
 // ===== フォルダピッカー用 Google Drive API =====

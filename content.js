@@ -26,6 +26,30 @@
   const isReviewPage = window.location.hostname === 'review.rakuten.co.jp';
   const isItemPage = window.location.hostname === 'item.rakuten.co.jp';
 
+  /**
+   * スマホ版ページかどうかを判定
+   * 楽天はUAに基づいてサーバーサイドで異なるHTMLを返す
+   * スマホ版の特徴: item-description-- クラスが存在、.item_desc が存在しない
+   */
+  function isMobilePage() {
+    // スマホ版にのみ存在する要素
+    const mobileIndicators = [
+      '[class*="item-description--"]',  // スマホ版の商品説明
+      '[class*="slideshow-container--"]', // スマホ版の画像スライダー
+      '[class*="item-name--"]'  // スマホ版の商品名
+    ];
+    for (const sel of mobileIndicators) {
+      if (document.querySelector(sel)) return true;
+    }
+    // PC版にのみ存在する要素がない場合もスマホ版と判断
+    if (!document.querySelector('.item_desc') && !document.querySelector('.sale_desc') &&
+        !document.querySelector('span.normal_reserve_item_name')) {
+      // ただしページが十分に読み込まれている場合のみ
+      if (document.querySelector('meta[property="og:title"]')) return true;
+    }
+    return false;
+  }
+
   // メッセージリスナー
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     switch (message.action) {
@@ -207,10 +231,18 @@
    * セレクターは docs/楽天商品情報収集ロジック.md に基づく
    */
   function collectRakutenProductInfo() {
-    // 商品名: og:titleから加工
+    const mobile = isMobilePage();
+    console.log(`[楽天商品情報収集] ページタイプ: ${mobile ? 'スマホ版' : 'PC版'}`);
+
+    // 商品名: og:titleから加工（PC/スマホ共通）
     const ogTitle = document.querySelector('meta[property="og:title"]');
     let title = ogTitle ? ogTitle.content : document.title;
     title = title.replace(/^【楽天市場】/, '').replace(/：[^：]+$/, '').trim();
+    // スマホ版のフォールバック: item-name-- クラスから取得
+    if (!title && mobile) {
+      const mobileTitle = document.querySelector('[class*="item-name--"]');
+      if (mobileTitle) title = mobileTitle.textContent.trim();
+    }
 
     // URLパスからショップID・商品管理番号を抽出
     const pathParts = location.pathname.split('/').filter(Boolean);
@@ -292,7 +324,7 @@
       // 末尾の価格パターンを除去（例: "【XL】27-30cm2,480円" → "【XL】27-30cm"）
       .map(t => t.replace(/\d{1,3}(,\d{3})*円$/, '').trim());
 
-    // 商品説明テキスト（.item_desc → .sale_desc → og:description のフォールバック）
+    // 商品説明テキスト（PC: .item_desc → .sale_desc、スマホ: item-description-- → html-host-- → og:description のフォールバック）
     function extractDescText(container) {
       if (!container) return '';
       const clone = container.cloneNode(true);
@@ -302,9 +334,20 @@
         .replace(/\s{3,}/g, '\n')
         .trim();
     }
-    let description = extractDescText(document.querySelector('.item_desc'));
-    if (!description) {
-      description = extractDescText(document.querySelector('.sale_desc'));
+    let description = '';
+    if (mobile) {
+      // スマホ版: item-description-- → html-host-- の順にフォールバック
+      const mobileDescContainers = document.querySelectorAll('[class*="item-description--"], [class*="html-host--"]');
+      for (const container of mobileDescContainers) {
+        const text = extractDescText(container);
+        if (text && text.length > description.length) description = text;
+      }
+    } else {
+      // PC版: .item_desc → .sale_desc
+      description = extractDescText(document.querySelector('.item_desc'));
+      if (!description) {
+        description = extractDescText(document.querySelector('.sale_desc'));
+      }
     }
     if (!description) {
       const ogDesc = document.querySelector('meta[property="og:description"]');
@@ -331,20 +374,50 @@
       seen.add(url);
     }
 
-    // 2. ギャラリー画像（商品画像ギャラリーコンテナ内のみ）
-    // ページ上部の商品画像スライダー内の画像だけを収集（おすすめ・ランキング等を除外）
-    document.querySelectorAll('[class*="r-image--"] img, [class*="image-wrapper--"] img').forEach(img => {
-      const src = img.src || '';
-      if (!src || src.includes('data:image')) return;
-      const url = toHighResUrl(src);
-      if (seen.has(url)) return;
-      if (img.naturalWidth > 0 && img.naturalWidth <= 2) return;
-      images.push({ url, type: 'gallery' });
-      seen.add(url);
-    });
+    // 2. ギャラリー画像（PC/スマホで異なるセレクタ）
+    if (mobile) {
+      // スマホ版: swiper-slide内の画像、またはimage--クラスの画像
+      document.querySelectorAll('[class*="slideshow-container--"] img[class*="image--"], .swiper-slide img[src*="r10s.jp"]').forEach(img => {
+        const src = img.src || '';
+        if (!src || src.includes('data:image')) return;
+        const url = toHighResUrl(src);
+        if (seen.has(url)) return;
+        if (img.naturalWidth > 0 && img.naturalWidth <= 2) return;
+        images.push({ url, type: 'gallery' });
+        seen.add(url);
+      });
+      // フォールバック: r10s.jp画像を広く収集（サムネイル除外）
+      if (images.length <= 1) {
+        document.querySelectorAll('img[src*="r10s.jp"]').forEach(img => {
+          const src = img.src || '';
+          if (!src || src.includes('data:image')) return;
+          // サムネイル（thumbnail--クラス）を除外
+          if (img.className && /thumbnail--/.test(img.className)) return;
+          const url = toHighResUrl(src);
+          if (seen.has(url)) return;
+          if (img.naturalWidth > 0 && img.naturalWidth <= 50) return;
+          images.push({ url, type: 'gallery' });
+          seen.add(url);
+        });
+      }
+    } else {
+      // PC版: ページ上部の商品画像スライダー内の画像だけを収集
+      document.querySelectorAll('[class*="r-image--"] img, [class*="image-wrapper--"] img').forEach(img => {
+        const src = img.src || '';
+        if (!src || src.includes('data:image')) return;
+        const url = toHighResUrl(src);
+        if (seen.has(url)) return;
+        if (img.naturalWidth > 0 && img.naturalWidth <= 2) return;
+        images.push({ url, type: 'gallery' });
+        seen.add(url);
+      });
+    }
 
-    // 3. 商品説明欄の画像（.item_desc / .sale_desc）
-    const descContainers = document.querySelectorAll('.item_desc, .sale_desc');
+    // 3. 商品説明欄の画像（PC: .item_desc/.sale_desc、スマホ: item-description--/html-host--）
+    const descSelectors = mobile
+      ? '[class*="item-description--"], [class*="html-host--"]'
+      : '.item_desc, .sale_desc';
+    const descContainers = document.querySelectorAll(descSelectors);
     descContainers.forEach(container => {
       container.querySelectorAll('img').forEach(img => {
         const src = img.src || '';
@@ -376,8 +449,11 @@
       }
     });
 
-    // 商品説明欄内の動画（.item_desc / .sale_desc）
-    document.querySelectorAll('.item_desc video source, .item_desc video[src], .sale_desc video source, .sale_desc video[src]').forEach(el => {
+    // 商品説明欄内の動画（PC: .item_desc/.sale_desc、スマホ: item-description--/html-host--）
+    const videoDescSelector = mobile
+      ? '[class*="item-description--"] video source, [class*="item-description--"] video[src], [class*="html-host--"] video source, [class*="html-host--"] video[src]'
+      : '.item_desc video source, .item_desc video[src], .sale_desc video source, .sale_desc video[src]';
+    document.querySelectorAll(videoDescSelector).forEach(el => {
       const src = el.src || el.getAttribute('src') || '';
       if (src && !videoSeen.has(src)) {
         videos.push({ url: src, type: src.includes('.m3u8') ? 'hls' : 'mp4', source: 'description' });

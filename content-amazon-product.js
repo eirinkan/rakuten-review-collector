@@ -12,21 +12,40 @@
   if (window.__amazonProductCollectorLoaded) return;
   window.__amazonProductCollectorLoaded = true;
 
-  const VERSION = '1.0.0';
+  const VERSION = '1.1.0';
 
-  // ===== セレクター定義（フォールバック付き） =====
+  /**
+   * スマホ版ページかどうかを判定
+   * AmazonはUAに基づいてサーバーサイドで異なるHTMLを返す
+   */
+  function isMobilePage() {
+    // スマホ版にのみ存在する要素
+    if (document.querySelector('#corePriceDisplay_mobile_feature_div')) return true;
+    if (document.querySelector('#mobile_buybox')) return true;
+    if (document.querySelector('#immersive-main')) return true;
+    // PC版にのみ存在する要素がある場合はPC版
+    if (document.querySelector('#dp-container')) return false;
+    if (document.querySelector('#landingImage')) return false;
+    if (document.querySelector('#corePriceDisplay_desktop_feature_div')) return false;
+    return false;
+  }
+
+  // ===== セレクター定義（PC版・スマホ版両対応、フォールバック付き） =====
   const SELECTORS = {
-    // 商品名
+    // 商品名（スマホ版: span#title、PC版: #productTitle）
     productTitle: [
       '#productTitle',
+      'span#title',
       '#title span',
       'h1.product-title-word-break'
     ],
-    // 価格
+    // 価格（スマホ版: mobile用div、PC版: desktop用div）
     price: [
       '#corePriceDisplay_desktop_feature_div .a-price .a-offscreen',
+      '#corePriceDisplay_mobile_feature_div .a-price .a-offscreen',
       '#corePrice_feature_div .a-price .a-offscreen',
       '#tp_price_block_total_price_ww .a-price .a-offscreen',
+      '#mobile_buybox .a-price .a-offscreen',
       '#priceblock_ourprice',
       '#priceblock_dealprice',
       '.a-color-price',
@@ -38,23 +57,26 @@
       '#listPrice',
       '.priceBlockStrikePriceString'
     ],
-    // メイン画像
+    // メイン画像（スマホ版: immersive-view、PC版: landingImage）
     mainImage: [
       '#landingImage',
       '#imgBlkFront',
-      '#main-image'
+      '#main-image',
+      '#image-block-iv-product-image-0'
     ],
-    // ギャラリーサムネイル
+    // ギャラリーサムネイル（スマホ版: imageGallery、PC版: altImages）
     galleryThumbs: [
       '#altImages li.a-spacing-small.item img',
-      '.imageThumbnail img'
+      '.imageThumbnail img',
+      '#imageGallery img.product-image',
+      '#imageGallery_feature_div img[src*="images-amazon.com"]'
     ],
     // ブランド
     brand: [
       '#bylineInfo',
       '.po-brand .a-span9 .a-size-base'
     ],
-    // 箇条書き（Feature Bullets）
+    // 箇条書き（Feature Bullets）— PC/スマホ共通
     featureBullets: [
       '#feature-bullets .a-list-item',
       '#feature-bullets li'
@@ -62,43 +84,52 @@
     // 商品説明
     productDescription: [
       '#productDescription',
-      '#productDescription_feature_div'
+      '#productDescription_feature_div',
+      '#productDescription_RI'
     ],
-    // A+コンテンツ
+    // A+コンテンツ — PC/スマホ共通（classが異なるがIDは同じ）
     aplus: [
       '#aplus_feature_div',
       '#aplus',
       '#aplusProductDescription'
     ],
-    // 技術仕様テーブル
+    // 技術仕様テーブル（スマホ版: additionalProductDetails、PC版: productDetails_techSpec）
     techSpecs: [
       '#productDetails_techSpec_section_1',
       '#prodDetails table.a-keyvalue',
-      '#technicalSpecifications_section_1'
+      '#technicalSpecifications_section_1',
+      '#additionalProductDetails-content table'
     ],
     // 商品詳細（箇条書き形式）
     detailBullets: [
       '#detailBullets_feature_div .a-list-item',
-      '#detail-bullets .content li'
+      '#detail-bullets .content li',
+      '#additionalProductDetails-content .a-list-item'
     ],
-    // カテゴリ（パンくずリスト）
+    // カテゴリ（パンくずリスト — スマホ版: #breadcrumb、PC版: #wayfinding-breadcrumbs）
     breadcrumbs: [
-      '#wayfinding-breadcrumbs_feature_div a.a-link-normal'
+      '#wayfinding-breadcrumbs_feature_div a.a-link-normal',
+      '#breadcrumb_feature_div a.a-link-normal',
+      '#breadcrumb a'
     ],
-    // 評価
+    // 評価（スマホ版: averageCustomerReviews内、PC版: acrPopover内）
     rating: [
       '#acrPopover .a-icon-alt',
+      '#averageCustomerReviews_feature_div .a-icon-alt',
       '.a-icon-star .a-icon-alt'
     ],
     // レビュー数
     reviewCount: [
-      '#acrCustomerReviewText'
+      '#acrCustomerReviewText',
+      '#averageCustomerReviews_feature_div .a-size-small.a-color-secondary'
     ],
-    // バリエーション
+    // バリエーション（スマホ版: inline-twister、PC版: twister）
     variations: [
       '#variation_color_name .selection',
       '#variation_size_name .selection',
-      '#twister .a-button-selected .a-button-text'
+      '#twister .a-button-selected .a-button-text',
+      '#inline-twister-row-color_name .a-button-selected .a-button-text',
+      '#inline-twister-row-size_name .a-button-selected .a-button-text'
     ]
   };
 
@@ -165,65 +196,111 @@
   }
 
   /**
-   * 商品ページからすべての画像URLを収集
+   * 商品ページからすべての画像URLを収集（PC版・スマホ版両対応）
    */
   function collectImageUrls() {
     const images = [];
     const seen = new Set();
+    const mobile = isMobilePage();
 
-    // 1. メイン画像（data-old-hires > data-a-dynamic-image > src）
-    const mainImg = queryFirst(SELECTORS.mainImage);
-    if (mainImg) {
-      // data-old-hires が最高解像度
-      const hiRes = mainImg.getAttribute('data-old-hires');
-      if (hiRes && !seen.has(hiRes)) {
-        images.push({ url: hiRes, type: 'main' });
-        seen.add(hiRes);
-      }
-
-      // data-a-dynamic-image からも取得（複数サイズ）
-      const dynamicAttr = mainImg.getAttribute('data-a-dynamic-image');
-      if (dynamicAttr) {
-        try {
-          const dynamicImages = JSON.parse(dynamicAttr);
-          // 最大サイズのURLを選択
-          let maxUrl = '';
-          let maxSize = 0;
-          for (const [url, dims] of Object.entries(dynamicImages)) {
-            const size = Array.isArray(dims) ? dims[0] * dims[1] : 0;
-            if (size > maxSize) {
-              maxSize = size;
-              maxUrl = url;
-            }
+    if (mobile) {
+      // === スマホ版の画像収集 ===
+      // 1. immersive-view内の商品画像
+      const ivImages = document.querySelectorAll('#immersive-main img, [id^="image-block-iv-product-image-"] img');
+      if (ivImages.length > 0) {
+        let first = true;
+        for (const img of ivImages) {
+          const src = img.src || img.getAttribute('data-src') || '';
+          if (!src || src.includes('data:image') || src.includes('transparent-pixel')) continue;
+          const hiRes = toHighResUrl(src);
+          if (hiRes && !seen.has(hiRes)) {
+            images.push({ url: hiRes, type: first ? 'main' : 'gallery' });
+            seen.add(hiRes);
+            first = false;
           }
-          if (maxUrl && !seen.has(maxUrl) && !hiRes) {
-            images.push({ url: maxUrl, type: 'main' });
-            seen.add(maxUrl);
-          }
-        } catch (e) {
-          // JSON解析エラーは無視
         }
       }
 
-      // フォールバック: src
-      if (images.length === 0 && mainImg.src && !seen.has(mainImg.src)) {
-        images.push({ url: mainImg.src, type: 'main' });
-        seen.add(mainImg.src);
+      // 2. imageGallery内の画像
+      const galleryImgs = document.querySelectorAll('#imageGallery img.product-image, #imageGallery_feature_div img[src*="images-amazon.com"], #imageGallery_feature_div img[src*="m.media-amazon.com"]');
+      for (const img of galleryImgs) {
+        const src = img.src || img.getAttribute('data-src') || '';
+        if (!src || src.includes('data:image') || src.includes('transparent-pixel')) continue;
+        const hiRes = toHighResUrl(src);
+        if (hiRes && !seen.has(hiRes)) {
+          images.push({ url: hiRes, type: images.length === 0 ? 'main' : 'gallery' });
+          seen.add(hiRes);
+        }
       }
-    }
 
-    // 2. ギャラリー画像（サムネイルを高解像度に変換）
-    const thumbs = queryAllFirst(SELECTORS.galleryThumbs);
-    for (const thumb of thumbs) {
-      const thumbSrc = thumb.src || '';
-      // 動画のサムネイルはスキップ（動画アイコンが含まれる場合）
-      const parentLi = thumb.closest('li');
-      if (parentLi && parentLi.classList.contains('videoThumbnail')) continue;
+      // 3. フォールバック: imageBlock内の全画像
+      if (images.length === 0) {
+        const blockImgs = document.querySelectorAll('#imageBlock_feature_div img[src*="images-amazon.com"], #imageBlock_feature_div img[src*="m.media-amazon.com"]');
+        let first = true;
+        for (const img of blockImgs) {
+          const src = img.src || '';
+          if (!src || src.includes('data:image') || src.includes('transparent-pixel')) continue;
+          // 小さすぎるアイコンを除外
+          if (img.naturalWidth > 0 && img.naturalWidth <= 30) continue;
+          const hiRes = toHighResUrl(src);
+          if (hiRes && !seen.has(hiRes)) {
+            images.push({ url: hiRes, type: first ? 'main' : 'gallery' });
+            seen.add(hiRes);
+            first = false;
+          }
+        }
+      }
+    } else {
+      // === PC版の画像収集（従来のロジック） ===
+      // 1. メイン画像（data-old-hires > data-a-dynamic-image > src）
+      const mainImg = queryFirst(SELECTORS.mainImage);
+      if (mainImg) {
+        const hiRes = mainImg.getAttribute('data-old-hires');
+        if (hiRes && !seen.has(hiRes)) {
+          images.push({ url: hiRes, type: 'main' });
+          seen.add(hiRes);
+        }
 
-      const hiRes = toHighResUrl(thumbSrc);
-      if (hiRes && !seen.has(hiRes)) {
-        images.push({ url: hiRes, type: 'gallery' });
-        seen.add(hiRes);
+        const dynamicAttr = mainImg.getAttribute('data-a-dynamic-image');
+        if (dynamicAttr) {
+          try {
+            const dynamicImages = JSON.parse(dynamicAttr);
+            let maxUrl = '';
+            let maxSize = 0;
+            for (const [url, dims] of Object.entries(dynamicImages)) {
+              const size = Array.isArray(dims) ? dims[0] * dims[1] : 0;
+              if (size > maxSize) {
+                maxSize = size;
+                maxUrl = url;
+              }
+            }
+            if (maxUrl && !seen.has(maxUrl) && !hiRes) {
+              images.push({ url: maxUrl, type: 'main' });
+              seen.add(maxUrl);
+            }
+          } catch (e) {
+            // JSON解析エラーは無視
+          }
+        }
+
+        if (images.length === 0 && mainImg.src && !seen.has(mainImg.src)) {
+          images.push({ url: mainImg.src, type: 'main' });
+          seen.add(mainImg.src);
+        }
+      }
+
+      // 2. ギャラリー画像（サムネイルを高解像度に変換）
+      const thumbs = queryAllFirst(SELECTORS.galleryThumbs);
+      for (const thumb of thumbs) {
+        const thumbSrc = thumb.src || '';
+        const parentLi = thumb.closest('li');
+        if (parentLi && parentLi.classList.contains('videoThumbnail')) continue;
+
+        const hiRes = toHighResUrl(thumbSrc);
+        if (hiRes && !seen.has(hiRes)) {
+          images.push({ url: hiRes, type: 'gallery' });
+          seen.add(hiRes);
+        }
       }
     }
 
@@ -341,6 +418,7 @@
    */
   function collectTechSpecs() {
     const specs = {};
+    const mobile = isMobilePage();
 
     // テーブル形式の仕様
     const techTable = queryFirst(SELECTORS.techSpecs);
@@ -359,11 +437,29 @@
       }
     }
 
+    // スマホ版: additionalProductDetails からテキスト形式で抽出
+    if (mobile && Object.keys(specs).length === 0) {
+      const detailContent = document.querySelector('#additionalProductDetails-content');
+      if (detailContent) {
+        const items = detailContent.querySelectorAll('.a-list-item, li');
+        for (const item of items) {
+          const text = item.textContent.trim().replace(/\s+/g, ' ');
+          const colonIndex = text.indexOf(':');
+          if (colonIndex > 0 && colonIndex < text.length - 1) {
+            const key = text.substring(0, colonIndex).trim();
+            const value = text.substring(colonIndex + 1).trim();
+            if (key && value && !key.includes('カスタマーレビュー')) {
+              specs[key] = value;
+            }
+          }
+        }
+      }
+    }
+
     // 箇条書き形式の詳細情報
     const detailItems = queryAllFirst(SELECTORS.detailBullets);
     for (const item of detailItems) {
       const text = item.textContent.trim().replace(/\s+/g, ' ');
-      // 「ラベル : 値」形式を分割
       const colonIndex = text.indexOf(':');
       if (colonIndex > 0 && colonIndex < text.length - 1) {
         const key = text.substring(0, colonIndex).trim();
@@ -381,7 +477,8 @@
    * 商品ページからすべての情報を収集
    */
   function collectProductInfo() {
-    console.log(`[Amazon商品情報収集 v${VERSION}] 情報収集を開始`);
+    const mobile = isMobilePage();
+    console.log(`[Amazon商品情報収集 v${VERSION}] 情報収集を開始（${mobile ? 'スマホ版' : 'PC版'}）`);
 
     const asin = extractASIN();
     if (!asin) {
@@ -498,9 +595,11 @@
       const hasTitle = !!queryFirst(SELECTORS.productTitle);
       const hasPrice = !!queryFirstWithText(SELECTORS.price);
       const hasMainImage = !!queryFirst(SELECTORS.mainImage);
+      // スマホ版の追加チェック: immersive-view内の画像
+      const hasMobileImage = !!document.querySelector('#immersive-main img, #imageGallery img');
 
       // タイトル＋（価格または画像）が揃えば準備完了
-      if (hasTitle && (hasPrice || hasMainImage)) {
+      if (hasTitle && (hasPrice || hasMainImage || hasMobileImage)) {
         // A+コンテンツや画像データ属性が遅延設定されるのを少し待つ
         await new Promise(r => setTimeout(r, 500));
         console.log(`[Amazon商品情報収集] ページ準備完了（${Date.now() - startTime}ms）`);
