@@ -893,13 +893,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     // ===== フォルダピッカー（Google Drive） =====
     case 'getDriveFolders':
-      getDriveFolders(message.parentId)
+      getDriveFolders(message.parentId, message.driveId)
         .then(result => sendResponse(result))
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
 
     case 'searchDriveFolders':
-      searchDriveFolders(message.query)
+      searchDriveFolders(message.query, message.driveId)
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'getSharedDrives':
+      getSharedDrives()
         .then(result => sendResponse(result))
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
@@ -3938,9 +3944,10 @@ async function getAuthTokenWithFallback() {
 /**
  * 指定フォルダ内のサブフォルダ一覧を取得
  * @param {string} parentId - 親フォルダID（'root'でマイドライブ直下）
+ * @param {string} driveId - 共有ドライブID（省略時はマイドライブ）
  * @returns {Promise<Object>} { success: true, folders: [...] }
  */
-async function getDriveFolders(parentId = 'root') {
+async function getDriveFolders(parentId = 'root', driveId = null) {
   const token = await getAuthTokenWithFallback();
 
   const query = `'${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
@@ -3950,6 +3957,14 @@ async function getDriveFolders(parentId = 'root') {
     orderBy: 'name',
     pageSize: '100'
   });
+
+  // 共有ドライブ対応
+  if (driveId) {
+    params.set('includeItemsFromAllDrives', 'true');
+    params.set('supportsAllDrives', 'true');
+    params.set('corpora', 'drive');
+    params.set('driveId', driveId);
+  }
 
   const response = await fetch(
     `https://www.googleapis.com/drive/v3/files?${params}`,
@@ -3971,9 +3986,10 @@ async function getDriveFolders(parentId = 'root') {
 /**
  * フォルダ名で検索
  * @param {string} query - 検索クエリ
+ * @param {string} driveId - 共有ドライブID（省略時はマイドライブ）
  * @returns {Promise<Object>} { success: true, folders: [...] }
  */
-async function searchDriveFolders(query) {
+async function searchDriveFolders(query, driveId = null) {
   if (!query || query.trim().length === 0) {
     return { success: true, folders: [] };
   }
@@ -3989,6 +4005,14 @@ async function searchDriveFolders(query) {
     orderBy: 'name',
     pageSize: '50'
   });
+
+  // 共有ドライブ対応
+  if (driveId) {
+    params.set('includeItemsFromAllDrives', 'true');
+    params.set('supportsAllDrives', 'true');
+    params.set('corpora', 'drive');
+    params.set('driveId', driveId);
+  }
 
   const response = await fetch(
     `https://www.googleapis.com/drive/v3/files?${params}`,
@@ -4008,6 +4032,35 @@ async function searchDriveFolders(query) {
       name: f.name,
       parentId: f.parents ? f.parents[0] : null
     }))
+  };
+}
+
+/**
+ * 共有ドライブ一覧を取得
+ * @returns {Promise<Object>} { success: true, drives: [...] }
+ */
+async function getSharedDrives() {
+  const token = await getAuthTokenWithFallback();
+
+  const params = new URLSearchParams({
+    pageSize: '100',
+    fields: 'drives(id,name)'
+  });
+
+  const response = await fetch(
+    `https://www.googleapis.com/drive/v3/drives?${params}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || `共有ドライブの取得エラー (${response.status})`);
+  }
+
+  const data = await response.json();
+  return {
+    success: true,
+    drives: (data.drives || []).map(d => ({ id: d.id, name: d.name }))
   };
 }
 

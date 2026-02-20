@@ -542,7 +542,9 @@
         break;
 
       default:
-        sendResponse({ success: false, error: '不明なアクション' });
+        // 他のcontent script（content-amazon-product.js等）が処理する可能性があるため、
+        // 未知のアクションには応答しない
+        return;
     }
     return true;
   });

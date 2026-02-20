@@ -2312,6 +2312,31 @@
       font-size: 16px;
       color: var(--text-primary);
     }
+    .fp-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 10px;
+    }
+    .fp-tab {
+      flex: 1;
+      padding: 6px 12px;
+      border: 1px solid var(--border-glass);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 13px;
+      transition: all var(--transition);
+    }
+    .fp-tab:hover {
+      background: var(--bg-glass-hover);
+    }
+    .fp-tab.active {
+      background: var(--info);
+      color: white;
+      border-color: var(--info);
+    }
+
     .fp-search {
       width: 100%;
       padding: 8px 12px;
@@ -3075,6 +3100,10 @@
     <div class="fp-modal">
       <div class="fp-header">
         <h3>フォルダを選択</h3>
+        <div class="fp-tabs">
+          <button type="button" class="fp-tab active" id="fpTabMyDrive">マイドライブ</button>
+          <button type="button" class="fp-tab" id="fpTabShared">共有ドライブ</button>
+        </div>
         <input type="text" class="fp-search" id="fpSearch" placeholder="フォルダ名で検索...">
       </div>
       <div class="fp-breadcrumbs" id="fpBreadcrumbs"></div>

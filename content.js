@@ -111,7 +111,7 @@
         sendResponse({ success: true, productInfo: productInfo });
         break;
       default:
-        sendResponse({ success: false, error: '不明なアクション' });
+        return;
     }
     return true;
   });
