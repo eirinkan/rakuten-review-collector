@@ -2553,6 +2553,8 @@ async function handleCollectionComplete(tabId) {
     log(`すべての収集が完了しました（${reviewCount}件のレビュー）`, 'success');
     // 全体完了の通知
     showNotification('楽天レビュー収集', `すべての収集が完了しました（${reviewCount}件のレビュー）`);
+    // UIにキュー収集完了を通知（ポップアップのボタン状態リセット用）
+    forwardToAll({ action: 'queueCollectionComplete' });
   } else if (activeCollectionTabs.size === 0 && !isQueueCollecting && !completedItem) {
     // 単一収集完了時の検証と通知
     verifyReviewCount();
@@ -3348,6 +3350,9 @@ function log(text, type = '', category = 'review') {
   if (!_logFlushTimer) {
     _logFlushTimer = setTimeout(flushLogBuffer, 200);
   }
+
+  // UIに直接送信（即時表示用 — ストレージ書込みを待たない）
+  forwardToAll({ action: 'appendLog', entry: { time, text, type }, category });
 }
 
 function flushLogBuffer() {

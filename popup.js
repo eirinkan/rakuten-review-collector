@@ -319,11 +319,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function restoreState() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    chrome.storage.local.get(['collectingItems'], (result) => {
+    chrome.storage.local.get(['collectingItems', 'isQueueCollecting'], (result) => {
       const collectingItems = result.collectingItems || [];
+      const isQueueCollecting = result.isQueueCollecting || false;
       // 現在のタブが収集中リストにあるかチェック
       const isCurrentTabCollecting = collectingItems.some(item => item.tabId === tab.id);
       updateUI({ isRunning: isCurrentTabCollecting });
+
+      // ランキングページのボタン状態を復元
+      if (isQueueCollecting) {
+        updateRankingUI(true);
+      }
+    });
+
+    // 商品バッチ収集の状態を確認
+    chrome.runtime.sendMessage({ action: 'getBatchProductProgress' }, (res) => {
+      if (chrome.runtime.lastError) return;
+      if (res && res.progress && res.progress.isRunning) {
+        updateRankingProductUI(true);
+      }
     });
   }
 
@@ -334,6 +348,34 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       startBtn.style.display = 'block';
       stopBtn.style.display = 'none';
+    }
+  }
+
+  // ランキングページのレビュー収集ボタン状態を更新
+  function updateRankingUI(isCollecting) {
+    if (!startRankingBtn) return;
+    if (isCollecting) {
+      startRankingBtn.textContent = '収集中...';
+      startRankingBtn.disabled = true;
+      startRankingBtn.classList.remove('btn-start');
+      startRankingBtn.classList.add('btn-stop');
+    } else {
+      startRankingBtn.textContent = 'レビュー収集開始';
+      startRankingBtn.disabled = false;
+      startRankingBtn.classList.remove('btn-stop');
+      startRankingBtn.classList.add('btn-start');
+    }
+  }
+
+  // ランキングページの商品情報収集ボタン状態を更新
+  function updateRankingProductUI(isCollecting) {
+    if (!startRankingProductBtn) return;
+    if (isCollecting) {
+      startRankingProductBtn.textContent = '商品情報収集中...';
+      startRankingProductBtn.disabled = true;
+    } else {
+      startRankingProductBtn.textContent = '商品情報収集開始';
+      startRankingProductBtn.disabled = false;
     }
   }
 
@@ -350,9 +392,17 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // ボタンを即座に切り替え（レスポンスを待たない）
+    startBtn.style.display = 'none';
+    stopBtn.style.display = 'block';
+    showMessage('収集を開始しています...', 'success');
+
     // 商品情報を取得
     chrome.tabs.sendMessage(tab.id, { action: 'getProductInfo' }, (response) => {
       if (chrome.runtime.lastError) {
+        // エラー時はボタンを戻す
+        startBtn.style.display = 'block';
+        stopBtn.style.display = 'none';
         showMessage('ページをリロードしてください', 'error');
         return;
       }
@@ -370,10 +420,11 @@ document.addEventListener('DOMContentLoaded', () => {
         tabId: tab.id
       }, (res) => {
         if (res && res.success) {
-          startBtn.style.display = 'none';
-          stopBtn.style.display = 'block';
           showMessage('収集を開始しました', 'success');
         } else {
+          // エラー時はボタンを戻す
+          startBtn.style.display = 'block';
+          stopBtn.style.display = 'none';
           showMessage(res?.error || '収集開始に失敗しました', 'error');
         }
       });
@@ -555,13 +606,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function startQueueCollectionFromRanking(itemCount) {
     chrome.runtime.sendMessage({ action: 'startQueueCollection' }, (res) => {
-      startRankingBtn.disabled = false;
       addRankingBtn.disabled = false;
-      startRankingBtn.textContent = '収集開始';
 
       if (res && res.success) {
+        // 収集中状態を維持（ボタンをリセットしない）
+        updateRankingUI(true);
         showRankingMessage(`${itemCount}件の収集を開始しました`, 'success');
       } else {
+        // エラー時はボタンを戻す
+        updateRankingUI(false);
         showRankingMessage(res?.error || '収集開始に失敗しました', 'error');
       }
     });
@@ -645,10 +698,18 @@ document.addEventListener('DOMContentLoaded', () => {
           action: 'startBatchProductCollection',
           items: response.addedItems
         }, (res) => {
-          resetRankingProductBtn();
-          if (res && res.success) {
+          // 他のボタンは戻す
+          startRankingBtn.disabled = false;
+          addRankingBtn.disabled = false;
+          if (addRankingProductBtn) addRankingProductBtn.disabled = false;
+
+          if (res && !res.error) {
+            // 収集中状態を維持
+            updateRankingProductUI(true);
             showRankingMessage(`${response.addedCount}件の商品情報収集を開始しました`, 'success');
           } else {
+            // エラー時はボタンを戻す
+            updateRankingProductUI(false);
             showRankingMessage(res?.error || '商品情報収集の開始に失敗しました', 'error');
           }
         });
@@ -660,10 +721,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function resetRankingProductBtn() {
-    if (startRankingProductBtn) {
-      startRankingProductBtn.disabled = false;
-      startRankingProductBtn.textContent = '商品情報収集開始';
-    }
+    updateRankingProductUI(false);
     startRankingBtn.disabled = false;
     addRankingBtn.disabled = false;
     if (addRankingProductBtn) addRankingProductBtn.disabled = false;
@@ -741,6 +799,10 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'collectionComplete':
         restoreState(); // 現在のタブの状態を再確認
         break;
+      case 'queueCollectionComplete':
+        // キュー全件収集完了 — ランキングボタンをリセット
+        updateRankingUI(false);
+        break;
       case 'queueUpdated':
         restoreState(); // 現在のタブの状態を再確認
         break;
@@ -768,6 +830,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         break;
       }
+      case 'batchProductProgressUpdate':
+        // 商品バッチ収集の進捗/完了
+        if (msg.progress && !msg.progress.isRunning) {
+          updateRankingProductUI(false);
+        }
+        break;
     }
   }
 

@@ -1580,7 +1580,16 @@ document.addEventListener('DOMContentLoaded', () => {
         // background.jsからログデータを直接受信→即座にメモリ追加＋DOM更新
         if (msg.entry) {
           appendToLog(msg.entry, msg.category);
+          // 商品ログの場合、ポーリングカウンターも進めて重複防止
+          if (msg.category === 'product') {
+            _lastPolledProductLogCount++;
+          }
         }
+        break;
+      case 'queueCollectionComplete':
+        // キュー全件収集完了 — ボタン状態を更新
+        loadState();
+        loadQueue();
         break;
       case 'batchProductProgressUpdate':
         updateBatchProductProgress(msg.progress);
