@@ -3930,6 +3930,13 @@ async function getAuthTokenWithFallback() {
   if (token) return token;
 
   // 非対話型で取得できなければ対話型で試す
+  return getAuthTokenInteractive();
+}
+
+/**
+ * 対話型で認証トークンを取得
+ */
+function getAuthTokenInteractive() {
   return new Promise((resolve, reject) => {
     chrome.identity.getAuthToken({ interactive: true }, (token) => {
       if (chrome.runtime.lastError || !token) {
@@ -3942,14 +3949,52 @@ async function getAuthTokenWithFallback() {
 }
 
 /**
+ * キャッシュされたトークンを削除して新しいトークンを対話型で取得
+ * スコープが更新された場合に使用
+ */
+async function refreshAuthToken() {
+  const oldToken = await getAuthToken();
+  if (oldToken) {
+    await new Promise(resolve => {
+      chrome.identity.removeCachedAuthToken({ token: oldToken }, resolve);
+    });
+  }
+  return getAuthTokenInteractive();
+}
+
+/**
+ * Drive APIリクエストを実行（スコープ不足時は自動リトライ）
+ */
+async function driveApiFetch(url, options = {}) {
+  const token = await getAuthTokenWithFallback();
+  const response = await fetch(url, {
+    ...options,
+    headers: { ...options.headers, Authorization: `Bearer ${token}` }
+  });
+
+  // スコープ不足エラー: トークンを更新してリトライ
+  if (response.status === 403) {
+    const errorData = await response.json().catch(() => ({}));
+    if (errorData.error?.message?.includes('insufficient authentication scopes')) {
+      const newToken = await refreshAuthToken();
+      return fetch(url, {
+        ...options,
+        headers: { ...options.headers, Authorization: `Bearer ${newToken}` }
+      });
+    }
+    throw new Error(errorData.error?.message || `Drive API エラー (403)`);
+  }
+
+  return response;
+}
+
+/**
  * 指定フォルダ内のサブフォルダ一覧を取得
  * @param {string} parentId - 親フォルダID（'root'でマイドライブ直下）
  * @param {string} driveId - 共有ドライブID（省略時はマイドライブ）
  * @returns {Promise<Object>} { success: true, folders: [...] }
  */
 async function getDriveFolders(parentId = 'root', driveId = null) {
-  const token = await getAuthTokenWithFallback();
-
   const query = `'${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
   const params = new URLSearchParams({
     q: query,
@@ -3958,7 +4003,6 @@ async function getDriveFolders(parentId = 'root', driveId = null) {
     pageSize: '100'
   });
 
-  // 共有ドライブ対応
   if (driveId) {
     params.set('includeItemsFromAllDrives', 'true');
     params.set('supportsAllDrives', 'true');
@@ -3966,10 +4010,7 @@ async function getDriveFolders(parentId = 'root', driveId = null) {
     params.set('driveId', driveId);
   }
 
-  const response = await fetch(
-    `https://www.googleapis.com/drive/v3/files?${params}`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
+  const response = await driveApiFetch(`https://www.googleapis.com/drive/v3/files?${params}`);
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
@@ -3994,9 +4035,6 @@ async function searchDriveFolders(query, driveId = null) {
     return { success: true, folders: [] };
   }
 
-  const token = await getAuthTokenWithFallback();
-
-  // 特殊文字をエスケープ
   const escaped = query.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   const q = `mimeType='application/vnd.google-apps.folder' and name contains '${escaped}' and trashed=false`;
   const params = new URLSearchParams({
@@ -4006,7 +4044,6 @@ async function searchDriveFolders(query, driveId = null) {
     pageSize: '50'
   });
 
-  // 共有ドライブ対応
   if (driveId) {
     params.set('includeItemsFromAllDrives', 'true');
     params.set('supportsAllDrives', 'true');
@@ -4014,10 +4051,7 @@ async function searchDriveFolders(query, driveId = null) {
     params.set('driveId', driveId);
   }
 
-  const response = await fetch(
-    `https://www.googleapis.com/drive/v3/files?${params}`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
+  const response = await driveApiFetch(`https://www.googleapis.com/drive/v3/files?${params}`);
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
@@ -4040,17 +4074,12 @@ async function searchDriveFolders(query, driveId = null) {
  * @returns {Promise<Object>} { success: true, drives: [...] }
  */
 async function getSharedDrives() {
-  const token = await getAuthTokenWithFallback();
-
   const params = new URLSearchParams({
     pageSize: '100',
     fields: 'drives(id,name)'
   });
 
-  const response = await fetch(
-    `https://www.googleapis.com/drive/v3/drives?${params}`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
+  const response = await driveApiFetch(`https://www.googleapis.com/drive/v3/drives?${params}`);
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
@@ -4075,14 +4104,9 @@ async function createDriveFolder(name, parentId = 'root') {
     throw new Error('フォルダ名を入力してください');
   }
 
-  const token = await getAuthTokenWithFallback();
-
-  const response = await fetch('https://www.googleapis.com/drive/v3/files', {
+  const response = await driveApiFetch('https://www.googleapis.com/drive/v3/files', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       name: name.trim(),
       mimeType: 'application/vnd.google-apps.folder',
@@ -4112,19 +4136,13 @@ async function getDriveFolderPath(folderId) {
     return { success: true, path: [{ id: 'root', name: 'マイドライブ' }] };
   }
 
-  const token = await getAuthTokenWithFallback();
   const path = [];
   let currentId = folderId;
 
-  // ルートに到達するまで親をたどる（最大10階層）
   for (let i = 0; i < 10; i++) {
-    const params = new URLSearchParams({
-      fields: 'id,name,parents'
-    });
-
-    const response = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${currentId}?${params}`,
-      { headers: { Authorization: `Bearer ${token}` } }
+    const params = new URLSearchParams({ fields: 'id,name,parents' });
+    const response = await driveApiFetch(
+      `https://www.googleapis.com/drive/v3/files/${currentId}?${params}`
     );
 
     if (!response.ok) break;
@@ -4136,7 +4154,6 @@ async function getDriveFolderPath(folderId) {
     currentId = file.parents[0];
   }
 
-  // 先頭にマイドライブを追加（まだなければ）
   if (path.length === 0 || path[0].id !== 'root') {
     path.unshift({ id: 'root', name: 'マイドライブ' });
   }

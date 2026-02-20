@@ -2619,17 +2619,21 @@
     <!-- 商品情報一括収集 Card -->
     <div class="card" id="batchProductSection">
       <h2>商品情報収集</h2>
-      <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">商品ページの情報（テキスト＋画像）をGoogle Driveに保存します</p>
+
+      <!-- URL/ASIN入力 -->
       <div class="url-input-row">
-        <textarea id="batchProductAsins" class="url-textarea" placeholder="商品URL または ASIN（改行で複数可）&#10;例: https://www.amazon.co.jp/dp/B0DWZWJ272&#10;例: B0DWZWJ272"></textarea>
+        <textarea id="batchProductAsins" class="url-textarea" placeholder="商品URL または ASIN（改行で複数可）"></textarea>
         <button id="startBatchProductBtn" class="btn btn-secondary btn-add">追加</button>
       </div>
-      <div style="display: flex; gap: 8px; margin-top: 8px;">
-        <button id="startBatchProductRunBtn" class="btn btn-success" style="flex: 1;" disabled>収集開始・<span id="batchProductCount">0</span>件</button>
-        <button id="cancelBatchProductBtn" class="btn btn-danger btn-sm" style="display: none;">中止</button>
+      <div id="batchProductStatus" class="status-message"></div>
+
+      <div style="margin-top: 8px; margin-bottom: 8px;">
+        <button id="startBatchProductRunBtn" class="btn btn-success btn-large" style="width: 100%;" disabled>一括収集開始・<span id="batchProductCount">0</span>件</button>
+        <button id="cancelBatchProductBtn" class="btn btn-stop btn-large" style="width: 100%; display: none;">収集中止</button>
       </div>
-      <div id="batchProductList" class="queue-list" style="margin-top: 8px;"></div>
-      <div id="batchProductStatus" class="status-message" style="margin-top: 8px;"></div>
+
+      <!-- キューリスト -->
+      <div id="batchProductList" class="queue-list"></div>
       <div id="batchProductProgress" style="display: none; margin-top: 12px;">
         <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">
           <span id="batchProductProgressText">0 / 0</span>
