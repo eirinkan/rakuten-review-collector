@@ -364,6 +364,9 @@ document.addEventListener('DOMContentLoaded', () => {
       cancelBatchProductBtn.addEventListener('click', cancelBatchProductCollection);
     }
 
+    // フォルダピッカー初期化
+    initFolderPicker();
+
     // バックグラウンドからのメッセージ
     chrome.runtime.onMessage.addListener(handleMessage);
 
@@ -2344,6 +2347,283 @@ document.addEventListener('DOMContentLoaded', () => {
           `完了: ${successCount}件成功${failCount > 0 ? `、${failCount}件失敗` : ''}`);
       }
     }
+  }
+
+  // ===== フォルダピッカー =====
+
+  function initFolderPicker() {
+    const pickerBtn = document.getElementById('folderPickerBtn');
+    if (!pickerBtn) return;
+
+    const overlay = document.getElementById('folderPickerOverlay');
+    const searchInput = document.getElementById('fpSearch');
+    const breadcrumbs = document.getElementById('fpBreadcrumbs');
+    const listEl = document.getElementById('fpList');
+    const selectBtn = document.getElementById('fpSelectBtn');
+    const cancelBtn = document.getElementById('fpCancelBtn');
+    const newFolderBtn = document.getElementById('fpNewFolderBtn');
+    const newFolderRow = document.getElementById('fpNewFolderRow');
+    const newFolderInput = document.getElementById('fpNewFolderInput');
+    const newFolderCreate = document.getElementById('fpNewFolderCreate');
+    const newFolderCancel = document.getElementById('fpNewFolderCancel');
+
+    // 状態
+    let currentParentId = 'root';
+    let selectedFolder = null;
+    let pathStack = [{ id: 'root', name: 'マイドライブ' }];
+    let isSearchMode = false;
+    let searchTimeout = null;
+
+    // キャッシュ（5分）
+    const cache = new Map();
+    const CACHE_TTL = 5 * 60 * 1000;
+
+    function getCached(key) {
+      const entry = cache.get(key);
+      if (entry && Date.now() - entry.time < CACHE_TTL) return entry.data;
+      cache.delete(key);
+      return null;
+    }
+
+    function setCache(key, data) {
+      cache.set(key, { data, time: Date.now() });
+    }
+
+    // モーダルを開く
+    pickerBtn.addEventListener('click', () => {
+      overlay.classList.add('active');
+      currentParentId = 'root';
+      selectedFolder = null;
+      pathStack = [{ id: 'root', name: 'マイドライブ' }];
+      isSearchMode = false;
+      searchInput.value = '';
+      selectBtn.disabled = true;
+      newFolderRow.classList.remove('active');
+      loadFolders(currentParentId);
+      renderBreadcrumbs();
+    });
+
+    // モーダルを閉じる
+    cancelBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeModal();
+    });
+
+    function closeModal() {
+      overlay.classList.remove('active');
+    }
+
+    // フォルダ一覧を読み込み
+    async function loadFolders(parentId) {
+      listEl.innerHTML = '<div class="fp-loading">読み込み中...</div>';
+      selectedFolder = null;
+      selectBtn.disabled = true;
+
+      const cached = getCached('list:' + parentId);
+      if (cached) {
+        renderFolders(cached);
+        return;
+      }
+
+      chrome.runtime.sendMessage({ action: 'getDriveFolders', parentId }, (response) => {
+        if (chrome.runtime.lastError) {
+          listEl.innerHTML = `<div class="fp-empty">エラー: ${escapeHtml(chrome.runtime.lastError.message)}</div>`;
+          return;
+        }
+        if (!response || !response.success) {
+          listEl.innerHTML = `<div class="fp-empty">エラー: ${escapeHtml(response?.error || '取得に失敗しました')}</div>`;
+          return;
+        }
+        setCache('list:' + parentId, response.folders);
+        renderFolders(response.folders);
+      });
+    }
+
+    // フォルダ検索
+    async function searchFolders(query) {
+      listEl.innerHTML = '<div class="fp-loading">検索中...</div>';
+      selectedFolder = null;
+      selectBtn.disabled = true;
+
+      chrome.runtime.sendMessage({ action: 'searchDriveFolders', query }, (response) => {
+        if (chrome.runtime.lastError) {
+          listEl.innerHTML = `<div class="fp-empty">エラー: ${escapeHtml(chrome.runtime.lastError.message)}</div>`;
+          return;
+        }
+        if (!response || !response.success) {
+          listEl.innerHTML = `<div class="fp-empty">エラー: ${escapeHtml(response?.error || '検索に失敗しました')}</div>`;
+          return;
+        }
+        renderFolders(response.folders, true);
+      });
+    }
+
+    // フォルダ一覧を描画
+    function renderFolders(folders, isSearch = false) {
+      if (!folders || folders.length === 0) {
+        listEl.innerHTML = `<div class="fp-empty">${isSearch ? '該当するフォルダが見つかりません' : 'フォルダがありません'}</div>`;
+        return;
+      }
+
+      listEl.innerHTML = '';
+      folders.forEach(folder => {
+        const item = document.createElement('div');
+        item.className = 'fp-item';
+        item.innerHTML = `<span class="fp-item-icon">📁</span><span class="fp-item-name">${escapeHtml(folder.name)}</span>`;
+
+        // クリック = 選択
+        item.addEventListener('click', () => {
+          // 選択状態を切り替え
+          listEl.querySelectorAll('.fp-item.selected').forEach(el => el.classList.remove('selected'));
+          item.classList.add('selected');
+          selectedFolder = folder;
+          selectBtn.disabled = false;
+        });
+
+        // ダブルクリック = フォルダの中に入る
+        item.addEventListener('dblclick', () => {
+          enterFolder(folder);
+        });
+
+        listEl.appendChild(item);
+      });
+    }
+
+    // フォルダに入る
+    function enterFolder(folder) {
+      currentParentId = folder.id;
+      selectedFolder = null;
+      selectBtn.disabled = true;
+      isSearchMode = false;
+      searchInput.value = '';
+
+      // パスを更新
+      pathStack.push({ id: folder.id, name: folder.name });
+      renderBreadcrumbs();
+      loadFolders(folder.id);
+    }
+
+    // パンくずリストを描画
+    function renderBreadcrumbs() {
+      breadcrumbs.innerHTML = '';
+      pathStack.forEach((item, index) => {
+        if (index > 0) {
+          const sep = document.createElement('span');
+          sep.className = 'fp-separator';
+          sep.textContent = ' > ';
+          breadcrumbs.appendChild(sep);
+        }
+
+        const crumb = document.createElement('span');
+        crumb.textContent = item.name;
+
+        if (index === pathStack.length - 1) {
+          crumb.className = 'fp-crumb current';
+        } else {
+          crumb.className = 'fp-crumb';
+          crumb.addEventListener('click', () => {
+            // この階層まで戻る
+            pathStack = pathStack.slice(0, index + 1);
+            currentParentId = item.id;
+            selectedFolder = null;
+            selectBtn.disabled = true;
+            isSearchMode = false;
+            searchInput.value = '';
+            renderBreadcrumbs();
+            loadFolders(currentParentId);
+          });
+        }
+
+        breadcrumbs.appendChild(crumb);
+      });
+    }
+
+    // 検索入力
+    searchInput.addEventListener('input', () => {
+      const query = searchInput.value.trim();
+      if (searchTimeout) clearTimeout(searchTimeout);
+
+      if (query.length === 0) {
+        isSearchMode = false;
+        renderBreadcrumbs();
+        loadFolders(currentParentId);
+        return;
+      }
+
+      isSearchMode = true;
+      breadcrumbs.innerHTML = '<span class="fp-crumb current">検索結果</span>';
+
+      searchTimeout = setTimeout(() => {
+        searchFolders(query);
+      }, 400);
+    });
+
+    // 「選択」ボタン
+    selectBtn.addEventListener('click', () => {
+      if (!selectedFolder) return;
+      const url = `https://drive.google.com/drive/folders/${selectedFolder.id}`;
+      if (productInfoFolderUrlInput) {
+        productInfoFolderUrlInput.value = url;
+        // 保存を実行
+        saveProductInfoFolderUrl();
+      }
+      closeModal();
+    });
+
+    // 「新規フォルダ」ボタン
+    newFolderBtn.addEventListener('click', () => {
+      newFolderRow.classList.add('active');
+      newFolderInput.value = '';
+      newFolderInput.focus();
+    });
+
+    newFolderCancel.addEventListener('click', () => {
+      newFolderRow.classList.remove('active');
+    });
+
+    newFolderCreate.addEventListener('click', createNewFolder);
+    newFolderInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') createNewFolder();
+      if (e.key === 'Escape') newFolderRow.classList.remove('active');
+    });
+
+    async function createNewFolder() {
+      const name = newFolderInput.value.trim();
+      if (!name) return;
+
+      newFolderCreate.disabled = true;
+      newFolderCreate.textContent = '作成中...';
+
+      chrome.runtime.sendMessage({
+        action: 'createDriveFolder',
+        name,
+        parentId: currentParentId
+      }, (response) => {
+        newFolderCreate.disabled = false;
+        newFolderCreate.textContent = '作成';
+
+        if (chrome.runtime.lastError) {
+          alert('エラー: ' + chrome.runtime.lastError.message);
+          return;
+        }
+        if (!response || !response.success) {
+          alert('エラー: ' + (response?.error || '作成に失敗しました'));
+          return;
+        }
+
+        // キャッシュをクリアして再読み込み
+        cache.delete('list:' + currentParentId);
+        newFolderRow.classList.remove('active');
+        loadFolders(currentParentId);
+      });
+    }
+
+    // ESCキーでモーダルを閉じる
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && overlay.classList.contains('active')) {
+        closeModal();
+      }
+    });
   }
 
 });

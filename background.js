@@ -890,6 +890,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       batchProductCancelled = true;
       sendResponse({ success: true });
       return false;
+
+    // ===== フォルダピッカー（Google Drive） =====
+    case 'getDriveFolders':
+      getDriveFolders(message.parentId)
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'searchDriveFolders':
+      searchDriveFolders(message.query)
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'createDriveFolder':
+      createDriveFolder(message.name, message.parentId)
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'getDriveFolderPath':
+      getDriveFolderPath(message.folderId)
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
   }
 });
 
@@ -3885,4 +3910,183 @@ function waitForTabComplete(tabId, timeoutMs = 15000) {
  */
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ===== フォルダピッカー用 Google Drive API =====
+
+/**
+ * 認証トークンを取得（対話型フォールバック付き）
+ * フォルダピッカーでは、未認証でも対話型ダイアログで認証できるようにする
+ */
+async function getAuthTokenWithFallback() {
+  // まず非対話型で試す
+  let token = await getAuthToken();
+  if (token) return token;
+
+  // 非対話型で取得できなければ対話型で試す
+  return new Promise((resolve, reject) => {
+    chrome.identity.getAuthToken({ interactive: true }, (token) => {
+      if (chrome.runtime.lastError || !token) {
+        reject(new Error('Google認証が必要です。ログインしてから再度お試しください。'));
+      } else {
+        resolve(token);
+      }
+    });
+  });
+}
+
+/**
+ * 指定フォルダ内のサブフォルダ一覧を取得
+ * @param {string} parentId - 親フォルダID（'root'でマイドライブ直下）
+ * @returns {Promise<Object>} { success: true, folders: [...] }
+ */
+async function getDriveFolders(parentId = 'root') {
+  const token = await getAuthTokenWithFallback();
+
+  const query = `'${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  const params = new URLSearchParams({
+    q: query,
+    fields: 'files(id,name)',
+    orderBy: 'name',
+    pageSize: '100'
+  });
+
+  const response = await fetch(
+    `https://www.googleapis.com/drive/v3/files?${params}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || `Drive API エラー (${response.status})`);
+  }
+
+  const data = await response.json();
+  return {
+    success: true,
+    folders: (data.files || []).map(f => ({ id: f.id, name: f.name }))
+  };
+}
+
+/**
+ * フォルダ名で検索
+ * @param {string} query - 検索クエリ
+ * @returns {Promise<Object>} { success: true, folders: [...] }
+ */
+async function searchDriveFolders(query) {
+  if (!query || query.trim().length === 0) {
+    return { success: true, folders: [] };
+  }
+
+  const token = await getAuthTokenWithFallback();
+
+  // 特殊文字をエスケープ
+  const escaped = query.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const q = `mimeType='application/vnd.google-apps.folder' and name contains '${escaped}' and trashed=false`;
+  const params = new URLSearchParams({
+    q: q,
+    fields: 'files(id,name,parents)',
+    orderBy: 'name',
+    pageSize: '50'
+  });
+
+  const response = await fetch(
+    `https://www.googleapis.com/drive/v3/files?${params}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || `Drive API エラー (${response.status})`);
+  }
+
+  const data = await response.json();
+  return {
+    success: true,
+    folders: (data.files || []).map(f => ({
+      id: f.id,
+      name: f.name,
+      parentId: f.parents ? f.parents[0] : null
+    }))
+  };
+}
+
+/**
+ * 新規フォルダを作成
+ * @param {string} name - フォルダ名
+ * @param {string} parentId - 親フォルダID
+ * @returns {Promise<Object>} { success: true, folder: { id, name } }
+ */
+async function createDriveFolder(name, parentId = 'root') {
+  if (!name || name.trim().length === 0) {
+    throw new Error('フォルダ名を入力してください');
+  }
+
+  const token = await getAuthTokenWithFallback();
+
+  const response = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      name: name.trim(),
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [parentId]
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || `フォルダ作成エラー (${response.status})`);
+  }
+
+  const folder = await response.json();
+  return {
+    success: true,
+    folder: { id: folder.id, name: folder.name }
+  };
+}
+
+/**
+ * フォルダのパス（パンくずリスト）を取得
+ * @param {string} folderId - フォルダID
+ * @returns {Promise<Object>} { success: true, path: [{ id, name }, ...] }
+ */
+async function getDriveFolderPath(folderId) {
+  if (!folderId || folderId === 'root') {
+    return { success: true, path: [{ id: 'root', name: 'マイドライブ' }] };
+  }
+
+  const token = await getAuthTokenWithFallback();
+  const path = [];
+  let currentId = folderId;
+
+  // ルートに到達するまで親をたどる（最大10階層）
+  for (let i = 0; i < 10; i++) {
+    const params = new URLSearchParams({
+      fields: 'id,name,parents'
+    });
+
+    const response = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${currentId}?${params}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    if (!response.ok) break;
+
+    const file = await response.json();
+    path.unshift({ id: file.id, name: file.name });
+
+    if (!file.parents || file.parents.length === 0) break;
+    currentId = file.parents[0];
+  }
+
+  // 先頭にマイドライブを追加（まだなければ）
+  if (path.length === 0 || path[0].id !== 'root') {
+    path.unshift({ id: 'root', name: 'マイドライブ' });
+  }
+
+  return { success: true, path };
 }
