@@ -343,11 +343,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function updateUI(state) {
+    const startGroup = document.getElementById('startGroup');
     if (state.isRunning) {
-      startBtn.style.display = 'none';
+      if (startGroup) startGroup.style.display = 'none';
       stopBtn.style.display = 'block';
     } else {
-      startBtn.style.display = 'block';
+      if (startGroup) startGroup.style.display = 'block';
       stopBtn.style.display = 'none';
     }
   }
@@ -394,16 +395,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ボタンを即座に切り替え（レスポンスを待たない）
-    startBtn.style.display = 'none';
-    stopBtn.style.display = 'block';
+    updateUI({ isRunning: true });
     showMessage('収集を開始しています...', 'success');
 
     // 商品情報を取得
     chrome.tabs.sendMessage(tab.id, { action: 'getProductInfo' }, (response) => {
       if (chrome.runtime.lastError) {
         // エラー時はボタンを戻す
-        startBtn.style.display = 'block';
-        stopBtn.style.display = 'none';
+        updateUI({ isRunning: false });
         showMessage('ページをリロードしてください', 'error');
         return;
       }
@@ -424,8 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
           showMessage('収集を開始しました', 'success');
         } else {
           // エラー時はボタンを戻す
-          startBtn.style.display = 'block';
-          stopBtn.style.display = 'none';
+          updateUI({ isRunning: false });
           showMessage(res?.error || '収集開始に失敗しました', 'error');
         }
       });
@@ -447,8 +445,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     chrome.tabs.sendMessage(tab.id, { action: 'stopCollection' }, (response) => {
       if (response && response.success) {
-        startBtn.style.display = 'block';
-        stopBtn.style.display = 'none';
+        updateUI({ isRunning: false });
       }
     });
   }

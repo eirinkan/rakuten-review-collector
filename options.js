@@ -1290,12 +1290,6 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.local.get(['isQueueCollecting', 'collectingItems'], (result) => {
       const isCollecting = result.isQueueCollecting || (result.collectingItems && result.collectingItems.length > 0);
 
-      const message = isCollecting
-        ? 'キューをクリアし、収集中の処理も全て中止しますか？'
-        : 'キューをクリアしますか？';
-
-      if (!confirm(message)) return;
-
       // 収集中の場合は中止
       if (isCollecting) {
         chrome.runtime.sendMessage({ action: 'stopQueueCollection' }, () => {
