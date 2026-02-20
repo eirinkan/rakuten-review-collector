@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>レビュー収集 - 設定</title>
+  <title>収集 - 設定</title>
   <style>
     /* === CSS Variables === */
     :root {
@@ -2530,7 +2530,7 @@
     <!-- Header -->
     <div class="header">
       <div class="header-top">
-        <h1 id="headerTitle" style="cursor: pointer;">レビュー収集</h1>
+        <h1 id="headerTitle" style="cursor: pointer;">収集</h1>
         <div class="header-actions">
           <div class="spreadsheet-link-wrapper">
             <button id="spreadsheetLinkBtn" class="header-icon-btn disabled" title="スプレッドシートを開く">
@@ -2567,7 +2567,7 @@
         <!-- Queue Card -->
         <div class="card">
           <div class="queue-header">
-            <h2>レビュー収集</h2>
+            <h2>レビュー</h2>
             <div style="display: flex; align-items: center; gap: 8px;">
               <div class="saved-queues-dropdown-container">
                 <button id="loadSavedQueuesBtn" class="icon-btn" title="保存済みキュー">
@@ -2661,9 +2661,30 @@
 
       <!-- ===== 右カラム: 商品情報収集 ===== -->
       <div class="main-column">
-        <!-- 商品情報一括収集 Card -->
+        <!-- 商品情報収集 Card -->
         <div class="card" id="batchProductSection">
-          <h2>商品情報収集</h2>
+          <div class="queue-header">
+            <h2>商品</h2>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div class="saved-queues-dropdown-container">
+                <button id="loadProductQueuesBtn" class="icon-btn" title="保存済みキュー">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/></svg>
+                </button>
+                <div id="productQueuesDropdown" class="saved-queues-dropdown" style="display: none;">
+                  <div class="saved-queues-dropdown-header">保存済みキュー</div>
+                  <div id="productQueuesDropdownList" class="saved-queues-dropdown-list">
+                    <div class="saved-queues-empty">保存済みキューはありません</div>
+                  </div>
+                </div>
+              </div>
+              <button id="saveProductQueueBtn" class="icon-btn" title="キューを保存">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+              </button>
+              <button id="clearProductQueueBtn" class="icon-btn" title="キュークリア">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+              </button>
+            </div>
+          </div>
 
           <!-- URL/ASIN入力 -->
           <div class="url-input-row">

@@ -150,6 +150,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // 商品情報収集のキューリスト（メモリ上で管理）
   let batchProductQueue = [];
 
+  // 商品キュー保存関連
+  const saveProductQueueBtn = document.getElementById('saveProductQueueBtn');
+  const loadProductQueuesBtn = document.getElementById('loadProductQueuesBtn');
+  const productQueuesDropdown = document.getElementById('productQueuesDropdown');
+  const productQueuesDropdownList = document.getElementById('productQueuesDropdownList');
+  const clearProductQueueBtn = document.getElementById('clearProductQueueBtn');
+
   // 定期収集関連
   const scheduledQueuesList = document.getElementById('scheduledQueuesList');
   const addScheduledQueueBtn = document.getElementById('addScheduledQueueBtn');
@@ -378,6 +385,34 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (cancelBatchProductBtn) {
       cancelBatchProductBtn.addEventListener('click', cancelBatchProductCollection);
+    }
+
+    // 商品キュー保存/読み込み/クリア
+    if (saveProductQueueBtn) saveProductQueueBtn.addEventListener('click', saveProductQueue);
+    if (loadProductQueuesBtn) loadProductQueuesBtn.addEventListener('click', toggleProductQueuesDropdown);
+    if (clearProductQueueBtn) {
+      clearProductQueueBtn.addEventListener('click', () => {
+        if (batchProductQueue.length === 0) return;
+        batchProductQueue = [];
+        renderBatchProductQueue();
+        addLog('キューをクリアしました', '', 'product');
+      });
+    }
+    // ドロップダウン外クリックで閉じる
+    document.addEventListener('click', (e) => {
+      if (productQueuesDropdown && productQueuesDropdown.style.display !== 'none') {
+        if (!productQueuesDropdown.contains(e.target) && !loadProductQueuesBtn.contains(e.target)) {
+          productQueuesDropdown.style.display = 'none';
+        }
+      }
+    });
+
+    // 商品入力欄の高さ自動調整
+    if (batchProductAsins) {
+      batchProductAsins.addEventListener('input', () => {
+        batchProductAsins.style.height = '38px';
+        batchProductAsins.style.height = Math.min(batchProductAsins.scrollHeight, 120) + 'px';
+      });
     }
 
     // フォルダピッカー初期化
@@ -1675,6 +1710,148 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ========================================
+  // 商品キュー保存機能
+  // ========================================
+
+  function toggleProductQueuesDropdown() {
+    if (!productQueuesDropdown) return;
+    const isVisible = productQueuesDropdown.style.display !== 'none';
+    productQueuesDropdown.style.display = isVisible ? 'none' : 'block';
+    if (!isVisible) loadSavedProductQueues();
+  }
+
+  function loadSavedProductQueues() {
+    chrome.storage.local.get(['savedProductQueues'], (result) => {
+      const queues = result.savedProductQueues || [];
+      renderProductQueuesDropdown(queues);
+    });
+  }
+
+  function renderProductQueuesDropdown(queues) {
+    if (!productQueuesDropdownList) return;
+    if (queues.length === 0) {
+      productQueuesDropdownList.innerHTML = '<div class="saved-queues-empty">保存済みキューはありません</div>';
+      return;
+    }
+
+    productQueuesDropdownList.innerHTML = queues.map(queue => `
+      <div class="saved-queue-item" data-id="${queue.id}">
+        <div class="saved-queue-info" data-id="${queue.id}">
+          <span class="saved-queue-name">${escapeHtml(queue.name)}</span>
+          <span class="saved-queue-count">${queue.items.length}件</span>
+        </div>
+        <div class="saved-queue-actions">
+          <button class="dropdown-icon-btn pq-load-btn" data-id="${queue.id}" title="キューに追加">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          </button>
+          <button class="dropdown-icon-btn pq-edit-btn" data-id="${queue.id}" title="名前を変更">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+          </button>
+          <button class="dropdown-icon-btn pq-delete-btn" data-id="${queue.id}" title="削除">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+          </button>
+        </div>
+      </div>
+    `).join('');
+
+    // イベントリスナー
+    productQueuesDropdownList.querySelectorAll('.pq-load-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        loadProductQueue(e.currentTarget.dataset.id);
+        productQueuesDropdown.style.display = 'none';
+      });
+    });
+    productQueuesDropdownList.querySelectorAll('.saved-queue-info').forEach(el => {
+      el.addEventListener('click', (e) => {
+        loadProductQueue(e.currentTarget.dataset.id);
+        productQueuesDropdown.style.display = 'none';
+      });
+    });
+    productQueuesDropdownList.querySelectorAll('.pq-edit-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        editProductQueueName(e.currentTarget.dataset.id);
+      });
+    });
+    productQueuesDropdownList.querySelectorAll('.pq-delete-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteProductQueue(e.currentTarget.dataset.id);
+      });
+    });
+  }
+
+  function saveProductQueue() {
+    if (batchProductQueue.length === 0) {
+      alert('キューが空です');
+      return;
+    }
+    const name = prompt('保存するキューの名前を入力してください');
+    if (!name || name.trim() === '') return;
+
+    chrome.storage.local.get(['savedProductQueues'], (result) => {
+      const queues = result.savedProductQueues || [];
+      queues.push({
+        id: 'pq_' + Date.now(),
+        name: name.trim(),
+        createdAt: new Date().toISOString(),
+        items: batchProductQueue.map(asin => ({ asin }))
+      });
+      chrome.storage.local.set({ savedProductQueues: queues }, () => {
+        loadSavedProductQueues();
+        addLog(`キュー「${name}」を保存（${batchProductQueue.length}件）`, 'success', 'product');
+      });
+    });
+  }
+
+  function loadProductQueue(queueId) {
+    chrome.storage.local.get(['savedProductQueues'], (result) => {
+      const queues = result.savedProductQueues || [];
+      const queue = queues.find(q => q.id === queueId);
+      if (!queue) return;
+      let addedCount = 0;
+      for (const item of queue.items) {
+        if (!batchProductQueue.includes(item.asin)) {
+          batchProductQueue.push(item.asin);
+          addedCount++;
+        }
+      }
+      renderBatchProductQueue();
+      addLog(`「${queue.name}」から${addedCount}件をキューに追加`, 'success', 'product');
+    });
+  }
+
+  function editProductQueueName(queueId) {
+    chrome.storage.local.get(['savedProductQueues'], (result) => {
+      const queues = result.savedProductQueues || [];
+      const queue = queues.find(q => q.id === queueId);
+      if (!queue) return;
+      const newName = prompt('新しいキュー名を入力', queue.name);
+      if (!newName || newName.trim() === '') return;
+      queue.name = newName.trim();
+      chrome.storage.local.set({ savedProductQueues: queues }, () => {
+        loadSavedProductQueues();
+        addLog(`キュー名を「${newName}」に変更`, 'success', 'product');
+      });
+    });
+  }
+
+  function deleteProductQueue(queueId) {
+    chrome.storage.local.get(['savedProductQueues'], (result) => {
+      const queues = result.savedProductQueues || [];
+      const queue = queues.find(q => q.id === queueId);
+      if (!queue) return;
+      if (!confirm(`「${queue.name}」を削除しますか？`)) return;
+      const newQueues = queues.filter(q => q.id !== queueId);
+      chrome.storage.local.set({ savedProductQueues: newQueues }, () => {
+        loadSavedProductQueues();
+        addLog(`キュー「${queue.name}」を削除`, 'success', 'product');
+      });
+    });
+  }
+
+  // ========================================
   // ビュー切り替え機能
   // ========================================
 
@@ -2394,14 +2571,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     batchProductList.innerHTML = batchProductQueue.map((asin, index) => `
-      <div class="queue-item" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; font-size: 13px;">
-        <span>${escapeHtml(asin)}</span>
-        <button class="icon-btn" data-index="${index}" title="削除" style="padding: 2px 6px; font-size: 12px; cursor: pointer; background: none; border: none; color: var(--error);">✕</button>
+      <div class="queue-item">
+        <div class="queue-item-info">
+          <div class="queue-item-title"><span class="source-badge source-amazon">Amazon</span>${escapeHtml(asin)}</div>
+          <div class="queue-item-url">https://www.amazon.co.jp/dp/${escapeHtml(asin)}</div>
+        </div>
+        <button class="queue-item-remove" data-index="${index}">×</button>
       </div>
     `).join('');
 
     // 削除ボタンのイベント
-    batchProductList.querySelectorAll('button[data-index]').forEach(btn => {
+    batchProductList.querySelectorAll('.queue-item-remove').forEach(btn => {
       btn.addEventListener('click', () => {
         const idx = parseInt(btn.dataset.index, 10);
         batchProductQueue.splice(idx, 1);
