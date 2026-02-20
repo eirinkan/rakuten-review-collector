@@ -633,13 +633,6 @@
       color: var(--error);
     }
 
-    .version-display {
-      text-align: center;
-      font-size: 11px;
-      color: var(--text-muted);
-      padding: 6px 0 8px;
-      opacity: 0.6;
-    }
   </style>
 </head>
 <body>
@@ -674,8 +667,8 @@
       <div id="normalMode">
         <div class="group-label">収集開始</div>
         <div class="btn-group">
-          <button id="startBtn" class="btn btn-start">レビューのみ</button>
-          <button id="productInfoBtn" class="btn btn-product-info">商品情報のみ</button>
+          <button id="startBtn" class="btn btn-start">レビュー</button>
+          <button id="productInfoBtn" class="btn btn-product-info">商品情報</button>
           <button id="startBothBtn" class="btn btn-both">両方</button>
         </div>
         <button id="stopBtn" class="btn btn-stop" style="display: none;">収集停止</button>
@@ -687,8 +680,8 @@
         </div>
         <div class="group-label">キューに追加</div>
         <div class="btn-group">
-          <button id="queueBtn" class="btn btn-queue">レビューのみ</button>
-          <button id="productQueueBtn" class="btn btn-queue btn-product-queue">商品情報のみ</button>
+          <button id="queueBtn" class="btn btn-queue">レビュー</button>
+          <button id="productQueueBtn" class="btn btn-queue btn-product-queue">商品情報</button>
           <button id="queueBothBtn" class="btn btn-queue btn-both">両方</button>
         </div>
         <div id="message" class="message"></div>
@@ -703,14 +696,14 @@
         </div>
         <div class="group-label">収集開始</div>
         <div class="btn-group">
-          <button id="startRankingBtn" class="btn btn-start">レビューのみ</button>
-          <button id="startRankingProductBtn" class="btn btn-product-info">商品情報のみ</button>
+          <button id="startRankingBtn" class="btn btn-start">レビュー</button>
+          <button id="startRankingProductBtn" class="btn btn-product-info">商品情報</button>
           <button id="startRankingBothBtn" class="btn btn-both">両方</button>
         </div>
         <div class="group-label">キューに追加</div>
         <div class="btn-group">
-          <button id="addRankingBtn" class="btn btn-queue">レビューのみ</button>
-          <button id="addRankingProductBtn" class="btn btn-queue btn-product-queue">商品情報のみ</button>
+          <button id="addRankingBtn" class="btn btn-queue">レビュー</button>
+          <button id="addRankingProductBtn" class="btn btn-queue btn-product-queue">商品情報</button>
           <button id="addRankingBothBtn" class="btn btn-queue btn-both">両方</button>
         </div>
         <div id="rankingMessage" class="message"></div>
@@ -732,8 +725,6 @@
       <button id="logoutBtn" class="btn-logout">ログアウト</button>
     </div>
 
-    <!-- バージョン表示 -->
-    <div id="versionDisplay" class="version-display"></div>
   </div>
 
   <script src="popup.js"></script>

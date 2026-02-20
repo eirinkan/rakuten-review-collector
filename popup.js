@@ -148,13 +148,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (userEmail) userEmail.textContent = user.email;
     }
 
-    // バージョン表示
-    const versionDisplay = document.getElementById('versionDisplay');
-    if (versionDisplay) {
-      const manifest = chrome.runtime.getManifest();
-      versionDisplay.textContent = `v${manifest.version}`;
-    }
-
     // メイン機能を初期化
     init();
   }
@@ -875,44 +868,67 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
-   * 商品情報を収集してGoogle Driveに保存
+   * 商品情報を収集（キューに追加してからバッチ収集を開始）
    */
   async function collectProductInfo() {
     const productInfoBtn = document.getElementById('productInfoBtn');
-    const progressContainer = document.getElementById('productInfoProgress');
-    const progressBar = document.getElementById('productInfoProgressBar');
-    const progressText = document.getElementById('productInfoProgressText');
-
     if (!productInfoBtn) return;
 
     productInfoBtn.disabled = true;
-    productInfoBtn.textContent = '収集中...';
-    if (progressContainer) progressContainer.style.display = 'block';
-    if (progressText) progressText.textContent = 'ページから情報を読み取り中...';
-    if (progressBar) progressBar.style.width = '10%';
+    productInfoBtn.textContent = '追加中...';
 
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-      chrome.runtime.sendMessage({
-        action: 'collectAndSaveProductInfo',
-        tabId: tab.id
-      }, (response) => {
-        if (chrome.runtime.lastError) {
-          showMessage('エラー: ' + chrome.runtime.lastError.message, 'error');
+      const isAmazonPage = tab.url.includes('amazon.co.jp');
+      const isRakutenPage = tab.url.includes('item.rakuten.co.jp');
+
+      if (!isAmazonPage && !isRakutenPage) {
+        showMessage('商品ページを開いてください', 'error');
+        resetProductInfoBtn();
+        return;
+      }
+
+      // キュー用のアイテムを作成
+      let item;
+      if (isAmazonPage) {
+        const dpMatch = tab.url.match(/\/dp\/([A-Z0-9]{10})/i);
+        const gpMatch = tab.url.match(/\/gp\/product\/([A-Z0-9]{10})/i);
+        const asin = (dpMatch && dpMatch[1]) || (gpMatch && gpMatch[1]);
+        if (!asin) {
+          showMessage('ASINが取得できませんでした', 'error');
           resetProductInfoBtn();
           return;
         }
+        item = asin.toUpperCase();
+      } else {
+        item = tab.url.split('?')[0];
+      }
 
-        if (response && response.success) {
-          if (progressBar) progressBar.style.width = '100%';
-          if (progressText) progressText.textContent = '保存完了!';
-          showMessage(`保存しました (画像${response.imageCount}枚)`, 'success');
-          setTimeout(resetProductInfoBtn, 2000);
-        } else {
-          showMessage(response?.error || '保存に失敗しました', 'error');
-          resetProductInfoBtn();
+      // 商品キューに追加
+      chrome.storage.local.get(['batchProductQueue'], (result) => {
+        const queue = result.batchProductQueue || [];
+        const alreadyInQueue = queue.includes(item);
+
+        if (!alreadyInQueue) {
+          queue.push(item);
+          chrome.storage.local.set({ batchProductQueue: queue });
+          chrome.runtime.sendMessage({ action: 'batchProductQueueUpdated' });
         }
+
+        // バッチ収集を開始（この1件だけ）
+        chrome.runtime.sendMessage({
+          action: 'startBatchProductCollection',
+          items: [item]
+        }, (res) => {
+          if (res && !res.error) {
+            productInfoBtn.textContent = '収集中...';
+            showMessage('商品情報の収集を開始しました', 'success');
+          } else {
+            showMessage(res?.error || '収集開始に失敗しました', 'error');
+            resetProductInfoBtn();
+          }
+        });
       });
     } catch (error) {
       showMessage('エラー: ' + error.message, 'error');
@@ -922,13 +938,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function resetProductInfoBtn() {
     const productInfoBtn = document.getElementById('productInfoBtn');
-    const progressContainer = document.getElementById('productInfoProgress');
     if (productInfoBtn) {
       productInfoBtn.disabled = false;
-      productInfoBtn.textContent = '商品情報を収集';
-    }
-    if (progressContainer) {
-      setTimeout(() => { progressContainer.style.display = 'none'; }, 500);
+      productInfoBtn.textContent = '商品情報';
     }
   }
 
@@ -977,6 +989,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 商品バッチ収集の進捗/完了
         if (msg.progress && !msg.progress.isRunning) {
           updateRankingProductUI(false);
+          resetProductInfoBtn();
         }
         break;
     }
