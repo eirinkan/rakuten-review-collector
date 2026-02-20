@@ -69,10 +69,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const queueBtn = document.getElementById('queueBtn');
   const settingsBtn = document.getElementById('settingsBtn');
   const productQueueBtn = document.getElementById('productQueueBtn');
+  const startBothBtn = document.getElementById('startBothBtn');
+  const queueBothBtn = document.getElementById('queueBothBtn');
   const startRankingBtn = document.getElementById('startRankingBtn');
   const startRankingProductBtn = document.getElementById('startRankingProductBtn');
+  const startRankingBothBtn = document.getElementById('startRankingBothBtn');
   const addRankingBtn = document.getElementById('addRankingBtn');
   const addRankingProductBtn = document.getElementById('addRankingProductBtn');
+  const addRankingBothBtn = document.getElementById('addRankingBothBtn');
   const rankingCountInput = document.getElementById('rankingCount');
 
   // ログインボタン
@@ -253,17 +257,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const isRakutenProductPage = tab.url && tab.url.includes('item.rakuten.co.jp');
     const isProductPage = isAmazonProductPage || isRakutenProductPage;
 
-    // 商品ページの場合: 商品情報収集ボタン＋商品情報キュー追加ボタンを表示
+    // 商品情報ボタンのイベント登録
     const productInfoBtn = document.getElementById('productInfoBtn');
-    if (isProductPage) {
-      if (productInfoBtn) {
-        productInfoBtn.style.display = 'block';
-        productInfoBtn.addEventListener('click', collectProductInfo);
-      }
-      if (productQueueBtn) {
-        productQueueBtn.style.display = 'block';
-        productQueueBtn.addEventListener('click', addToProductQueue);
-      }
+    if (productInfoBtn) productInfoBtn.addEventListener('click', collectProductInfo);
+    if (productQueueBtn) productQueueBtn.addEventListener('click', addToProductQueue);
+
+    // 商品ページでない場合: 商品情報系・両方ボタンをdisabled
+    if (!isProductPage) {
+      if (productInfoBtn) productInfoBtn.disabled = true;
+      if (productQueueBtn) productQueueBtn.disabled = true;
+      if (startBothBtn) startBothBtn.disabled = true;
+      if (queueBothBtn) queueBothBtn.disabled = true;
     }
 
     // 対応ページの判定
@@ -274,30 +278,30 @@ document.addEventListener('DOMContentLoaded', () => {
       // 楽天ランキングページの場合
       normalMode.style.display = 'none';
       rankingMode.style.display = 'block';
-      // 商品キュー・商品情報収集ボタンを表示
-      if (addRankingProductBtn) addRankingProductBtn.style.display = 'block';
-      if (startRankingProductBtn) startRankingProductBtn.style.display = 'block';
 
-      // サイトマップページの場合は特別処理
+      // サイトマップページの場合は全ボタン無効化
       if (isRakutenRankingSitemap) {
         startRankingBtn.disabled = true;
         if (startRankingProductBtn) startRankingProductBtn.disabled = true;
+        if (startRankingBothBtn) startRankingBothBtn.disabled = true;
         addRankingBtn.disabled = true;
         if (addRankingProductBtn) addRankingProductBtn.disabled = true;
+        if (addRankingBothBtn) addRankingBothBtn.disabled = true;
         showRankingMessage('任意のランキングを選んでください', 'info');
       }
     } else if (isAmazonRankingPage) {
       // Amazonランキングページの場合
       normalMode.style.display = 'none';
       rankingMode.style.display = 'block';
-      // 商品キュー・商品情報収集ボタンを表示
-      if (addRankingProductBtn) addRankingProductBtn.style.display = 'block';
-      if (startRankingProductBtn) startRankingProductBtn.style.display = 'block';
     } else if (!isSupportedPage) {
       // 楽天・Amazon以外のページ
       pageWarning.style.display = 'block';
       startBtn.disabled = true;
+      if (productInfoBtn) productInfoBtn.disabled = true;
+      if (startBothBtn) startBothBtn.disabled = true;
       queueBtn.disabled = true;
+      if (productQueueBtn) productQueueBtn.disabled = true;
+      if (queueBothBtn) queueBothBtn.disabled = true;
     }
 
     // 状態を復元
@@ -306,12 +310,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // イベントリスナー
     startBtn.addEventListener('click', startCollection);
     stopBtn.addEventListener('click', stopCollection);
+    if (startBothBtn) startBothBtn.addEventListener('click', startBothCollection);
     queueBtn.addEventListener('click', addToQueue);
+    if (queueBothBtn) queueBothBtn.addEventListener('click', addBothToQueue);
     settingsBtn.addEventListener('click', openSettings);
     startRankingBtn.addEventListener('click', startRankingCollection);
     if (startRankingProductBtn) startRankingProductBtn.addEventListener('click', startRankingProductCollection);
+    if (startRankingBothBtn) startRankingBothBtn.addEventListener('click', startRankingBothCollection);
     addRankingBtn.addEventListener('click', addRankingToQueue);
     if (addRankingProductBtn) addRankingProductBtn.addEventListener('click', addRankingToProductQueue);
+    if (addRankingBothBtn) addRankingBothBtn.addEventListener('click', addRankingBothToQueue);
 
     // バックグラウンドからのメッセージ
     chrome.runtime.onMessage.addListener(handleMessage);
@@ -431,6 +439,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  /**
+   * 両方（レビュー＋商品情報）を同時に収集開始
+   */
+  async function startBothCollection() {
+    // レビュー収集を開始
+    await startCollection();
+    // 商品情報収集も開始
+    collectProductInfo();
+  }
+
   async function stopCollection() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
@@ -521,6 +539,14 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome.runtime.sendMessage({ action: 'queueUpdated' });
       });
     });
+  }
+
+  /**
+   * 両方のキューに追加（レビューキュー＋商品情報キュー）
+   */
+  async function addBothToQueue() {
+    await addToQueue();
+    await addToProductQueue();
   }
 
   /**
@@ -718,6 +744,123 @@ document.addEventListener('DOMContentLoaded', () => {
         showRankingMessage(response?.error || '商品が見つかりませんでした', 'error');
       }
     });
+  }
+
+  /**
+   * ランキングから「両方」キューに追加（レビューキュー＋商品キュー）
+   */
+  async function addRankingBothToQueue() {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const count = parseInt(rankingCountInput.value) || 10;
+
+    // 全ボタン無効化
+    if (addRankingBothBtn) addRankingBothBtn.disabled = true;
+    addRankingBtn.disabled = true;
+    if (addRankingProductBtn) addRankingProductBtn.disabled = true;
+    startRankingBtn.disabled = true;
+    if (startRankingProductBtn) startRankingProductBtn.disabled = true;
+    if (startRankingBothBtn) startRankingBothBtn.disabled = true;
+    if (addRankingBothBtn) addRankingBothBtn.textContent = '追加中...';
+
+    // レビューキューに追加
+    chrome.runtime.sendMessage({
+      action: 'fetchRanking',
+      url: tab.url,
+      count: count
+    }, (reviewRes) => {
+      // 商品キューに追加
+      chrome.runtime.sendMessage({
+        action: 'addRankingToProductQueue',
+        url: tab.url,
+        count: count
+      }, (productRes) => {
+        // ボタン復帰
+        if (addRankingBothBtn) { addRankingBothBtn.disabled = false; addRankingBothBtn.textContent = '両方'; }
+        addRankingBtn.disabled = false;
+        if (addRankingProductBtn) addRankingProductBtn.disabled = false;
+        startRankingBtn.disabled = false;
+        if (startRankingProductBtn) startRankingProductBtn.disabled = false;
+        if (startRankingBothBtn) startRankingBothBtn.disabled = false;
+
+        const reviewCount = (reviewRes && reviewRes.success) ? reviewRes.addedCount : 0;
+        const productCount = (productRes && productRes.success) ? productRes.addedCount : 0;
+        showRankingMessage(`レビュー${reviewCount}件・商品${productCount}件追加`, 'success');
+      });
+    });
+  }
+
+  /**
+   * ランキングから「両方」収集開始（レビュー収集＋商品情報収集を同時に開始）
+   */
+  async function startRankingBothCollection() {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const count = parseInt(rankingCountInput.value) || 10;
+
+    // 全ボタン無効化
+    if (startRankingBothBtn) { startRankingBothBtn.disabled = true; startRankingBothBtn.textContent = '準備中...'; }
+    startRankingBtn.disabled = true;
+    if (startRankingProductBtn) startRankingProductBtn.disabled = true;
+    addRankingBtn.disabled = true;
+    if (addRankingProductBtn) addRankingProductBtn.disabled = true;
+    if (addRankingBothBtn) addRankingBothBtn.disabled = true;
+
+    // レビューキューに追加
+    chrome.runtime.sendMessage({
+      action: 'fetchRanking',
+      url: tab.url,
+      count: count
+    }, (reviewRes) => {
+      // 商品キューに追加
+      chrome.runtime.sendMessage({
+        action: 'addRankingToProductQueue',
+        url: tab.url,
+        count: count
+      }, (productRes) => {
+        const reviewCount = (reviewRes && reviewRes.success) ? reviewRes.addedCount : 0;
+        const productCount = (productRes && productRes.success) ? productRes.addedCount : 0;
+
+        if (reviewCount === 0 && productCount === 0) {
+          // 何も追加できなかった
+          resetAllRankingBtns();
+          showRankingMessage('商品が見つかりませんでした', 'error');
+          return;
+        }
+
+        // レビュー収集開始
+        if (reviewCount > 0 || (reviewRes && reviewRes.success)) {
+          chrome.runtime.sendMessage({ action: 'startQueueCollection' }, (res) => {
+            if (res && res.success) updateRankingUI(true);
+          });
+        }
+
+        // 商品情報収集開始
+        if (productRes && productRes.success && productRes.addedItems && productRes.addedItems.length > 0) {
+          chrome.runtime.sendMessage({
+            action: 'startBatchProductCollection',
+            items: productRes.addedItems
+          }, (res) => {
+            if (res && !res.error) updateRankingProductUI(true);
+          });
+        }
+
+        // ボタン復帰（収集中ボタンは除く）
+        addRankingBtn.disabled = false;
+        if (addRankingProductBtn) addRankingProductBtn.disabled = false;
+        if (addRankingBothBtn) { addRankingBothBtn.disabled = false; addRankingBothBtn.textContent = '両方'; }
+        if (startRankingBothBtn) { startRankingBothBtn.disabled = false; startRankingBothBtn.textContent = '両方'; }
+
+        showRankingMessage(`レビュー${reviewCount}件・商品${productCount}件の収集開始`, 'success');
+      });
+    });
+  }
+
+  function resetAllRankingBtns() {
+    startRankingBtn.disabled = false;
+    if (startRankingProductBtn) startRankingProductBtn.disabled = false;
+    if (startRankingBothBtn) { startRankingBothBtn.disabled = false; startRankingBothBtn.textContent = '両方'; }
+    addRankingBtn.disabled = false;
+    if (addRankingProductBtn) addRankingProductBtn.disabled = false;
+    if (addRankingBothBtn) { addRankingBothBtn.disabled = false; addRankingBothBtn.textContent = '両方'; }
   }
 
   function resetRankingProductBtn() {

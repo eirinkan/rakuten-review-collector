@@ -462,6 +462,41 @@
       box-shadow: 0 6px 20px rgba(108, 92, 231, 0.4);
     }
 
+    /* === Both Button (青系グラデーション) === */
+    .btn-both {
+      background: linear-gradient(135deg, #0984e3 0%, #74b9ff 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(9, 132, 227, 0.3);
+    }
+
+    .btn-both:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(9, 132, 227, 0.4);
+    }
+
+    /* === Button Group (3ボタン横並び) === */
+    .group-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .btn-group .btn {
+      flex: 1;
+      padding: 10px 4px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-bottom: 0;
+      white-space: nowrap;
+    }
+
     /* === Progress Bar === */
     .progress-container {
       display: none;
@@ -637,17 +672,25 @@
     <div id="mainContent" class="content" style="display: none;">
       <!-- 通常モード（商品・レビューページ） -->
       <div id="normalMode">
-        <button id="startBtn" class="btn btn-start">レビュー収集開始</button>
+        <div class="group-label">収集開始</div>
+        <div class="btn-group">
+          <button id="startBtn" class="btn btn-start">レビューのみ</button>
+          <button id="productInfoBtn" class="btn btn-product-info">商品情報のみ</button>
+          <button id="startBothBtn" class="btn btn-both">両方</button>
+        </div>
         <button id="stopBtn" class="btn btn-stop" style="display: none;">収集停止</button>
-        <button id="productInfoBtn" class="btn btn-product-info" style="display: none;">商品情報収集開始</button>
         <div id="productInfoProgress" class="progress-container">
           <div class="progress-bar-wrapper">
             <div id="productInfoProgressBar" class="progress-bar-fill"></div>
           </div>
           <div id="productInfoProgressText" class="progress-text"></div>
         </div>
-        <button id="queueBtn" class="btn btn-queue">レビューキューに追加</button>
-        <button id="productQueueBtn" class="btn btn-queue btn-product-queue" style="display: none;">商品情報キューに追加</button>
+        <div class="group-label">キューに追加</div>
+        <div class="btn-group">
+          <button id="queueBtn" class="btn btn-queue">レビューのみ</button>
+          <button id="productQueueBtn" class="btn btn-queue btn-product-queue">商品情報のみ</button>
+          <button id="queueBothBtn" class="btn btn-queue btn-both">両方</button>
+        </div>
         <div id="message" class="message"></div>
       </div>
 
@@ -658,10 +701,18 @@
           <input type="number" id="rankingCount" value="10" min="1" max="100">
           <label>件</label>
         </div>
-        <button id="startRankingBtn" class="btn btn-start">レビュー収集開始</button>
-        <button id="startRankingProductBtn" class="btn btn-product-info" style="display: none;">商品情報収集開始</button>
-        <button id="addRankingBtn" class="btn btn-queue">レビューキューに追加</button>
-        <button id="addRankingProductBtn" class="btn btn-queue btn-product-queue" style="display: none;">商品キューに追加</button>
+        <div class="group-label">収集開始</div>
+        <div class="btn-group">
+          <button id="startRankingBtn" class="btn btn-start">レビューのみ</button>
+          <button id="startRankingProductBtn" class="btn btn-product-info">商品情報のみ</button>
+          <button id="startRankingBothBtn" class="btn btn-both">両方</button>
+        </div>
+        <div class="group-label">キューに追加</div>
+        <div class="btn-group">
+          <button id="addRankingBtn" class="btn btn-queue">レビューのみ</button>
+          <button id="addRankingProductBtn" class="btn btn-queue btn-product-queue">商品情報のみ</button>
+          <button id="addRankingBothBtn" class="btn btn-queue btn-both">両方</button>
+        </div>
         <div id="rankingMessage" class="message"></div>
       </div>
 
