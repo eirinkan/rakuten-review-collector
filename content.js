@@ -173,7 +173,7 @@
   /**
    * 楽天商品ページの主要コンテンツが読み込まれるまで待機
    */
-  async function waitForRakutenPageReady(maxWaitMs = 8000) {
+  async function waitForRakutenPageReady(maxWaitMs = 20000) {
     if (document.readyState === 'loading') {
       await new Promise(resolve => {
         document.addEventListener('DOMContentLoaded', resolve, { once: true });

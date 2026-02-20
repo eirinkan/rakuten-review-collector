@@ -482,7 +482,7 @@
    * ページの主要コンテンツが読み込まれるまで待機
    * Amazon商品ページは遅延読み込みが多いため、主要要素の出現を確認してから収集する
    */
-  async function waitForPageReady(maxWaitMs = 8000) {
+  async function waitForPageReady(maxWaitMs = 20000) {
     // すでにDOMContentLoadedが完了しているか確認
     if (document.readyState === 'loading') {
       await new Promise(resolve => {
