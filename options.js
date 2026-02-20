@@ -177,7 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadSettings();
     loadState();
     loadQueue();
-    loadLogs();
+    initLogsFromStorage();
     loadSavedQueues();
     loadScheduledSettings();
 
@@ -413,13 +413,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // バックグラウンドからのメッセージ
     chrome.runtime.onMessage.addListener(handleMessage);
-
-    // ストレージ変更を監視（logUpdatedメッセージが届かない場合のバックアップ）
-    chrome.storage.onChanged.addListener((changes, area) => {
-      if (area !== 'local') return;
-      if (changes.productLogs) loadLogs('product');
-      if (changes.logs) loadLogs('review');
-    });
 
     // 定期更新
     setInterval(() => {
@@ -727,41 +720,76 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function loadLogs(category) {
-    // カテゴリ指定がある場合はそのカテゴリのみ、ない場合は両方読み込む
+  // ===== インメモリログ管理 =====
+  // ストレージの読み書き競合を排除するため、ログはメモリ上の配列で管理
+  // DOM更新は即座に行い、ストレージ保存はデバウンスで定期的に実行
+  let _memReviewLogs = [];
+  let _memProductLogs = [];
+  let _logSaveTimer = null;
+
+  // ページ読み込み時にストレージからメモリに復元
+  function initLogsFromStorage() {
+    chrome.storage.local.get(['logs', 'productLogs'], (result) => {
+      _memReviewLogs = result.logs || [];
+      _memProductLogs = result.productLogs || [];
+      renderLogs('review');
+      renderLogs('product');
+    });
+  }
+
+  // メモリ上のログをDOMに描画
+  function renderLogs(category) {
     if (category === 'review' || !category) {
-      chrome.storage.local.get(['logs'], (result) => {
-        const logs = result.logs || [];
-        if (logs.length === 0) {
-          logCard.style.display = 'none';
-          logContainer.innerHTML = '';
-        } else {
-          logCard.style.display = 'block';
-          logContainer.innerHTML = logs.map(log => {
-            const typeClass = log.type ? ` ${log.type}` : '';
-            return `<div class="log-entry${typeClass}"><span class="time">[${log.time}]</span> ${escapeHtml(log.text)}</div>`;
-          }).join('');
-          logContainer.scrollTop = logContainer.scrollHeight;
-        }
-      });
+      if (_memReviewLogs.length === 0) {
+        logCard.style.display = 'none';
+        logContainer.innerHTML = '';
+      } else {
+        logCard.style.display = 'block';
+        logContainer.innerHTML = _memReviewLogs.map(log => {
+          const typeClass = log.type ? ` ${log.type}` : '';
+          return `<div class="log-entry${typeClass}"><span class="time">[${log.time}]</span> ${escapeHtml(log.text)}</div>`;
+        }).join('');
+        logContainer.scrollTop = logContainer.scrollHeight;
+      }
     }
 
     if (category === 'product' || !category) {
-      chrome.storage.local.get(['productLogs'], (result) => {
-        const logs = result.productLogs || [];
-        if (logs.length === 0) {
-          productLogCard.style.display = 'none';
-          productLogContainer.innerHTML = '';
-        } else {
-          productLogCard.style.display = 'block';
-          productLogContainer.innerHTML = logs.map(log => {
-            const typeClass = log.type ? ` ${log.type}` : '';
-            return `<div class="log-entry${typeClass}"><span class="time">[${log.time}]</span> ${escapeHtml(log.text)}</div>`;
-          }).join('');
-          productLogContainer.scrollTop = productLogContainer.scrollHeight;
-        }
-      });
+      if (_memProductLogs.length === 0) {
+        productLogCard.style.display = 'none';
+        productLogContainer.innerHTML = '';
+      } else {
+        productLogCard.style.display = 'block';
+        productLogContainer.innerHTML = _memProductLogs.map(log => {
+          const typeClass = log.type ? ` ${log.type}` : '';
+          return `<div class="log-entry${typeClass}"><span class="time">[${log.time}]</span> ${escapeHtml(log.text)}</div>`;
+        }).join('');
+        productLogContainer.scrollTop = productLogContainer.scrollHeight;
+      }
     }
+  }
+
+  // メモリに追加 → 即座にDOM更新 → デバウンスでストレージ保存
+  function appendToLog(entry, category) {
+    const logs = category === 'product' ? _memProductLogs : _memReviewLogs;
+    logs.push(entry);
+    renderLogs(category);
+    scheduleLogSave();
+  }
+
+  // ストレージ保存（デバウンス: 最後の書き込みから300ms後に1回だけ実行）
+  function scheduleLogSave() {
+    if (_logSaveTimer) clearTimeout(_logSaveTimer);
+    _logSaveTimer = setTimeout(() => {
+      chrome.storage.local.set({
+        logs: _memReviewLogs,
+        productLogs: _memProductLogs
+      });
+    }, 300);
+  }
+
+  // 後方互換: 既存のloadLogs呼び出し箇所をカバー
+  function loadLogs(category) {
+    renderLogs(category);
   }
 
   // スプレッドシートURLの自動保存（Sheets API直接連携）
@@ -1234,26 +1262,20 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function copyLogs() {
-    chrome.storage.local.get(['logs'], (result) => {
-      const logs = result.logs || [];
-      if (logs.length === 0) {
-        return;
-      }
+    if (_memReviewLogs.length === 0) return;
 
-      const logText = logs.map(log => `[${log.time}] ${log.text}`).join('\n');
-      navigator.clipboard.writeText(logText).then(() => {
-        // コピー成功のフィードバック（色変化）
-        copyLogBtn.style.background = '#28a745';
-        copyLogBtn.style.color = 'white';
-        copyLogBtn.title = 'コピーしました!';
-        setTimeout(() => {
-          copyLogBtn.style.background = '';
-          copyLogBtn.style.color = '';
-          copyLogBtn.title = 'ログをコピー';
-        }, 1500);
-      }).catch(err => {
-        console.error('コピーに失敗:', err);
-      });
+    const logText = _memReviewLogs.map(log => `[${log.time}] ${log.text}`).join('\n');
+    navigator.clipboard.writeText(logText).then(() => {
+      copyLogBtn.style.background = '#28a745';
+      copyLogBtn.style.color = 'white';
+      copyLogBtn.title = 'コピーしました!';
+      setTimeout(() => {
+        copyLogBtn.style.background = '';
+        copyLogBtn.style.color = '';
+        copyLogBtn.title = 'ログをコピー';
+      }, 1500);
+    }).catch(err => {
+      console.error('コピーに失敗:', err);
     });
   }
 
@@ -1423,14 +1445,15 @@ document.addEventListener('DOMContentLoaded', () => {
     clearLogBtn.style.color = 'white';
     clearLogBtn.title = 'クリアしました!';
 
-    chrome.storage.local.set({ logs: [] }, () => {
-      loadLogs('review');
-      setTimeout(() => {
-        clearLogBtn.style.background = '';
-        clearLogBtn.style.color = '';
-        clearLogBtn.title = 'クリア';
-      }, 1500);
-    });
+    _memReviewLogs = [];
+    renderLogs('review');
+    chrome.storage.local.set({ logs: [] });
+
+    setTimeout(() => {
+      clearLogBtn.style.background = '';
+      clearLogBtn.style.color = '';
+      clearLogBtn.title = 'クリア';
+    }, 1500);
   }
 
   function clearProductLogs() {
@@ -1438,34 +1461,32 @@ document.addEventListener('DOMContentLoaded', () => {
     clearProductLogBtn.style.color = 'white';
     clearProductLogBtn.title = 'クリアしました!';
 
-    chrome.storage.local.set({ productLogs: [] }, () => {
-      loadLogs('product');
-      setTimeout(() => {
-        clearProductLogBtn.style.background = '';
-        clearProductLogBtn.style.color = '';
-        clearProductLogBtn.title = 'クリア';
-      }, 1500);
-    });
+    _memProductLogs = [];
+    renderLogs('product');
+    chrome.storage.local.set({ productLogs: [] });
+
+    setTimeout(() => {
+      clearProductLogBtn.style.background = '';
+      clearProductLogBtn.style.color = '';
+      clearProductLogBtn.title = 'クリア';
+    }, 1500);
   }
 
   function copyProductLogs() {
-    chrome.storage.local.get(['productLogs'], (result) => {
-      const logs = result.productLogs || [];
-      if (logs.length === 0) return;
+    if (_memProductLogs.length === 0) return;
 
-      const logText = logs.map(log => `[${log.time}] ${log.text}`).join('\n');
-      navigator.clipboard.writeText(logText).then(() => {
-        copyProductLogBtn.style.background = '#28a745';
-        copyProductLogBtn.style.color = 'white';
-        copyProductLogBtn.title = 'コピーしました!';
-        setTimeout(() => {
-          copyProductLogBtn.style.background = '';
-          copyProductLogBtn.style.color = '';
-          copyProductLogBtn.title = 'ログをコピー';
-        }, 1500);
-      }).catch(err => {
-        console.error('コピーに失敗:', err);
-      });
+    const logText = _memProductLogs.map(log => `[${log.time}] ${log.text}`).join('\n');
+    navigator.clipboard.writeText(logText).then(() => {
+      copyProductLogBtn.style.background = '#28a745';
+      copyProductLogBtn.style.color = 'white';
+      copyProductLogBtn.title = 'コピーしました!';
+      setTimeout(() => {
+        copyProductLogBtn.style.background = '';
+        copyProductLogBtn.style.color = '';
+        copyProductLogBtn.title = 'ログをコピー';
+      }, 1500);
+    }).catch(err => {
+      console.error('コピーに失敗:', err);
     });
   }
 
@@ -1484,8 +1505,11 @@ document.addEventListener('DOMContentLoaded', () => {
         loadQueue();
         loadState(); // ボタン状態も更新
         break;
-      case 'logUpdated':
-        loadLogs(msg.category);
+      case 'appendLog':
+        // background.jsからログデータを直接受信→即座にメモリ追加＋DOM更新
+        if (msg.entry) {
+          appendToLog(msg.entry, msg.category);
+        }
         break;
       case 'batchProductProgressUpdate':
         updateBatchProductProgress(msg.progress);
@@ -1495,16 +1519,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function addLog(text, type = '', category = 'review') {
     const time = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const storageKey = category === 'product' ? 'productLogs' : 'logs';
-
-    chrome.storage.local.get([storageKey], (result) => {
-      const logs = result[storageKey] || [];
-      logs.push({ time, text, type });
-
-      chrome.storage.local.set({ [storageKey]: logs }, () => {
-        loadLogs(category);
-      });
-    });
+    appendToLog({ time, text, type }, category);
   }
 
   function showStatus(element, type, message) {

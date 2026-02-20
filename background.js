@@ -3209,33 +3209,29 @@ function forwardToAll(message) {
 }
 
 /**
- * ログを保存＆転送
- * ストレージに直接保存し、options.jsにも通知して表示を更新
- * キュー方式で書き込み競合を防止（複数のlog()が同時に呼ばれてもデータが消えない）
+ * ログをoptions.jsに直接送信
+ * options.jsがインメモリ管理＋ストレージ保存＋DOM更新を一括担当
+ * options.jsが開いていない場合のみストレージに直接保存（フォールバック）
  */
-let _logWriteChain = Promise.resolve();
-
 function log(text, type = '', category = 'review') {
   console.log(`[収集] ${text}`);
 
   const time = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const storageKey = category === 'product' ? 'productLogs' : 'logs';
+  const entry = { time, text, type };
 
-  // 前の書き込みが完了してから次を実行（get→push→setの競合を防止）
-  _logWriteChain = _logWriteChain.then(() => new Promise((resolve) => {
+  // options.jsにログデータを直接送信（即時表示 + ストレージ保存はoptions.js側で実行）
+  chrome.runtime.sendMessage({
+    action: 'appendLog',
+    entry,
+    category
+  }).catch(() => {
+    // options.jsが開いていない場合、直接ストレージに保存（フォールバック）
+    const storageKey = category === 'product' ? 'productLogs' : 'logs';
     chrome.storage.local.get([storageKey], (result) => {
       const logs = result[storageKey] || [];
-      logs.push({ time, text, type });
-      chrome.storage.local.set({ [storageKey]: logs }, () => {
-        forwardToAll({
-          action: 'logUpdated',
-          category: category
-        });
-        resolve();
-      });
+      logs.push(entry);
+      chrome.storage.local.set({ [storageKey]: logs });
     });
-  })).catch((err) => {
-    console.error('[収集] ログ書き込みエラー:', err);
   });
 }
 
