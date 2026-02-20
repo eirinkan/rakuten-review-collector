@@ -2630,6 +2630,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (addedCount > 0) {
       if (batchProductStatus) showStatus(batchProductStatus, 'success', `${addedCount}件追加しました`);
+      addLog(`キューに${addedCount}件追加しました（合計: ${batchProductQueue.length}件）`, 'info', 'product');
     } else {
       if (batchProductStatus) showStatus(batchProductStatus, 'info', 'すべて追加済みです');
     }
