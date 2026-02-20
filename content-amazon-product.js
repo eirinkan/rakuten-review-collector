@@ -496,17 +496,26 @@
     const titleEl = queryFirst(SELECTORS.productTitle);
     const title = titleEl ? titleEl.textContent.trim() : '';
 
-    // 価格（テキストが空の要素をスキップ、ポイント表示を除外）
+    // 単価（"￥1 / ml" など）かどうかを判定
+    function isUnitPrice(el) {
+      const container = el.closest('.a-price')?.parentElement || el.parentElement;
+      return container && /\/\s*(ml|mL|g|kg|個|本|枚|100|l|L)/i.test(container.textContent);
+    }
+
+    // 価格（テキストが空の要素をスキップ、単価・ポイント表示を除外）
     const priceEl = queryFirstWithText(SELECTORS.price);
     let price = priceEl ? priceEl.textContent.trim() : '';
-    // ポイント表示（例: "8pt (1%)"）や在庫切れ文を誤検出した場合のフォールバック
-    if (price && !/[￥¥]\s*[\d,]+/.test(price) && !/^\d[\d,]+円/.test(price)) {
+    // 価格として有効かチェック（価格形式であること、かつ単価でないこと）
+    const isValidPrice = price &&
+      (/[￥¥]\s*[\d,]+/.test(price) || /^\d[\d,]+円/.test(price)) &&
+      !(priceEl && isUnitPrice(priceEl));
+    if (!isValidPrice) {
       price = '';
       for (const sel of SELECTORS.price) {
         const els = document.querySelectorAll(sel);
         for (const el of els) {
           const text = el.textContent.trim();
-          if (/^[￥¥]\s*[\d,]+/.test(text)) {
+          if (/^[￥¥]\s*[\d,]+/.test(text) && !isUnitPrice(el)) {
             price = text;
             break;
           }
