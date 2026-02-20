@@ -3951,13 +3951,13 @@ async function resumableUploadToDrive(token, folderId, fileName, blob) {
  */
 async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions = null) {
   const isMobile = mode === 'mobile';
-  const filePrefix = isMobile ? 'mobile_' : '';
   const modeLabel = isMobile ? 'スマホ版' : 'PC版';
+  const subFolderName = isMobile ? 'sp' : 'pc';
   log(`[${modeLabel}] 収集を開始します...`, '', 'product');
 
-  // 1. 設定チェック（スマホ版は既存フォルダを再利用するため親フォルダ不要）
+  // 1. 設定チェック（スマホ版は既存の商品フォルダを使うため親フォルダ不要）
   let parentFolderId = null;
-  if (!isMobile || !mobileOptions?.folderId) {
+  if (!isMobile || !mobileOptions?.parentFolderId) {
     const settings = await chrome.storage.sync.get(['productInfoFolderUrl']);
     const folderUrl = settings.productInfoFolderUrl;
     if (!folderUrl) {
@@ -3998,15 +3998,22 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
       ? `rakuten_${productData.itemSlug}_${dateStr}`
       : `amazon_${productData.asin}_${dateStr}`);
 
-  // 4. 商品フォルダを作成（スマホ版は既存フォルダを再利用）
-  let productFolderId;
-  if (isMobile && mobileOptions?.folderId) {
-    productFolderId = mobileOptions.folderId;
-    log(`[${modeLabel}][${productId}] 既存フォルダにスマホ版を保存中...`, '', 'product');
+  // 4. 商品フォルダとサブフォルダ（pc/sp）を作成
+  let productParentFolderId; // 商品フォルダID（pcとspの親）
+  let productFolderId;       // 実際のファイル保存先（pc or spサブフォルダ）
+  if (isMobile && mobileOptions?.parentFolderId) {
+    // スマホ版: 商品フォルダは既にPC版で作成済み → spサブフォルダを作成
+    productParentFolderId = mobileOptions.parentFolderId;
+    log(`[${modeLabel}][${productId}] spフォルダを作成中...`, '', 'product');
+    const spFolderResult = await createDriveFolder(subFolderName, productParentFolderId);
+    productFolderId = spFolderResult.folder.id;
   } else {
+    // PC版: 商品フォルダを新規作成 → pcサブフォルダを作成
     log(`[${modeLabel}][${productId}] 保存フォルダを作成中...`, '', 'product');
     const productFolderResult = await createDriveFolder(baseName, parentFolderId);
-    productFolderId = productFolderResult.folder.id;
+    productParentFolderId = productFolderResult.folder.id;
+    const pcFolderResult = await createDriveFolder(subFolderName, productParentFolderId);
+    productFolderId = pcFolderResult.folder.id;
   }
 
   // 5. 画像をダウンロード → Driveにアップロード（個別ファイル）
@@ -4031,7 +4038,7 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
 
     if (mediaResult) {
       const ext = getExtensionFromMimeType(mediaResult.mimeType, imgUrl);
-      const fileName = `${filePrefix}img_${String(imgOrder).padStart(2, '0')}_${imgSection}.${ext}`;
+      const fileName = `img_${String(imgOrder).padStart(2, '0')}_${imgSection}.${ext}`;
 
       try {
         const uploaded = await uploadMediaToDrive(token, productFolderId, fileName, mediaResult.blob, mediaResult.mimeType);
@@ -4076,7 +4083,7 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
 
       if (mediaResult) {
         const ext = getExtensionFromMimeType(mediaResult.mimeType, imgUrl);
-        const fileName = `${filePrefix}aplus_${String(aplusOrder).padStart(2, '0')}.${ext}`;
+        const fileName = `aplus_${String(aplusOrder).padStart(2, '0')}.${ext}`;
 
         try {
           const uploaded = await uploadMediaToDrive(token, productFolderId, fileName, mediaResult.blob, mediaResult.mimeType);
@@ -4125,7 +4132,7 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
         if (videoThumbs[videoOrder - 1]) {
           const thumbResult = await fetchMediaAsBlob(videoThumbs[videoOrder - 1]);
           if (thumbResult) {
-            thumbFileName = `${filePrefix}video_${String(videoOrder).padStart(2, '0')}_thumb.jpg`;
+            thumbFileName = `video_${String(videoOrder).padStart(2, '0')}_thumb.jpg`;
             try {
               const thumbUploaded = await uploadMediaToDrive(token, productFolderId, thumbFileName, thumbResult.blob, thumbResult.mimeType);
               thumbDriveId = thumbUploaded.id;
@@ -4154,7 +4161,7 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
         if (videoThumbs[videoOrder - 1]) {
           const thumbResult = await fetchMediaAsBlob(videoThumbs[videoOrder - 1]);
           if (thumbResult) {
-            thumbFileName = `${filePrefix}video_${String(videoOrder).padStart(2, '0')}_thumb.jpg`;
+            thumbFileName = `video_${String(videoOrder).padStart(2, '0')}_thumb.jpg`;
             try {
               const thumbUploaded = await uploadMediaToDrive(token, productFolderId, thumbFileName, thumbResult.blob, thumbResult.mimeType);
               thumbDriveId = thumbUploaded.id;
@@ -4180,7 +4187,7 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
         const videoBlob = await fetchMediaAsBlob(video.url);
         if (videoBlob && videoBlob.size > 1000) { // 1KB未満は不正なレスポンス
           const ext = getExtensionFromMimeType(videoBlob.mimeType, video.url);
-          const fileName = `${filePrefix}video_${String(videoOrder).padStart(2, '0')}.${ext}`;
+          const fileName = `video_${String(videoOrder).padStart(2, '0')}.${ext}`;
           const uploaded = await uploadMediaToDrive(token, productFolderId, fileName, videoBlob.blob, videoBlob.mimeType);
 
           videoMetadata.push({
@@ -4201,7 +4208,7 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
         if (videoThumbs[videoOrder - 1]) {
           const thumbResult = await fetchMediaAsBlob(videoThumbs[videoOrder - 1]);
           if (thumbResult) {
-            thumbFileName = `${filePrefix}video_${String(videoOrder).padStart(2, '0')}_thumb.jpg`;
+            thumbFileName = `video_${String(videoOrder).padStart(2, '0')}_thumb.jpg`;
             try {
               const thumbUploaded = await uploadMediaToDrive(token, productFolderId, thumbFileName, thumbResult.blob, thumbResult.mimeType);
               thumbDriveId = thumbUploaded.id;
@@ -4242,7 +4249,7 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
   const jsonData = {
     ...textData,
     viewType: mode,
-    productFolderId,
+    productFolderId: productParentFolderId,
     images: imageMetadata,
     aplusImages: aplusImageMetadata.length > 0 ? aplusImageMetadata : undefined,
     videos: videoMetadata.length > 0 ? videoMetadata : undefined,
@@ -4259,7 +4266,7 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
   // undefinedキーを除去
   const cleanJsonData = JSON.parse(JSON.stringify(jsonData));
 
-  const jsonFileName = `${baseName}_${mode}.json`;
+  const jsonFileName = `${baseName}.json`;
   const uploadResult = await uploadJsonToDrive(token, productFolderId, jsonFileName, cleanJsonData);
 
   const totalImageCount = imageMetadata.length + aplusImageMetadata.length;
@@ -4270,7 +4277,8 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
     success: true,
     fileName: jsonFileName,
     fileId: uploadResult.id,
-    productFolderId,
+    productFolderId: productParentFolderId,
+    parentFolderId: productParentFolderId,
     baseName,
     productId,
     source: isRakuten ? 'rakuten' : 'amazon',
@@ -4388,7 +4396,7 @@ async function startBatchProductCollection(items) {
             await waitForTabComplete(batchTab.id, 15000);
             await sleep(1500);
             await collectAndSaveProductInfo(batchTab.id, 'mobile', {
-              folderId: desktopResult.productFolderId,
+              parentFolderId: desktopResult.parentFolderId,
               baseName: desktopResult.baseName
             });
           } catch (mobileError) {
@@ -4544,7 +4552,7 @@ async function collectProductInfoWithMobile(tabId) {
     await waitForTabComplete(mobileTab.id, 15000);
     await sleep(1500);
     await collectAndSaveProductInfo(mobileTab.id, 'mobile', {
-      folderId: desktopResult.productFolderId,
+      parentFolderId: desktopResult.parentFolderId,
       baseName: desktopResult.baseName
     });
     log('PC版・スマホ版の収集完了', 'success', 'product');
