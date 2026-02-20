@@ -231,6 +231,67 @@
   }
 
   /**
+   * 商品ページから動画URL・サムネイルを収集
+   * Amazon動画はHLS/DASHストリーミングの場合が多く、直接ダウンロードできないケースがある
+   */
+  function collectVideoUrls() {
+    const videos = [];
+    const seen = new Set();
+
+    // 方法1: ページ内スクリプトからMP4 URLを探す
+    // Amazonはvideoデータをscriptタグ内のJSONに埋め込むことがある
+    const scripts = document.querySelectorAll('script:not([src])');
+    for (const script of scripts) {
+      const text = script.textContent || '';
+      if (text.length > 500000) continue; // 大きすぎるスクリプトはスキップ
+
+      // mp4 URLを抽出
+      const mp4Regex = /https?:\/\/[^"'\s,]+\.mp4[^"'\s,]*/g;
+      let match;
+      while ((match = mp4Regex.exec(text)) !== null) {
+        const url = match[0].replace(/\\u002F/g, '/').replace(/\\/g, '');
+        if (!seen.has(url) && !url.includes('thumbnail') && !url.includes('preview')) {
+          videos.push({ url, type: 'mp4', source: 'script' });
+          seen.add(url);
+        }
+      }
+
+      // m3u8 (HLS) URLも記録
+      const hlsRegex = /https?:\/\/[^"'\s,]+\.m3u8[^"'\s,]*/g;
+      while ((match = hlsRegex.exec(text)) !== null) {
+        const url = match[0].replace(/\\u002F/g, '/').replace(/\\/g, '');
+        if (!seen.has(url)) {
+          videos.push({ url, type: 'hls', source: 'script' });
+          seen.add(url);
+        }
+      }
+    }
+
+    // 方法2: video要素から直接取得
+    const videoElements = document.querySelectorAll('video source, video[src]');
+    for (const el of videoElements) {
+      const src = el.src || el.getAttribute('src') || '';
+      if (src && !seen.has(src)) {
+        const type = src.includes('.m3u8') ? 'hls' : 'mp4';
+        videos.push({ url: src, type, source: 'video-element' });
+        seen.add(src);
+      }
+    }
+
+    // 動画サムネイル画像を収集（動画がダウンロードできない場合のフォールバック用）
+    const videoThumbs = document.querySelectorAll('li.videoThumbnail img');
+    const thumbnails = [];
+    for (const thumb of videoThumbs) {
+      const src = thumb.src || '';
+      if (src) {
+        thumbnails.push(toHighResUrl(src));
+      }
+    }
+
+    return { videos, thumbnails };
+  }
+
+  /**
    * A+コンテンツから画像URLとテキストを収集
    */
   function collectAplusContent() {
@@ -384,6 +445,9 @@
     // A+コンテンツの画像もimagesに含める
     const aplusImages = aplusContent?.images || [];
 
+    // 動画URL
+    const videoData = collectVideoUrls();
+
     const productData = {
       asin,
       title,
@@ -401,13 +465,15 @@
       techSpecs: techSpecs || undefined,
       images,
       aplusImages: aplusImages.length > 0 ? aplusImages : undefined,
+      videos: videoData.videos.length > 0 ? videoData.videos : undefined,
+      videoThumbnails: videoData.thumbnails.length > 0 ? videoData.thumbnails : undefined,
       collectedAt: new Date().toISOString()
     };
 
     // undefinedのキーを除去
     const cleanData = JSON.parse(JSON.stringify(productData));
 
-    console.log(`[Amazon商品情報収集] 収集完了: ${title?.substring(0, 50)}... (画像: ${images.length}枚, A+画像: ${aplusImages.length}枚)`);
+    console.log(`[Amazon商品情報収集] 収集完了: ${title?.substring(0, 50)}... (画像: ${images.length}枚, A+画像: ${aplusImages.length}枚, 動画: ${videoData.videos.length}件)`);
 
     return cleanData;
   }

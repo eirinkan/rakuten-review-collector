@@ -3658,6 +3658,161 @@ async function fetchImageAsBase64(imageUrl) {
 }
 
 /**
+ * 画像/動画URLからBlobを取得（base64変換なし）
+ * @param {string} mediaUrl - メディアURL
+ * @returns {Promise<{blob: Blob, mimeType: string, size: number}|null>}
+ */
+async function fetchMediaAsBlob(mediaUrl) {
+  try {
+    let referer = 'https://www.amazon.co.jp/';
+    if (mediaUrl.includes('rakuten.co.jp') || mediaUrl.includes('r10s.jp')) {
+      referer = 'https://item.rakuten.co.jp/';
+    }
+
+    const response = await fetch(mediaUrl, {
+      headers: {
+        'Accept': 'image/*,video/*,*/*',
+        'Referer': referer
+      }
+    });
+
+    if (!response.ok) {
+      console.warn(`[商品情報] メディア取得失敗: ${response.status} - ${mediaUrl.substring(0, 80)}`);
+      return null;
+    }
+
+    const blob = await response.blob();
+    const mimeType = blob.type || 'application/octet-stream';
+
+    return { blob, mimeType, size: blob.size };
+  } catch (error) {
+    console.warn(`[商品情報] メディア取得エラー: ${error.message} - ${mediaUrl.substring(0, 80)}`);
+    return null;
+  }
+}
+
+/**
+ * MIMEタイプからファイル拡張子を推定
+ */
+function getExtensionFromMimeType(mimeType, url = '') {
+  const mimeMap = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+    'image/svg+xml': 'svg',
+    'video/mp4': 'mp4',
+    'video/webm': 'webm',
+    'video/quicktime': 'mov'
+  };
+  if (mimeMap[mimeType]) return mimeMap[mimeType];
+
+  // URLから拡張子を推定
+  const urlMatch = url.match(/\.([a-zA-Z0-9]+)(?:\?|$)/);
+  if (urlMatch) {
+    const ext = urlMatch[1].toLowerCase();
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'webm', 'mov'].includes(ext)) {
+      return ext === 'jpeg' ? 'jpg' : ext;
+    }
+  }
+
+  return 'jpg'; // デフォルト
+}
+
+/**
+ * バイナリメディアファイルをGoogle Driveにアップロード
+ * @param {string} token - OAuthトークン
+ * @param {string} folderId - 保存先フォルダID
+ * @param {string} fileName - ファイル名
+ * @param {Blob} blob - バイナリデータ
+ * @param {string} mimeType - MIMEタイプ
+ * @returns {Promise<Object>} {id, name}
+ */
+async function uploadMediaToDrive(token, folderId, fileName, blob, mimeType) {
+  // 5MB未満: multipart upload, 5MB以上: resumable upload
+  if (blob.size < 5 * 1024 * 1024) {
+    const metadata = JSON.stringify({
+      name: fileName,
+      mimeType: mimeType,
+      parents: [folderId]
+    });
+
+    const boundary = '-------mediaboundary' + Date.now();
+    const encoder = new TextEncoder();
+
+    // マルチパートボディをバイナリで構築
+    const metadataPart = encoder.encode(
+      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\nContent-Transfer-Encoding: binary\r\n\r\n`
+    );
+    const closingPart = encoder.encode(`\r\n--${boundary}--`);
+    const blobBuffer = await blob.arrayBuffer();
+
+    const body = new Uint8Array(metadataPart.length + blobBuffer.byteLength + closingPart.length);
+    body.set(metadataPart, 0);
+    body.set(new Uint8Array(blobBuffer), metadataPart.length);
+    body.set(closingPart, metadataPart.length + blobBuffer.byteLength);
+
+    const response = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': `multipart/related; boundary=${boundary}`
+        },
+        body: body.buffer
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error?.message || `メディアアップロードエラー: ${response.status}`);
+    }
+
+    return await response.json();
+  } else {
+    // 大きいファイル: resumable upload
+    const initResponse = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-Upload-Content-Type': mimeType,
+          'X-Upload-Content-Length': blob.size
+        },
+        body: JSON.stringify({
+          name: fileName,
+          mimeType: mimeType,
+          parents: [folderId]
+        })
+      }
+    );
+
+    if (!initResponse.ok) {
+      throw new Error(`メディアアップロード開始エラー: ${initResponse.status}`);
+    }
+
+    const uploadUrl = initResponse.headers.get('Location');
+    const uploadResponse = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': mimeType,
+        'Content-Length': blob.size
+      },
+      body: blob
+    });
+
+    if (!uploadResponse.ok) {
+      throw new Error(`メディアアップロードエラー: ${uploadResponse.status}`);
+    }
+
+    return await uploadResponse.json();
+  }
+}
+
+/**
  * Google DriveフォルダURLからフォルダIDを抽出
  */
 function extractDriveFolderId(url) {
@@ -3783,7 +3938,9 @@ async function resumableUploadToDrive(token, folderId, fileName, blob) {
 }
 
 /**
- * 商品情報を収集してGoogle Driveに保存
+ * 商品情報を収集してGoogle Driveに保存（メディア分離形式）
+ * - 画像/GIF/動画は個別ファイルとしてメディアサブフォルダに保存
+ * - JSONにはテキスト + メディアメタデータ（LP構造情報）のみ保存
  * @param {number} tabId - 対象タブのID
  */
 async function collectAndSaveProductInfo(tabId) {
@@ -3823,109 +3980,271 @@ async function collectAndSaveProductInfo(tabId) {
     ? (productData.itemSlug || '???')
     : (productData.asin || '???');
 
-  // 4. 画像をbase64に変換
-  const aplusImages = isRakuten ? [] : (productData.aplusImages || []);
-  const totalImages = productData.images.length + aplusImages.length;
-  log(`[${productId}] 画像を取得中...（${productData.images.length}枚${aplusImages.length > 0 ? ` + A+: ${aplusImages.length}枚` : ''}）`, '', 'product');
+  const dateStr = formatDate(new Date());
+  const baseName = isRakuten
+    ? `rakuten_${productData.itemSlug}_${dateStr}`
+    : `amazon_${productData.asin}_${dateStr}`;
 
-  let processedImages = 0;
+  // 4. メディアサブフォルダを作成
+  log(`[${productId}] メディアフォルダを作成中...`, '', 'product');
+  const mediaFolderName = `${baseName}_media`;
+  const mediaFolderResult = await createDriveFolder(mediaFolderName, folderId);
+  const mediaFolderId = mediaFolderResult.folder.id;
 
-  // 商品画像
-  const imageResults = [];
+  // 5. 画像をダウンロード → Driveにアップロード（個別ファイル）
+  const aplusImgUrls = isRakuten ? [] : (productData.aplusImages || []);
+  const rawVideos = productData.videos || [];
+  const videoThumbs = productData.videoThumbnails || [];
+  const totalMedia = productData.images.length + aplusImgUrls.length + rawVideos.length;
+  log(`[${productId}] メディアをアップロード中...（画像: ${productData.images.length}枚${aplusImgUrls.length > 0 ? ` + A+: ${aplusImgUrls.length}枚` : ''}${rawVideos.length > 0 ? ` + 動画: ${rawVideos.length}件` : ''}）`, '', 'product');
+
+  let processedMedia = 0;
+
+  // --- 商品画像のアップロード ---
+  const imageMetadata = [];
+  let imgOrder = 0;
   for (const img of productData.images) {
     const imgUrl = typeof img === 'string' ? img : img.url;
-    const imgType = typeof img === 'string' ? 'product' : img.type;
-    const result = await fetchImageAsBase64(imgUrl);
-    processedImages++;
-    if (result) {
-      imageResults.push({
-        url: imgUrl,
-        type: imgType,
-        base64: result.base64,
-        mimeType: result.mimeType,
-        size: result.size
-      });
+    const imgSection = typeof img === 'string' ? 'product' : (img.type || 'product');
+
+    imgOrder++;
+    const mediaResult = await fetchMediaAsBlob(imgUrl);
+    processedMedia++;
+
+    if (mediaResult) {
+      const ext = getExtensionFromMimeType(mediaResult.mimeType, imgUrl);
+      const fileName = `img_${String(imgOrder).padStart(2, '0')}_${imgSection}.${ext}`;
+
+      try {
+        const uploaded = await uploadMediaToDrive(token, mediaFolderId, fileName, mediaResult.blob, mediaResult.mimeType);
+        imageMetadata.push({
+          order: imgOrder,
+          section: imgSection,
+          description: getSectionDescription(imgSection, imgOrder),
+          fileName,
+          originalUrl: imgUrl,
+          mimeType: mediaResult.mimeType,
+          driveFileId: uploaded.id
+        });
+      } catch (uploadError) {
+        console.warn(`[商品情報] 画像アップロード失敗: ${uploadError.message} - ${fileName}`);
+        imageMetadata.push({
+          order: imgOrder,
+          section: imgSection,
+          description: getSectionDescription(imgSection, imgOrder),
+          fileName,
+          originalUrl: imgUrl,
+          mimeType: mediaResult.mimeType,
+          driveFileId: null,
+          error: uploadError.message
+        });
+      }
     }
+
     forwardToAll({
       action: 'productInfoProgress',
-      progress: {
-        phase: 'images',
-        current: processedImages,
-        total: totalImages,
-        productId
-      }
+      progress: { phase: 'images', current: processedMedia, total: totalMedia, productId }
     });
   }
 
-  // A+コンテンツ画像（Amazonのみ）
-  const aplusImageResults = [];
-  if (!isRakuten && productData.aplusImages) {
-    for (const imgUrl of productData.aplusImages) {
-      const result = await fetchImageAsBase64(imgUrl);
-      processedImages++;
-      if (result) {
-        aplusImageResults.push({
-          url: imgUrl,
-          base64: result.base64,
-          mimeType: result.mimeType,
-          size: result.size
-        });
+  // --- A+コンテンツ画像のアップロード（Amazonのみ） ---
+  const aplusImageMetadata = [];
+  if (!isRakuten && aplusImgUrls.length > 0) {
+    let aplusOrder = 0;
+    for (const imgUrl of aplusImgUrls) {
+      aplusOrder++;
+      const mediaResult = await fetchMediaAsBlob(imgUrl);
+      processedMedia++;
+
+      if (mediaResult) {
+        const ext = getExtensionFromMimeType(mediaResult.mimeType, imgUrl);
+        const fileName = `aplus_${String(aplusOrder).padStart(2, '0')}.${ext}`;
+
+        try {
+          const uploaded = await uploadMediaToDrive(token, mediaFolderId, fileName, mediaResult.blob, mediaResult.mimeType);
+          aplusImageMetadata.push({
+            order: aplusOrder,
+            description: `A+コンテンツ画像${aplusOrder}枚目`,
+            fileName,
+            originalUrl: imgUrl,
+            mimeType: mediaResult.mimeType,
+            driveFileId: uploaded.id
+          });
+        } catch (uploadError) {
+          console.warn(`[商品情報] A+画像アップロード失敗: ${uploadError.message}`);
+          aplusImageMetadata.push({
+            order: aplusOrder,
+            description: `A+コンテンツ画像${aplusOrder}枚目`,
+            fileName,
+            originalUrl: imgUrl,
+            mimeType: mediaResult.mimeType,
+            driveFileId: null,
+            error: uploadError.message
+          });
+        }
       }
+
       forwardToAll({
         action: 'productInfoProgress',
-        progress: {
-          phase: 'images',
-          current: processedImages,
-          total: totalImages,
-          productId
-        }
+        progress: { phase: 'images', current: processedMedia, total: totalMedia, productId }
       });
     }
   }
 
-  // 5. JSONデータを生成
-  const jsonData = {
-    ...productData,
-    images: imageResults.map(img => ({
-      url: img.url,
-      type: img.type,
-      mimeType: img.mimeType,
-      size: img.size,
-      base64: img.base64
-    })),
-    aplusImages: aplusImageResults.length > 0 ? aplusImageResults.map(img => ({
-      url: img.url,
-      mimeType: img.mimeType,
-      size: img.size,
-      base64: img.base64
-    })) : undefined
-  };
+  // --- 動画のダウンロード試行 ---
+  const videoMetadata = [];
+  if (rawVideos.length > 0) {
+    let videoOrder = 0;
+    for (const video of rawVideos) {
+      videoOrder++;
+      processedMedia++;
 
-  // 6. Google Driveにアップロード
-  log(`[${productId}] Google Driveにアップロード中...`, '', 'product');
+      // HLSストリーミング（m3u8）はダウンロード不可
+      if (video.type === 'hls') {
+        // サムネイルがあれば保存
+        let thumbFileName = null;
+        let thumbDriveId = null;
+        if (videoThumbs[videoOrder - 1]) {
+          const thumbResult = await fetchMediaAsBlob(videoThumbs[videoOrder - 1]);
+          if (thumbResult) {
+            thumbFileName = `video_${String(videoOrder).padStart(2, '0')}_thumb.jpg`;
+            try {
+              const thumbUploaded = await uploadMediaToDrive(token, mediaFolderId, thumbFileName, thumbResult.blob, thumbResult.mimeType);
+              thumbDriveId = thumbUploaded.id;
+            } catch (e) {
+              console.warn(`[商品情報] 動画サムネイルアップロード失敗: ${e.message}`);
+            }
+          }
+        }
+
+        videoMetadata.push({
+          order: videoOrder,
+          description: '商品紹介動画',
+          originalUrl: video.url,
+          saved: false,
+          reason: 'HLSストリーミングのためダウンロード不可',
+          thumbnailFileName: thumbFileName,
+          thumbnailDriveFileId: thumbDriveId
+        });
+        continue;
+      }
+
+      // MP4など直接ダウンロード可能な動画を試行
+      try {
+        const videoBlob = await fetchMediaAsBlob(video.url);
+        if (videoBlob && videoBlob.size > 1000) { // 1KB未満は不正なレスポンス
+          const ext = getExtensionFromMimeType(videoBlob.mimeType, video.url);
+          const fileName = `video_${String(videoOrder).padStart(2, '0')}.${ext}`;
+          const uploaded = await uploadMediaToDrive(token, mediaFolderId, fileName, videoBlob.blob, videoBlob.mimeType);
+
+          videoMetadata.push({
+            order: videoOrder,
+            description: '商品紹介動画',
+            fileName,
+            originalUrl: video.url,
+            driveFileId: uploaded.id,
+            saved: true
+          });
+        } else {
+          throw new Error('動画データが小さすぎます（不正なレスポンス）');
+        }
+      } catch (videoError) {
+        // ダウンロード失敗 → URLのみ記録 + サムネイル保存
+        let thumbFileName = null;
+        let thumbDriveId = null;
+        if (videoThumbs[videoOrder - 1]) {
+          const thumbResult = await fetchMediaAsBlob(videoThumbs[videoOrder - 1]);
+          if (thumbResult) {
+            thumbFileName = `video_${String(videoOrder).padStart(2, '0')}_thumb.jpg`;
+            try {
+              const thumbUploaded = await uploadMediaToDrive(token, mediaFolderId, thumbFileName, thumbResult.blob, thumbResult.mimeType);
+              thumbDriveId = thumbUploaded.id;
+            } catch (e) {
+              console.warn(`[商品情報] 動画サムネイルアップロード失敗: ${e.message}`);
+            }
+          }
+        }
+
+        videoMetadata.push({
+          order: videoOrder,
+          description: '商品紹介動画',
+          originalUrl: video.url,
+          saved: false,
+          reason: videoError.message,
+          thumbnailFileName: thumbFileName,
+          thumbnailDriveFileId: thumbDriveId
+        });
+      }
+
+      forwardToAll({
+        action: 'productInfoProgress',
+        progress: { phase: 'videos', current: processedMedia, total: totalMedia, productId }
+      });
+    }
+  }
+
+  // 6. 軽量JSONを生成（画像バイナリなし、メタデータのみ）
+  log(`[${productId}] JSONを保存中...`, '', 'product');
   forwardToAll({
     action: 'productInfoProgress',
     progress: { phase: 'upload', productId }
   });
 
-  const dateStr = formatDate(new Date());
-  const fileName = isRakuten
-    ? `rakuten_${productData.itemSlug}_${dateStr}.json`
-    : `amazon_${productData.asin}_${dateStr}.json`;
-  const uploadResult = await uploadJsonToDrive(token, folderId, fileName, jsonData);
+  // content scriptから取得した生データからimages/aplusImages/videosを除去してテキスト情報のみ残す
+  const { images: _img, aplusImages: _aplus, videos: _vid, videoThumbnails: _vt, ...textData } = productData;
 
-  log(`[${productId}] 保存完了`, 'success', 'product');
+  const jsonData = {
+    ...textData,
+    mediaFolderId,
+    images: imageMetadata,
+    aplusImages: aplusImageMetadata.length > 0 ? aplusImageMetadata : undefined,
+    videos: videoMetadata.length > 0 ? videoMetadata : undefined,
+    fileNamingRule: 'img_{連番}_{セクション}.{拡張子} / video_{連番}.{拡張子} / aplus_{連番}.{拡張子}',
+    sectionDescriptions: {
+      main: 'メイン画像 - 商品ページで最初に大きく表示される代表画像',
+      gallery: 'ギャラリー画像 - メイン画像の下に並ぶサムネイル画像群',
+      product: '商品画像 - ショップが掲載した商品関連画像',
+      description: '商品説明欄 - ページ下部のLP（ランディングページ）部分に掲載された画像',
+      aplus: 'A+コンテンツ - Amazonの拡張商品説明エリアの画像'
+    }
+  };
+
+  // undefinedキーを除去
+  const cleanJsonData = JSON.parse(JSON.stringify(jsonData));
+
+  const jsonFileName = `${baseName}.json`;
+  const uploadResult = await uploadJsonToDrive(token, folderId, jsonFileName, cleanJsonData);
+
+  const totalImageCount = imageMetadata.length + aplusImageMetadata.length;
+  const savedVideoCount = videoMetadata.filter(v => v.saved).length;
+  log(`[${productId}] 保存完了（画像: ${totalImageCount}枚, 動画: ${savedVideoCount}/${videoMetadata.length}件）`, 'success', 'product');
 
   return {
     success: true,
-    fileName,
+    fileName: jsonFileName,
     fileId: uploadResult.id,
+    mediaFolderId,
     productId,
     source: isRakuten ? 'rakuten' : 'amazon',
     title: productData.title,
-    imageCount: imageResults.length,
-    aplusImageCount: aplusImageResults.length
+    imageCount: imageMetadata.length,
+    aplusImageCount: aplusImageMetadata.length,
+    videoCount: videoMetadata.length,
+    savedVideoCount
   };
+}
+
+/**
+ * セクション名から説明文を生成
+ */
+function getSectionDescription(section, order) {
+  const descriptions = {
+    main: 'メイン画像（商品ページで最初に表示される代表画像）',
+    gallery: `ギャラリー画像${order}枚目`,
+    product: `商品画像${order}枚目`,
+    description: '商品説明欄の画像（ページ下部のLP部分）'
+  };
+  return descriptions[section] || `画像${order}枚目`;
 }
 
 /**

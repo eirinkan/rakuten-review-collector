@@ -324,6 +324,39 @@
       if (el.textContent.trim() === '送料無料') shipping = '送料無料';
     });
 
+    // 動画の収集（楽天の商品ページにはvideo要素やiframe埋め込みがある場合がある）
+    const videos = [];
+    const videoSeen = new Set();
+
+    // video要素
+    document.querySelectorAll('video source, video[src]').forEach(el => {
+      const src = el.src || el.getAttribute('src') || '';
+      if (src && !videoSeen.has(src)) {
+        videos.push({ url: src, type: src.includes('.m3u8') ? 'hls' : 'mp4', source: 'video-element' });
+        videoSeen.add(src);
+      }
+    });
+
+    // item_desc内の動画
+    if (descEl) {
+      descEl.querySelectorAll('video source, video[src]').forEach(el => {
+        const src = el.src || el.getAttribute('src') || '';
+        if (src && !videoSeen.has(src)) {
+          videos.push({ url: src, type: src.includes('.m3u8') ? 'hls' : 'mp4', source: 'description' });
+          videoSeen.add(src);
+        }
+      });
+    }
+
+    // 動画サムネイル（楽天は動画ボタン付きの画像がある場合）
+    const videoThumbnails = [];
+    document.querySelectorAll('[class*="video"] img, [data-video] img').forEach(img => {
+      const src = img.src || '';
+      if (src && !src.includes('data:image')) {
+        videoThumbnails.push(toHighResUrl(src));
+      }
+    });
+
     return {
       source: 'rakuten',
       title,
@@ -339,6 +372,8 @@
       variations,
       description: description.substring(0, 5000),
       images,
+      videos: videos.length > 0 ? videos : undefined,
+      videoThumbnails: videoThumbnails.length > 0 ? videoThumbnails : undefined,
       shipping,
       collectedAt: new Date().toISOString()
     };

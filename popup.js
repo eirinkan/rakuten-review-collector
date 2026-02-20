@@ -972,12 +972,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const progressText = document.getElementById('productInfoProgressText');
         if (msg.progress) {
           if (msg.progress.phase === 'images' && progressBar && progressText) {
-            const pct = Math.round((msg.progress.current / msg.progress.total) * 80) + 10;
+            const pct = Math.round((msg.progress.current / msg.progress.total) * 70) + 10;
             progressBar.style.width = pct + '%';
-            progressText.textContent = `画像を取得中... (${msg.progress.current}/${msg.progress.total})`;
+            progressText.textContent = `メディアをアップロード中... (${msg.progress.current}/${msg.progress.total})`;
+          } else if (msg.progress.phase === 'videos' && progressBar && progressText) {
+            const pct = Math.round((msg.progress.current / msg.progress.total) * 70) + 10;
+            progressBar.style.width = pct + '%';
+            progressText.textContent = `動画を処理中... (${msg.progress.current}/${msg.progress.total})`;
           } else if (msg.progress.phase === 'upload' && progressBar && progressText) {
             progressBar.style.width = '90%';
-            progressText.textContent = 'Google Driveにアップロード中...';
+            progressText.textContent = 'JSONを保存中...';
           }
         }
         break;
