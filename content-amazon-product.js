@@ -112,6 +112,18 @@
   }
 
   /**
+   * セレクターリストからテキスト内容がある最初の要素を返す
+   * 価格など、要素は存在するがテキストが空のケースに対応
+   */
+  function queryFirstWithText(selectorList) {
+    for (const sel of selectorList) {
+      const el = document.querySelector(sel);
+      if (el && el.textContent.trim()) return el;
+    }
+    return null;
+  }
+
+  /**
    * セレクターリストから全要素を返す
    */
   function queryAllFirst(selectorList) {
@@ -318,12 +330,12 @@
     const titleEl = queryFirst(SELECTORS.productTitle);
     const title = titleEl ? titleEl.textContent.trim() : '';
 
-    // 価格
-    const priceEl = queryFirst(SELECTORS.price);
+    // 価格（テキストが空の要素をスキップ）
+    const priceEl = queryFirstWithText(SELECTORS.price);
     const price = priceEl ? priceEl.textContent.trim() : '';
 
     // 元価格（セール時）
-    const listPriceEl = queryFirst(SELECTORS.listPrice);
+    const listPriceEl = queryFirstWithText(SELECTORS.listPrice);
     const listPrice = listPriceEl ? listPriceEl.textContent.trim() : '';
 
     // ブランド
