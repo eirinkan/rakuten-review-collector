@@ -402,6 +402,7 @@ document.addEventListener('DOMContentLoaded', () => {
       clearProductQueueBtn.addEventListener('click', () => {
         if (batchProductQueue.length === 0) return;
         batchProductQueue = [];
+        chrome.storage.local.set({ batchProductQueue: [] });
         renderBatchProductQueue();
         addLog('キューをクリアしました', '', 'product');
       });
@@ -2662,6 +2663,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (addedCount > 0) {
+      chrome.storage.local.set({ batchProductQueue: [...batchProductQueue] });
       if (batchProductStatus) showStatus(batchProductStatus, 'success', `${addedCount}件追加しました`);
       addLog(`キューに${addedCount}件追加しました（合計: ${batchProductQueue.length}件）`, 'info', 'product');
     } else {
@@ -2731,6 +2733,7 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.addEventListener('click', () => {
         const idx = parseInt(btn.dataset.index, 10);
         batchProductQueue.splice(idx, 1);
+        chrome.storage.local.set({ batchProductQueue: [...batchProductQueue] });
         renderBatchProductQueue();
       });
     });
@@ -2829,6 +2832,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (idx !== -1) batchProductQueue.splice(idx, 1);
         });
       }
+      chrome.storage.local.set({ batchProductQueue: [...batchProductQueue] });
       renderBatchProductQueue();
 
       // 最終同期（background.jsの完了ログを拾う。バッファフラッシュ待ちのため少し遅延）
