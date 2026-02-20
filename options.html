@@ -77,8 +77,30 @@
     }
 
     .container {
-      max-width: 600px;
+      max-width: 1200px;
       margin: 0 auto;
+    }
+
+    /* === 2カラムレイアウト === */
+    .main-columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .main-column {
+      min-width: 0;
+    }
+
+    /* 画面幅が狭い場合は1カラムに */
+    @media (max-width: 860px) {
+      .container {
+        max-width: 600px;
+      }
+      .main-columns {
+        grid-template-columns: 1fr;
+      }
     }
 
     /* === Header === */
@@ -2539,129 +2561,153 @@
 
     <!-- ========== メインビュー ========== -->
     <div id="main-view" class="view-container active">
-    <!-- Queue Card -->
-    <div class="card">
-      <div class="queue-header">
-        <h2>レビュー収集</h2>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <div class="saved-queues-dropdown-container">
-            <button id="loadSavedQueuesBtn" class="icon-btn" title="保存済みキュー">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/></svg>
-            </button>
-            <div id="savedQueuesDropdown" class="saved-queues-dropdown" style="display: none;">
-              <div class="saved-queues-dropdown-header">保存済みキュー</div>
-              <div id="savedQueuesDropdownList" class="saved-queues-dropdown-list">
-                <div class="saved-queues-empty">保存済みキューはありません</div>
+    <div class="main-columns">
+      <!-- ===== 左カラム: レビュー収集 ===== -->
+      <div class="main-column">
+        <!-- Queue Card -->
+        <div class="card">
+          <div class="queue-header">
+            <h2>レビュー収集</h2>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div class="saved-queues-dropdown-container">
+                <button id="loadSavedQueuesBtn" class="icon-btn" title="保存済みキュー">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/></svg>
+                </button>
+                <div id="savedQueuesDropdown" class="saved-queues-dropdown" style="display: none;">
+                  <div class="saved-queues-dropdown-header">保存済みキュー</div>
+                  <div id="savedQueuesDropdownList" class="saved-queues-dropdown-list">
+                    <div class="saved-queues-empty">保存済みキューはありません</div>
+                  </div>
+                </div>
+              </div>
+              <button id="saveQueueBtn" class="icon-btn" title="キューを保存">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+              </button>
+              <button id="clearQueueBtn" class="icon-btn" title="キュークリア">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- URL Input -->
+          <div class="url-input-row">
+            <textarea id="productUrl" class="url-textarea" placeholder="商品URL、ASIN（例: B0DWZWJ272）、またはランキングURL（改行で複数可）"></textarea>
+            <div id="rankingCountWrapper" class="ranking-count-wrapper" style="display: none;">
+              <span>上位</span>
+              <input type="number" id="rankingCount" value="10" min="1" max="100">
+              <span>件</span>
+            </div>
+            <button id="addToQueueBtn" class="btn btn-secondary btn-add">追加</button>
+          </div>
+          <div id="addStatus" class="status-message"></div>
+
+          <div style="margin-top: 8px; margin-bottom: 8px;">
+            <button id="startQueueBtn" class="btn btn-success btn-large" style="width: 100%;" disabled>一括収集開始・<span id="queueRemaining">0</span>件</button>
+            <button id="stopQueueBtn" class="btn btn-stop btn-large" style="width: 100%; display: none;">収集中止</button>
+          </div>
+
+          <!-- 期間指定フィルター -->
+          <div class="date-filter-section">
+            <label class="date-filter-label">収集期間（指定しない場合は全件）</label>
+            <div class="date-filter-inputs">
+              <input type="date" id="dateFilterFrom">
+              <span>〜</span>
+              <input type="date" id="dateFilterTo">
+            </div>
+          </div>
+
+          <!-- Queue List -->
+          <div id="queueList" class="queue-list"></div>
+        </div>
+
+        <!-- 定期収集 Card -->
+        <div class="card" id="scheduledCollectionSection">
+          <div class="queue-header">
+            <h2>定期（β版）</h2>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div class="saved-queues-dropdown-container">
+                <button id="addScheduledQueueBtn" class="btn btn-secondary btn-add" title="保存キューから追加">追加</button>
+                <div id="addScheduledQueueDropdown" class="saved-queues-dropdown" style="display: none;">
+                  <div class="saved-queues-dropdown-header">追加する保存キューを選択</div>
+                  <div id="addScheduledQueueList" class="saved-queues-dropdown-list">
+                    <div class="saved-queues-empty">保存済みキューがありません</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-          <button id="saveQueueBtn" class="icon-btn" title="キューを保存">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
-          </button>
-          <button id="clearQueueBtn" class="icon-btn" title="キュークリア">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-          </button>
+
+          <!-- 定期収集キュー一覧 -->
+          <div id="scheduledQueuesList" class="scheduled-queues-list"></div>
         </div>
-      </div>
 
-      <!-- URL Input -->
-      <div class="url-input-row">
-        <textarea id="productUrl" class="url-textarea" placeholder="商品URL、ASIN（例: B0DWZWJ272）、またはランキングURL（改行で複数可）"></textarea>
-        <div id="rankingCountWrapper" class="ranking-count-wrapper" style="display: none;">
-          <span>上位</span>
-          <input type="number" id="rankingCount" value="10" min="1" max="100">
-          <span>件</span>
-        </div>
-        <button id="addToQueueBtn" class="btn btn-secondary btn-add">追加</button>
-      </div>
-      <div id="addStatus" class="status-message"></div>
-
-      <div style="margin-top: 8px; margin-bottom: 8px;">
-        <button id="startQueueBtn" class="btn btn-success btn-large" style="width: 100%;" disabled>一括収集開始・<span id="queueRemaining">0</span>件</button>
-        <button id="stopQueueBtn" class="btn btn-stop btn-large" style="width: 100%; display: none;">収集中止</button>
-      </div>
-
-      <!-- 期間指定フィルター -->
-      <div class="date-filter-section">
-        <label class="date-filter-label">収集期間（指定しない場合は全件）</label>
-        <div class="date-filter-inputs">
-          <input type="date" id="dateFilterFrom">
-          <span>〜</span>
-          <input type="date" id="dateFilterTo">
-        </div>
-      </div>
-
-      <!-- Queue List -->
-      <div id="queueList" class="queue-list"></div>
-    </div>
-
-    <!-- 定期収集 Card -->
-    <div class="card" id="scheduledCollectionSection">
-      <div class="queue-header">
-        <h2>定期（β版）</h2>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <div class="saved-queues-dropdown-container">
-            <button id="addScheduledQueueBtn" class="btn btn-secondary btn-add" title="保存キューから追加">追加</button>
-            <div id="addScheduledQueueDropdown" class="saved-queues-dropdown" style="display: none;">
-              <div class="saved-queues-dropdown-header">追加する保存キューを選択</div>
-              <div id="addScheduledQueueList" class="saved-queues-dropdown-list">
-                <div class="saved-queues-empty">保存済みキューがありません</div>
-              </div>
+        <!-- レビュー収集ログ -->
+        <div id="logCard" class="card" style="display: none;">
+          <div class="log-header">
+            <h2>ログ</h2>
+            <div class="log-actions">
+              <button id="copyLogBtn" class="icon-btn" title="ログをコピー">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+              </button>
+              <button id="clearLogBtn" class="icon-btn" title="クリア">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+              </button>
             </div>
           </div>
+          <div id="logContainer" class="log-container"></div>
+          <div id="versionDisplay" class="version-display"></div>
         </div>
       </div>
 
-      <!-- 定期収集キュー一覧 -->
-      <div id="scheduledQueuesList" class="scheduled-queues-list"></div>
-    </div>
+      <!-- ===== 右カラム: 商品情報収集 ===== -->
+      <div class="main-column">
+        <!-- 商品情報一括収集 Card -->
+        <div class="card" id="batchProductSection">
+          <h2>商品情報収集</h2>
 
-    <!-- 商品情報一括収集 Card -->
-    <div class="card" id="batchProductSection">
-      <h2>商品情報収集</h2>
+          <!-- URL/ASIN入力 -->
+          <div class="url-input-row">
+            <textarea id="batchProductAsins" class="url-textarea" placeholder="商品URL または ASIN（改行で複数可）"></textarea>
+            <button id="startBatchProductBtn" class="btn btn-secondary btn-add">追加</button>
+          </div>
+          <div id="batchProductStatus" class="status-message"></div>
 
-      <!-- URL/ASIN入力 -->
-      <div class="url-input-row">
-        <textarea id="batchProductAsins" class="url-textarea" placeholder="商品URL または ASIN（改行で複数可）"></textarea>
-        <button id="startBatchProductBtn" class="btn btn-secondary btn-add">追加</button>
-      </div>
-      <div id="batchProductStatus" class="status-message"></div>
+          <div style="margin-top: 8px; margin-bottom: 8px;">
+            <button id="startBatchProductRunBtn" class="btn btn-success btn-large" style="width: 100%;" disabled>一括収集開始・<span id="batchProductCount">0</span>件</button>
+            <button id="cancelBatchProductBtn" class="btn btn-stop btn-large" style="width: 100%; display: none;">収集中止</button>
+          </div>
 
-      <div style="margin-top: 8px; margin-bottom: 8px;">
-        <button id="startBatchProductRunBtn" class="btn btn-success btn-large" style="width: 100%;" disabled>一括収集開始・<span id="batchProductCount">0</span>件</button>
-        <button id="cancelBatchProductBtn" class="btn btn-stop btn-large" style="width: 100%; display: none;">収集中止</button>
-      </div>
-
-      <!-- キューリスト -->
-      <div id="batchProductList" class="queue-list"></div>
-      <div id="batchProductProgress" style="display: none; margin-top: 12px;">
-        <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">
-          <span id="batchProductProgressText">0 / 0</span>
-          <span id="batchProductProgressPercent">0%</span>
+          <!-- キューリスト -->
+          <div id="batchProductList" class="queue-list"></div>
+          <div id="batchProductProgress" style="display: none; margin-top: 12px;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">
+              <span id="batchProductProgressText">0 / 0</span>
+              <span id="batchProductProgressPercent">0%</span>
+            </div>
+            <div style="background: var(--bg-input); border-radius: 4px; height: 8px; overflow: hidden;">
+              <div id="batchProductProgressBar" style="background: linear-gradient(90deg, #6c5ce7, #a29bfe); height: 100%; width: 0%; transition: width 0.3s ease; border-radius: 4px;"></div>
+            </div>
+            <div id="batchProductResults" style="margin-top: 8px; font-size: 12px; max-height: 120px; overflow-y: auto;"></div>
+          </div>
         </div>
-        <div style="background: var(--bg-input); border-radius: 4px; height: 8px; overflow: hidden;">
-          <div id="batchProductProgressBar" style="background: linear-gradient(90deg, #6c5ce7, #a29bfe); height: 100%; width: 0%; transition: width 0.3s ease; border-radius: 4px;"></div>
-        </div>
-        <div id="batchProductResults" style="margin-top: 8px; font-size: 12px; max-height: 120px; overflow-y: auto;"></div>
-      </div>
-    </div>
 
-    <!-- Log Card -->
-    <div id="logCard" class="card" style="display: none;">
-      <div class="log-header">
-        <h2>ログ</h2>
-        <div class="log-actions">
-          <button id="copyLogBtn" class="icon-btn" title="ログをコピー">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-          </button>
-          <button id="clearLogBtn" class="icon-btn" title="クリア">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-          </button>
+        <!-- 商品情報ログ -->
+        <div id="productLogCard" class="card" style="display: none;">
+          <div class="log-header">
+            <h2>ログ</h2>
+            <div class="log-actions">
+              <button id="copyProductLogBtn" class="icon-btn" title="ログをコピー">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+              </button>
+              <button id="clearProductLogBtn" class="icon-btn" title="クリア">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+              </button>
+            </div>
+          </div>
+          <div id="productLogContainer" class="log-container"></div>
         </div>
       </div>
-      <div id="logContainer" class="log-container"></div>
-      <div id="versionDisplay" class="version-display"></div>
-    </div>
+    </div><!-- /main-columns -->
     </div><!-- /main-view -->
 
 

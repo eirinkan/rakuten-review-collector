@@ -3212,13 +3212,14 @@ function forwardToAll(message) {
  * ログを送信
  * ストレージへの保存はoptions.jsのaddLog()が行うため、ここでは転送のみ
  */
-function log(text, type = '') {
+function log(text, type = '', category = 'review') {
   console.log(`[レビュー収集] ${text}`);
 
   forwardToAll({
     action: 'log',
     text: text,
-    type: type
+    type: type,
+    category: category
   });
 }
 
@@ -3236,7 +3237,8 @@ chrome.runtime.onInstalled.addListener(() => {
       logs: []
     },
     queue: [],
-    logs: []
+    logs: [],
+    productLogs: []
   });
 });
 
@@ -3625,7 +3627,7 @@ async function resumableUploadToDrive(token, folderId, fileName, blob) {
  * @param {number} tabId - 対象タブのID
  */
 async function collectAndSaveProductInfo(tabId) {
-  log('[商品情報] 収集を開始します...');
+  log('[商品情報] 収集を開始します...', '', 'product');
 
   // 1. 設定からDriveフォルダURLを取得
   const settings = await chrome.storage.sync.get(['productInfoFolderUrl']);
@@ -3646,7 +3648,7 @@ async function collectAndSaveProductInfo(tabId) {
   }
 
   // 3. content scriptから商品情報を取得
-  log('[商品情報] ページから情報を読み取り中...');
+  log('[商品情報] ページから情報を読み取り中...', '', 'product');
   let productData;
   try {
     const response = await chrome.tabs.sendMessage(tabId, { action: 'collectProductInfo' });
@@ -3659,7 +3661,7 @@ async function collectAndSaveProductInfo(tabId) {
   }
 
   // 4. 画像をbase64に変換
-  log(`[商品情報] 画像を取得中...（${productData.images.length}枚 + A+: ${(productData.aplusImages || []).length}枚）`);
+  log(`[商品情報] 画像を取得中...（${productData.images.length}枚 + A+: ${(productData.aplusImages || []).length}枚）`, '', 'product');
 
   // 進捗通知用
   const totalImages = productData.images.length + (productData.aplusImages || []).length;
@@ -3736,7 +3738,7 @@ async function collectAndSaveProductInfo(tabId) {
   };
 
   // 6. Google Driveにアップロード
-  log('[商品情報] Google Driveにアップロード中...');
+  log('[商品情報] Google Driveにアップロード中...', '', 'product');
   forwardToAll({
     action: 'productInfoProgress',
     progress: { phase: 'upload', asin: productData.asin }
@@ -3745,7 +3747,7 @@ async function collectAndSaveProductInfo(tabId) {
   const fileName = `${productData.asin}_${formatDate(new Date())}.json`;
   const uploadResult = await uploadJsonToDrive(token, folderId, fileName, jsonData);
 
-  log(`[商品情報] 保存完了: ${productData.title?.substring(0, 40)}... (${fileName})`, 'success');
+  log(`[商品情報] 保存完了: ${productData.title?.substring(0, 40)}... (${fileName})`, 'success', 'product');
 
   return {
     success: true,
@@ -3787,7 +3789,7 @@ async function startBatchProductCollection(asins) {
     isRunning: true
   };
 
-  log(`[商品情報バッチ] ${asins.length}件の商品情報収集を開始します`);
+  log(`[商品情報バッチ] ${asins.length}件の商品情報収集を開始します`, '', 'product');
   forwardToAll({ action: 'batchProductProgressUpdate', progress: batchProductProgress });
 
   // バッチ処理を非同期で実行（即座にレスポンスを返す）
@@ -3800,14 +3802,14 @@ async function startBatchProductCollection(asins) {
         active: false
       });
     } catch (e) {
-      log('[商品情報バッチ] タブ作成に失敗しました', 'error');
+      log('[商品情報バッチ] タブ作成に失敗しました', 'error', 'product');
       batchProductProgress.isRunning = false;
       return;
     }
 
     for (let i = 0; i < asins.length; i++) {
       if (batchProductCancelled) {
-        log('[商品情報バッチ] キャンセルされました');
+        log('[商品情報バッチ] キャンセルされました', '', 'product');
         break;
       }
 
@@ -3820,7 +3822,7 @@ async function startBatchProductCollection(asins) {
       }
 
       const productUrl = `https://www.amazon.co.jp/dp/${asin}`;
-      log(`[商品情報バッチ] (${i + 1}/${asins.length}) ${asin} を収集中...`);
+      log(`[商品情報バッチ] (${i + 1}/${asins.length}) ${asin} を収集中...`, '', 'product');
 
       try {
         // タブでページを開く
@@ -3843,7 +3845,7 @@ async function startBatchProductCollection(asins) {
       } catch (error) {
         console.error(`[商品情報バッチ] ${asin} エラー:`, error);
         batchProductProgress.failed.push({ asin, error: error.message });
-        log(`[商品情報バッチ] ${asin}: ${error.message}`, 'error');
+        log(`[商品情報バッチ] ${asin}: ${error.message}`, 'error', 'product');
       }
 
       batchProductProgress.current = i + 1;
@@ -3868,7 +3870,7 @@ async function startBatchProductCollection(asins) {
 
     const successCount = batchProductProgress.completed.length;
     const failCount = batchProductProgress.failed.length;
-    log(`[商品情報バッチ] 完了: 成功 ${successCount}件、失敗 ${failCount}件`, successCount > 0 ? 'success' : 'error');
+    log(`[商品情報バッチ] 完了: 成功 ${successCount}件、失敗 ${failCount}件`, successCount > 0 ? 'success' : 'error', 'product');
   })();
 
   return { success: true, message: `${asins.length}件のバッチ収集を開始しました` };

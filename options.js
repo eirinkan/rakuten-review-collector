@@ -106,6 +106,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const logContainer = document.getElementById('logContainer');
   const clearLogBtn = document.getElementById('clearLogBtn');
 
+  // 商品情報ログ
+  const productLogCard = document.getElementById('productLogCard');
+  const productLogContainer = document.getElementById('productLogContainer');
+  const copyProductLogBtn = document.getElementById('copyProductLogBtn');
+  const clearProductLogBtn = document.getElementById('clearProductLogBtn');
+
   // ヘッダーボタン
   const headerTitle = document.getElementById('headerTitle');
   const settingsToggleBtn = document.getElementById('settingsToggleBtn');
@@ -182,6 +188,8 @@ document.addEventListener('DOMContentLoaded', () => {
     addToQueueBtn.addEventListener('click', addToQueue);
     clearLogBtn.addEventListener('click', clearLogs);
     copyLogBtn.addEventListener('click', copyLogs);
+    if (clearProductLogBtn) clearProductLogBtn.addEventListener('click', clearProductLogs);
+    if (copyProductLogBtn) copyProductLogBtn.addEventListener('click', copyProductLogs);
 
     // キュー保存イベント（ヘッダーアイコン）
     if (saveQueueBtn) {
@@ -684,23 +692,41 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function loadLogs() {
-    chrome.storage.local.get(['logs'], (result) => {
-      const logs = result.logs || [];
-      if (logs.length === 0) {
-        logCard.style.display = 'none';
-        logContainer.innerHTML = '';
-        return;
-      }
+  function loadLogs(category) {
+    // カテゴリ指定がある場合はそのカテゴリのみ、ない場合は両方読み込む
+    if (category === 'review' || !category) {
+      chrome.storage.local.get(['logs'], (result) => {
+        const logs = result.logs || [];
+        if (logs.length === 0) {
+          logCard.style.display = 'none';
+          logContainer.innerHTML = '';
+        } else {
+          logCard.style.display = 'block';
+          logContainer.innerHTML = logs.map(log => {
+            const typeClass = log.type ? ` ${log.type}` : '';
+            return `<div class="log-entry${typeClass}"><span class="time">[${log.time}]</span> ${escapeHtml(log.text)}</div>`;
+          }).join('');
+          logContainer.scrollTop = logContainer.scrollHeight;
+        }
+      });
+    }
 
-      logCard.style.display = 'block';
-      logContainer.innerHTML = logs.map(log => {
-        const typeClass = log.type ? ` ${log.type}` : '';
-        return `<div class="log-entry${typeClass}"><span class="time">[${log.time}]</span> ${escapeHtml(log.text)}</div>`;
-      }).join('');
-
-      logContainer.scrollTop = logContainer.scrollHeight;
-    });
+    if (category === 'product' || !category) {
+      chrome.storage.local.get(['productLogs'], (result) => {
+        const logs = result.productLogs || [];
+        if (logs.length === 0) {
+          productLogCard.style.display = 'none';
+          productLogContainer.innerHTML = '';
+        } else {
+          productLogCard.style.display = 'block';
+          productLogContainer.innerHTML = logs.map(log => {
+            const typeClass = log.type ? ` ${log.type}` : '';
+            return `<div class="log-entry${typeClass}"><span class="time">[${log.time}]</span> ${escapeHtml(log.text)}</div>`;
+          }).join('');
+          productLogContainer.scrollTop = productLogContainer.scrollHeight;
+        }
+      });
+    }
   }
 
   // スプレッドシートURLの自動保存（Sheets API直接連携）
@@ -1358,18 +1384,53 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function clearLogs() {
-    // クリア成功のフィードバック（色変化）
     clearLogBtn.style.background = '#dc3545';
     clearLogBtn.style.color = 'white';
     clearLogBtn.title = 'クリアしました!';
 
     chrome.storage.local.set({ logs: [] }, () => {
-      loadLogs();
+      loadLogs('review');
       setTimeout(() => {
         clearLogBtn.style.background = '';
         clearLogBtn.style.color = '';
         clearLogBtn.title = 'クリア';
       }, 1500);
+    });
+  }
+
+  function clearProductLogs() {
+    clearProductLogBtn.style.background = '#dc3545';
+    clearProductLogBtn.style.color = 'white';
+    clearProductLogBtn.title = 'クリアしました!';
+
+    chrome.storage.local.set({ productLogs: [] }, () => {
+      loadLogs('product');
+      setTimeout(() => {
+        clearProductLogBtn.style.background = '';
+        clearProductLogBtn.style.color = '';
+        clearProductLogBtn.title = 'クリア';
+      }, 1500);
+    });
+  }
+
+  function copyProductLogs() {
+    chrome.storage.local.get(['productLogs'], (result) => {
+      const logs = result.productLogs || [];
+      if (logs.length === 0) return;
+
+      const logText = logs.map(log => `[${log.time}] ${log.text}`).join('\n');
+      navigator.clipboard.writeText(logText).then(() => {
+        copyProductLogBtn.style.background = '#28a745';
+        copyProductLogBtn.style.color = 'white';
+        copyProductLogBtn.title = 'コピーしました!';
+        setTimeout(() => {
+          copyProductLogBtn.style.background = '';
+          copyProductLogBtn.style.color = '';
+          copyProductLogBtn.title = 'ログをコピー';
+        }, 1500);
+      }).catch(err => {
+        console.error('コピーに失敗:', err);
+      });
     });
   }
 
@@ -1389,7 +1450,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loadState(); // ボタン状態も更新
         break;
       case 'log':
-        addLog(msg.text, msg.type);
+        addLog(msg.text, msg.type, msg.category || 'review');
         break;
       case 'batchProductProgressUpdate':
         updateBatchProductProgress(msg.progress);
@@ -1397,15 +1458,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function addLog(text, type = '') {
+  function addLog(text, type = '', category = 'review') {
     const time = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const storageKey = category === 'product' ? 'productLogs' : 'logs';
 
-    chrome.storage.local.get(['logs'], (result) => {
-      const logs = result.logs || [];
+    chrome.storage.local.get([storageKey], (result) => {
+      const logs = result[storageKey] || [];
       logs.push({ time, text, type });
 
-      chrome.storage.local.set({ logs }, () => {
-        loadLogs();
+      chrome.storage.local.set({ [storageKey]: logs }, () => {
+        loadLogs(category);
       });
     });
   }
