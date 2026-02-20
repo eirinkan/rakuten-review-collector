@@ -217,7 +217,7 @@
         let first = true;
         for (const img of ivImages) {
           const src = img.src || img.getAttribute('data-src') || '';
-          if (!src || src.includes('data:image') || src.includes('transparent-pixel')) continue;
+          if (!src || src.includes('data:image') || src.includes('transparent-pixel') || src.includes('grey-pixel')) continue;
           const hiRes = toHighResUrl(src);
           if (hiRes && !seen.has(hiRes)) {
             images.push({ url: hiRes, type: first ? 'main' : 'gallery' });
@@ -231,7 +231,7 @@
       const galleryImgs = document.querySelectorAll('#imageGallery img.product-image, #imageGallery_feature_div img[src*="images-amazon.com"], #imageGallery_feature_div img[src*="m.media-amazon.com"]');
       for (const img of galleryImgs) {
         const src = img.src || img.getAttribute('data-src') || '';
-        if (!src || src.includes('data:image') || src.includes('transparent-pixel')) continue;
+        if (!src || src.includes('data:image') || src.includes('transparent-pixel') || src.includes('grey-pixel')) continue;
         const hiRes = toHighResUrl(src);
         if (hiRes && !seen.has(hiRes)) {
           images.push({ url: hiRes, type: images.length === 0 ? 'main' : 'gallery' });
@@ -245,7 +245,7 @@
         let first = true;
         for (const img of blockImgs) {
           const src = img.src || '';
-          if (!src || src.includes('data:image') || src.includes('transparent-pixel')) continue;
+          if (!src || src.includes('data:image') || src.includes('transparent-pixel') || src.includes('grey-pixel')) continue;
           // 小さすぎるアイコンを除外
           if (img.naturalWidth > 0 && img.naturalWidth <= 30) continue;
           const hiRes = toHighResUrl(src);
@@ -407,7 +407,7 @@
     for (const img of imgs) {
       // data-src（遅延読み込み）またはsrc
       const src = img.getAttribute('data-src') || img.src || '';
-      if (!src || src.includes('data:image') || src.includes('transparent-pixel')) continue;
+      if (!src || src.includes('data:image') || src.includes('transparent-pixel') || src.includes('grey-pixel')) continue;
 
       const hiRes = toHighResUrl(src);
       if (hiRes && !seen.has(hiRes)) {
@@ -496,9 +496,24 @@
     const titleEl = queryFirst(SELECTORS.productTitle);
     const title = titleEl ? titleEl.textContent.trim() : '';
 
-    // 価格（テキストが空の要素をスキップ）
+    // 価格（テキストが空の要素をスキップ、ポイント表示を除外）
     const priceEl = queryFirstWithText(SELECTORS.price);
-    const price = priceEl ? priceEl.textContent.trim() : '';
+    let price = priceEl ? priceEl.textContent.trim() : '';
+    // ポイント表示（例: "8pt (1%)"）や在庫切れ文を誤検出した場合のフォールバック
+    if (price && !/[￥¥]\s*[\d,]+/.test(price) && !/^\d[\d,]+円/.test(price)) {
+      price = '';
+      for (const sel of SELECTORS.price) {
+        const els = document.querySelectorAll(sel);
+        for (const el of els) {
+          const text = el.textContent.trim();
+          if (/^[￥¥]\s*[\d,]+/.test(text)) {
+            price = text;
+            break;
+          }
+        }
+        if (price) break;
+      }
+    }
 
     // 元価格（セール時）
     const listPriceEl = queryFirstWithText(SELECTORS.listPrice);
