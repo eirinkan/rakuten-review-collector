@@ -2558,8 +2558,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (batchProductStatus) showStatus(batchProductStatus, 'info', 'すべて追加済みです');
     }
 
-    // 入力欄をクリア
-    if (batchProductAsins) batchProductAsins.value = '';
+    // 入力欄をクリアしてサイズをリセット
+    if (batchProductAsins) {
+      batchProductAsins.value = '';
+      autoResizeTextarea(batchProductAsins);
+    }
     renderBatchProductQueue();
   }
 
