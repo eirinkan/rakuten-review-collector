@@ -2800,10 +2800,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (cancelBatchProductBtn) cancelBatchProductBtn.style.display = 'none';
 
-    // 最終同期してから中止メッセージを追加
-    finalSyncProductLogs(() => {
-      addLog('収集を中止しました', 'warning', 'product');
-    });
+    // 中止メッセージを追加（appendLogで即時受信済みなので最終同期は不要）
+    addLog('収集を中止しました', 'warning', 'product');
+    // カウンターを同期
+    setTimeout(() => {
+      chrome.storage.local.get(['productLogs'], (result) => {
+        _lastPolledProductLogCount = (result.productLogs || []).length;
+      });
+    }, 500);
   }
 
   // 一括収集の進捗更新（ログはbackground.jsがストレージに書き込み、ポーリングで表示済み）
@@ -2844,9 +2848,12 @@ document.addEventListener('DOMContentLoaded', () => {
       chrome.storage.local.set({ batchProductQueue: [...batchProductQueue] });
       renderBatchProductQueue();
 
-      // 最終同期（background.jsの完了ログを拾う。バッファフラッシュ待ちのため少し遅延）
+      // 最終同期は不要（appendLogメッセージで即時受信済み）
+      // ただしページ復帰時の安全策として、少し遅延後にカウンターだけ同期
       setTimeout(() => {
-        finalSyncProductLogs();
+        chrome.storage.local.get(['productLogs'], (result) => {
+          _lastPolledProductLogCount = (result.productLogs || []).length;
+        });
       }, 500);
     }
   }
