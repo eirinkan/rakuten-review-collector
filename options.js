@@ -102,12 +102,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const addStatus = document.getElementById('addStatus');
   const urlCountLabel = document.getElementById('urlCountLabel');
 
-  const logCard = document.getElementById('logCard');
+  const logSection = document.getElementById('logSection');
   const logContainer = document.getElementById('logContainer');
   const clearLogBtn = document.getElementById('clearLogBtn');
 
   // 商品情報ログ
-  const productLogCard = document.getElementById('productLogCard');
+  const productLogSection = document.getElementById('productLogSection');
   const productLogContainer = document.getElementById('productLogContainer');
   const copyProductLogBtn = document.getElementById('copyProductLogBtn');
   const clearProductLogBtn = document.getElementById('clearProductLogBtn');
@@ -167,6 +167,19 @@ document.addEventListener('DOMContentLoaded', () => {
       spreadsheetLinkBtn.classList.remove('disabled');
     } else {
       spreadsheetLinkBtn.classList.add('disabled');
+    }
+  }
+
+  // Google Driveフォルダリンクの状態更新
+  function updateDriveFolderLink(url) {
+    const link = document.getElementById('driveFolderLink');
+    if (!link) return;
+    if (url && url.trim()) {
+      link.href = url.trim();
+      link.classList.remove('disabled');
+    } else {
+      link.href = '#';
+      link.classList.add('disabled');
     }
   }
 
@@ -479,6 +492,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (productInfoFolderUrlInput && result.productInfoFolderUrl) {
         productInfoFolderUrlInput.value = result.productInfoFolderUrl;
       }
+      // Google Driveフォルダリンクの状態更新
+      updateDriveFolderLink(result.productInfoFolderUrl);
     });
 
     // 収集項目の設定を読み込み
@@ -794,10 +809,10 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderLogs(category) {
     if (category === 'review' || !category) {
       if (_memReviewLogs.length === 0) {
-        logCard.style.display = 'none';
+        logSection.style.display = 'none';
         logContainer.innerHTML = '';
       } else {
-        logCard.style.display = 'block';
+        logSection.style.display = 'block';
         logContainer.innerHTML = _memReviewLogs.map(log => {
           const typeClass = log.type ? ` ${log.type}` : '';
           return `<div class="log-entry${typeClass}"><span class="time">[${log.time}]</span> ${escapeHtml(log.text)}</div>`;
@@ -808,10 +823,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (category === 'product' || !category) {
       if (_memProductLogs.length === 0) {
-        productLogCard.style.display = 'none';
+        productLogSection.style.display = 'none';
         productLogContainer.innerHTML = '';
       } else {
-        productLogCard.style.display = 'block';
+        productLogSection.style.display = 'block';
         productLogContainer.innerHTML = _memProductLogs.map(log => {
           const typeClass = log.type ? ` ${log.type}` : '';
           return `<div class="log-entry${typeClass}"><span class="time">[${log.time}]</span> ${escapeHtml(log.text)}</div>`;
@@ -2588,6 +2603,7 @@ document.addEventListener('DOMContentLoaded', () => {
           productInfoFolderUrlStatus.textContent = '';
         }
       }
+      updateDriveFolderLink(url);
     });
   }
 

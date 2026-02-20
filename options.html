@@ -2532,6 +2532,16 @@
       <div class="header-top">
         <h1 id="headerTitle" style="cursor: pointer;">収集</h1>
         <div class="header-actions">
+          <a id="driveFolderLink" href="#" target="_blank" class="header-link disabled" title="Google Driveフォルダを開く">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M7.71 3.5L1.15 15l3.43 5.95h6.86L7.71 3.5z" fill="#0066DA"/>
+              <path d="M16.29 3.5H7.71l3.72 6.45L16.29 3.5z" fill="#00AC47"/>
+              <path d="M16.29 3.5l4.56 7.91L22.85 15l-6.56-11.5z" fill="#EA4335"/>
+              <path d="M11.43 9.95l-3.72 6.45h13.14l-3.72-6.45H11.43z" fill="#00832D"/>
+              <path d="M11.43 9.95L7.71 16.4l3.72 6.45 3.72-6.45-3.72-6.45z" fill="#2684FC"/>
+              <path d="M16.29 3.5l-4.86 6.45 5.42 6.45h6.01L16.29 3.5z" fill="#FFBA00"/>
+            </svg>
+          </a>
           <div class="spreadsheet-link-wrapper">
             <button id="spreadsheetLinkBtn" class="header-icon-btn disabled" title="スプレッドシートを開く">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -2586,6 +2596,13 @@
               <button id="clearQueueBtn" class="icon-btn" title="キュークリア">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
               </button>
+              <span style="width: 1px; height: 20px; background: var(--border-glass); margin: 0 2px;"></span>
+              <button id="copyLogBtn" class="icon-btn" title="ログをコピー">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+              </button>
+              <button id="clearLogBtn" class="icon-btn" title="ログクリア">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+              </button>
             </div>
           </div>
 
@@ -2618,6 +2635,12 @@
 
           <!-- Queue List -->
           <div id="queueList" class="queue-list"></div>
+
+          <!-- ログ（キューカード内に統合） -->
+          <div id="logSection" style="display: none; margin-top: 12px;">
+            <div id="logContainer" class="log-container"></div>
+          </div>
+          <div id="versionDisplay" class="version-display"></div>
         </div>
 
         <!-- 定期収集 Card -->
@@ -2641,22 +2664,6 @@
           <div id="scheduledQueuesList" class="scheduled-queues-list"></div>
         </div>
 
-        <!-- レビュー収集ログ -->
-        <div id="logCard" class="card" style="display: none;">
-          <div class="log-header">
-            <h2>ログ</h2>
-            <div class="log-actions">
-              <button id="copyLogBtn" class="icon-btn" title="ログをコピー">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-              </button>
-              <button id="clearLogBtn" class="icon-btn" title="クリア">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-              </button>
-            </div>
-          </div>
-          <div id="logContainer" class="log-container"></div>
-          <div id="versionDisplay" class="version-display"></div>
-        </div>
       </div>
 
       <!-- ===== 右カラム: 商品情報収集 ===== -->
@@ -2664,7 +2671,7 @@
         <!-- 商品情報収集 Card -->
         <div class="card" id="batchProductSection">
           <div class="queue-header">
-            <h2>商品</h2>
+            <h2>商品情報</h2>
             <div style="display: flex; align-items: center; gap: 8px;">
               <div class="saved-queues-dropdown-container">
                 <button id="loadProductQueuesBtn" class="icon-btn" title="保存済みキュー">
@@ -2683,6 +2690,13 @@
               <button id="clearProductQueueBtn" class="icon-btn" title="キュークリア">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
               </button>
+              <span style="width: 1px; height: 20px; background: var(--border-glass); margin: 0 2px;"></span>
+              <button id="copyProductLogBtn" class="icon-btn" title="ログをコピー">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+              </button>
+              <button id="clearProductLogBtn" class="icon-btn" title="ログクリア">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+              </button>
             </div>
           </div>
 
@@ -2700,22 +2714,11 @@
 
           <!-- キューリスト -->
           <div id="batchProductList" class="queue-list"></div>
-        </div>
 
-        <!-- 商品情報ログ -->
-        <div id="productLogCard" class="card" style="display: none;">
-          <div class="log-header">
-            <h2>ログ</h2>
-            <div class="log-actions">
-              <button id="copyProductLogBtn" class="icon-btn" title="ログをコピー">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-              </button>
-              <button id="clearProductLogBtn" class="icon-btn" title="クリア">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-              </button>
-            </div>
+          <!-- ログ（キューカード内に統合） -->
+          <div id="productLogSection" style="display: none; margin-top: 12px;">
+            <div id="productLogContainer" class="log-container"></div>
           </div>
-          <div id="productLogContainer" class="log-container"></div>
         </div>
       </div>
     </div><!-- /main-columns -->

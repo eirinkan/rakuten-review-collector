@@ -69,6 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const queueBtn = document.getElementById('queueBtn');
   const settingsBtn = document.getElementById('settingsBtn');
   const startRankingBtn = document.getElementById('startRankingBtn');
+  const startRankingProductBtn = document.getElementById('startRankingProductBtn');
   const addRankingBtn = document.getElementById('addRankingBtn');
   const addRankingProductBtn = document.getElementById('addRankingProductBtn');
   const rankingCountInput = document.getElementById('rankingCount');
@@ -257,19 +258,25 @@ document.addEventListener('DOMContentLoaded', () => {
       // 楽天ランキングページの場合
       normalMode.style.display = 'none';
       rankingMode.style.display = 'block';
+      // 商品キュー・商品情報収集ボタンを表示
+      if (addRankingProductBtn) addRankingProductBtn.style.display = 'block';
+      if (startRankingProductBtn) startRankingProductBtn.style.display = 'block';
 
       // サイトマップページの場合は特別処理
       if (isRakutenRankingSitemap) {
         startRankingBtn.disabled = true;
+        if (startRankingProductBtn) startRankingProductBtn.disabled = true;
         addRankingBtn.disabled = true;
+        if (addRankingProductBtn) addRankingProductBtn.disabled = true;
         showRankingMessage('任意のランキングを選んでください', 'info');
       }
     } else if (isAmazonRankingPage) {
       // Amazonランキングページの場合
       normalMode.style.display = 'none';
       rankingMode.style.display = 'block';
-      // 商品キューボタンを表示（Amazon専用）
+      // 商品キュー・商品情報収集ボタンを表示
       if (addRankingProductBtn) addRankingProductBtn.style.display = 'block';
+      if (startRankingProductBtn) startRankingProductBtn.style.display = 'block';
     } else if (!isSupportedPage) {
       // 楽天・Amazon以外のページ
       pageWarning.style.display = 'block';
@@ -286,6 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
     queueBtn.addEventListener('click', addToQueue);
     settingsBtn.addEventListener('click', openSettings);
     startRankingBtn.addEventListener('click', startRankingCollection);
+    if (startRankingProductBtn) startRankingProductBtn.addEventListener('click', startRankingProductCollection);
     addRankingBtn.addEventListener('click', addRankingToQueue);
     if (addRankingProductBtn) addRankingProductBtn.addEventListener('click', addRankingToProductQueue);
 
@@ -549,6 +557,53 @@ document.addEventListener('DOMContentLoaded', () => {
         showRankingMessage(response?.error || '追加に失敗しました', 'error');
       }
     });
+  }
+
+  /**
+   * ランキングから商品キューに追加して商品情報バッチ収集を開始
+   */
+  async function startRankingProductCollection() {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const count = parseInt(rankingCountInput.value) || 10;
+
+    if (startRankingProductBtn) startRankingProductBtn.disabled = true;
+    startRankingBtn.disabled = true;
+    addRankingBtn.disabled = true;
+    if (addRankingProductBtn) addRankingProductBtn.disabled = true;
+    if (startRankingProductBtn) startRankingProductBtn.textContent = '準備中...';
+
+    // まずランキングから商品キューに追加
+    chrome.runtime.sendMessage({
+      action: 'addRankingToProductQueue',
+      url: tab.url,
+      count: count
+    }, (response) => {
+      if (response && response.success && response.addedCount > 0) {
+        showRankingMessage(`${response.addedCount}件追加、商品情報収集開始...`, 'success');
+        // 商品情報バッチ収集を開始
+        chrome.runtime.sendMessage({ action: 'startBatchProductFromPopup' }, (res) => {
+          resetRankingProductBtn();
+          if (res && res.success) {
+            showRankingMessage(`${response.addedCount}件の商品情報収集を開始しました`, 'success');
+          } else {
+            showRankingMessage(res?.error || '商品情報収集の開始に失敗しました', 'error');
+          }
+        });
+      } else {
+        resetRankingProductBtn();
+        showRankingMessage(response?.error || '商品が見つかりませんでした', 'error');
+      }
+    });
+  }
+
+  function resetRankingProductBtn() {
+    if (startRankingProductBtn) {
+      startRankingProductBtn.disabled = false;
+      startRankingProductBtn.textContent = '商品情報収集開始';
+    }
+    startRankingBtn.disabled = false;
+    addRankingBtn.disabled = false;
+    if (addRankingProductBtn) addRankingProductBtn.disabled = false;
   }
 
   function openSettings() {

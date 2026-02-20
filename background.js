@@ -728,6 +728,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
 
+    case 'startBatchProductFromPopup':
+      startBatchProductFromPopup()
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
     case 'updateScheduledAlarm':
       updateScheduledAlarm(message.settings)
         .then(() => sendResponse({ success: true }))
@@ -3208,78 +3214,166 @@ async function fetchAmazonRankingProducts(url, count) {
 }
 
 /**
- * Amazonランキングから商品キュー（batchProductQueue）にASINを追加
+ * ランキングから商品キュー（batchProductQueue）にASINを追加
+ * Amazon: ASINを直接追加
+ * 楽天: 商品URLからASINは取得不可のため、URLベースで追加（商品情報収集はスキップ）
  */
 async function addRankingToProductQueue(url, count) {
-  if (!url.includes('amazon.co.jp')) {
-    return { success: false, error: '商品キューはAmazonランキングのみ対応しています' };
+  const isAmazon = url.includes('amazon.co.jp');
+  const isRakuten = url.includes('ranking.rakuten.co.jp');
+
+  if (!isAmazon && !isRakuten) {
+    return { success: false, error: 'Amazon・楽天ランキングページのみ対応しています' };
   }
 
   try {
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8'
-      }
-    });
-    const html = await response.text();
+    if (isAmazon) {
+      return await addAmazonRankingToProductQueue(url, count);
+    } else {
+      return await addRakutenRankingToProductQueue(url, count);
+    }
+  } catch (error) {
+    log(`商品キュー追加エラー: ${error.message}`, 'error', 'product');
+    return { success: false, error: error.message };
+  }
+}
 
-    const asins = [];
-    const seenAsins = new Set();
+/**
+ * Amazonランキングから商品キューにASINを追加
+ */
+async function addAmazonRankingToProductQueue(url, count) {
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+      'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8'
+    }
+  });
+  const html = await response.text();
 
-    // data-asin属性からASINを抽出
-    const asinPattern = /data-asin="([A-Z0-9]{10})"/g;
-    let match;
-    while ((match = asinPattern.exec(html)) !== null && asins.length < count) {
+  const asins = [];
+  const seenAsins = new Set();
+
+  // data-asin属性からASINを抽出
+  const asinPattern = /data-asin="([A-Z0-9]{10})"/g;
+  let match;
+  while ((match = asinPattern.exec(html)) !== null && asins.length < count) {
+    const asin = match[1].toUpperCase();
+    if (!asin || seenAsins.has(asin)) continue;
+    seenAsins.add(asin);
+    asins.push(asin);
+  }
+
+  // フォールバック: /dp/ASINパターン
+  if (asins.length < count) {
+    const dpPattern = /\/dp\/([A-Z0-9]{10})/gi;
+    while ((match = dpPattern.exec(html)) !== null && asins.length < count) {
       const asin = match[1].toUpperCase();
       if (!asin || seenAsins.has(asin)) continue;
       seenAsins.add(asin);
       asins.push(asin);
     }
-
-    // フォールバック: /dp/ASINパターン
-    if (asins.length < count) {
-      const dpPattern = /\/dp\/([A-Z0-9]{10})/gi;
-      while ((match = dpPattern.exec(html)) !== null && asins.length < count) {
-        const asin = match[1].toUpperCase();
-        if (!asin || seenAsins.has(asin)) continue;
-        seenAsins.add(asin);
-        asins.push(asin);
-      }
-    }
-
-    if (asins.length === 0) {
-      return { success: false, error: '商品が見つかりませんでした' };
-    }
-
-    // batchProductQueueに追加（重複排除）
-    const result = await chrome.storage.local.get(['batchProductQueue']);
-    const queue = result.batchProductQueue || [];
-
-    let addedCount = 0;
-    for (const asin of asins) {
-      if (!queue.includes(asin)) {
-        queue.push(asin);
-        addedCount++;
-      }
-    }
-
-    await chrome.storage.local.set({ batchProductQueue: queue });
-
-    forwardToAll({ action: 'batchProductQueueUpdated' });
-
-    if (addedCount > 0) {
-      log(`Amazonランキングから${addedCount}件を商品キューに追加しました`, 'success', 'product');
-    } else {
-      log('追加する商品がありません（全て重複）', 'info', 'product');
-    }
-
-    return { success: true, addedCount, totalCount: queue.length };
-  } catch (error) {
-    log(`商品キュー追加エラー: ${error.message}`, 'error', 'product');
-    return { success: false, error: error.message };
   }
+
+  if (asins.length === 0) {
+    return { success: false, error: '商品が見つかりませんでした' };
+  }
+
+  // batchProductQueueに追加（重複排除）
+  const result = await chrome.storage.local.get(['batchProductQueue']);
+  const queue = result.batchProductQueue || [];
+
+  let addedCount = 0;
+  for (const asin of asins) {
+    if (!queue.includes(asin)) {
+      queue.push(asin);
+      addedCount++;
+    }
+  }
+
+  await chrome.storage.local.set({ batchProductQueue: queue });
+  forwardToAll({ action: 'batchProductQueueUpdated' });
+
+  if (addedCount > 0) {
+    log(`Amazonランキングから${addedCount}件を商品キューに追加`, 'success', 'product');
+  } else {
+    log('追加する商品がありません（全て重複）', 'info', 'product');
+  }
+
+  return { success: true, addedCount, totalCount: queue.length };
+}
+
+/**
+ * 楽天ランキングから商品キューにASINを追加
+ * 楽天商品URLからAmazon ASINを取得する方法はないため、
+ * 商品URLを使ってfetchRankingProducts経由で商品情報を取得し、
+ * レビューキューと同じ形式でbatchProductQueueに追加する
+ * ※ 商品情報収集（Google Drive保存）はAmazon専用のため楽天URLはスキップされる
+ */
+async function addRakutenRankingToProductQueue(url, count) {
+  // 楽天ランキングから商品URLを取得（既存のfetchRakutenRankingProducts関数を活用）
+  const rankingResult = await fetchRakutenRankingProducts(url, count);
+  if (!rankingResult.success || rankingResult.addedCount === 0) {
+    return { success: false, error: rankingResult.error || '商品が見つかりませんでした' };
+  }
+
+  // レビューキュー（queue）から追加されたばかりの楽天商品URLを取得
+  const queueResult = await chrome.storage.local.get(['queue', 'batchProductQueue']);
+  const reviewQueue = queueResult.queue || [];
+  const productQueue = queueResult.batchProductQueue || [];
+
+  // 楽天レビューキューの商品URLからASINは取れないが、URLベースで商品キューに追加
+  // 楽天商品のURLを商品キューにも追加する（URLとして格納）
+  const existingUrls = new Set(productQueue.map(item =>
+    typeof item === 'string' ? item : (item.url || item)
+  ));
+
+  let addedCount = 0;
+  const rakutenItems = reviewQueue.filter(item => item.source === 'rakuten');
+  for (const item of rakutenItems) {
+    if (!existingUrls.has(item.url)) {
+      productQueue.push(item.url);
+      existingUrls.add(item.url);
+      addedCount++;
+      if (addedCount >= count) break;
+    }
+  }
+
+  await chrome.storage.local.set({ batchProductQueue: productQueue });
+  forwardToAll({ action: 'batchProductQueueUpdated' });
+
+  if (addedCount > 0) {
+    log(`楽天ランキングから${addedCount}件を商品キューに追加（※商品情報収集はAmazon商品のみ対応）`, 'success', 'product');
+  } else {
+    log('追加する商品がありません（全て重複）', 'info', 'product');
+  }
+
+  return { success: true, addedCount, totalCount: productQueue.length };
+}
+
+/**
+ * ポップアップから商品キューの商品情報バッチ収集を開始
+ * batchProductQueueに入っているASINを使ってバッチ収集を実行
+ */
+async function startBatchProductFromPopup() {
+  const result = await chrome.storage.local.get(['batchProductQueue']);
+  const queue = result.batchProductQueue || [];
+
+  if (queue.length === 0) {
+    return { success: false, error: '商品キューが空です' };
+  }
+
+  // キューからASINを抽出
+  const asins = queue.map(item => {
+    if (typeof item === 'string') return item;
+    return item.asin || item;
+  }).filter(a => a && /^[A-Z0-9]{10}$/i.test(a));
+
+  if (asins.length === 0) {
+    return { success: false, error: '有効なASINが見つかりません' };
+  }
+
+  return startBatchProductCollection(asins);
 }
 
 /**
@@ -3737,7 +3831,7 @@ async function resumableUploadToDrive(token, folderId, fileName, blob) {
  * @param {number} tabId - 対象タブのID
  */
 async function collectAndSaveProductInfo(tabId) {
-  log('[商品情報] 収集を開始します...', '', 'product');
+  log('収集を開始します...', '', 'product');
 
   // 1. 設定からDriveフォルダURLを取得
   const settings = await chrome.storage.sync.get(['productInfoFolderUrl']);
@@ -3755,7 +3849,7 @@ async function collectAndSaveProductInfo(tabId) {
   const token = await getAuthTokenWithFallback();
 
   // 3. content scriptから商品情報を取得
-  log('[商品情報] ページから情報を読み取り中...', '', 'product');
+  log('ページから情報を読み取り中...', '', 'product');
   let productData;
   try {
     const response = await chrome.tabs.sendMessage(tabId, { action: 'collectProductInfo' });
@@ -3768,7 +3862,8 @@ async function collectAndSaveProductInfo(tabId) {
   }
 
   // 4. 画像をbase64に変換
-  log(`[商品情報] 画像を取得中...（${productData.images.length}枚 + A+: ${(productData.aplusImages || []).length}枚）`, '', 'product');
+  const asin = productData.asin || '???';
+  log(`[${asin}] 画像を取得中...（${productData.images.length}枚 + A+: ${(productData.aplusImages || []).length}枚）`, '', 'product');
 
   // 進捗通知用
   const totalImages = productData.images.length + (productData.aplusImages || []).length;
@@ -3845,7 +3940,7 @@ async function collectAndSaveProductInfo(tabId) {
   };
 
   // 6. Google Driveにアップロード
-  log('[商品情報] Google Driveにアップロード中...', '', 'product');
+  log(`[${asin}] Google Driveにアップロード中...`, '', 'product');
   forwardToAll({
     action: 'productInfoProgress',
     progress: { phase: 'upload', asin: productData.asin }
@@ -3854,7 +3949,7 @@ async function collectAndSaveProductInfo(tabId) {
   const fileName = `${productData.asin}_${formatDate(new Date())}.json`;
   const uploadResult = await uploadJsonToDrive(token, folderId, fileName, jsonData);
 
-  log(`[商品情報] 保存完了: ${productData.title?.substring(0, 40)}... (${fileName})`, 'success', 'product');
+  log(`[${asin}] 保存完了`, 'success', 'product');
 
   return {
     success: true,
@@ -3894,7 +3989,7 @@ async function startBatchProductCollection(asins) {
     isRunning: true
   };
 
-  log(`[商品情報バッチ] ${asins.length}件の商品情報収集を開始します`, '', 'product');
+  log(`${asins.length}件の商品情報収集を開始します`, '', 'product');
   forwardToAll({ action: 'batchProductProgressUpdate', progress: batchProductProgress });
 
   // バッチ処理を非同期で実行（即座にレスポンスを返す）
@@ -3907,14 +4002,14 @@ async function startBatchProductCollection(asins) {
         active: false
       });
     } catch (e) {
-      log('[商品情報バッチ] タブ作成に失敗しました', 'error', 'product');
+      log('タブ作成に失敗しました', 'error', 'product');
       batchProductProgress.isRunning = false;
       return;
     }
 
     for (let i = 0; i < asins.length; i++) {
       if (batchProductCancelled) {
-        log('[商品情報バッチ] キャンセルされました', '', 'product');
+        log('キャンセルされました', '', 'product');
         break;
       }
 
@@ -3927,7 +4022,7 @@ async function startBatchProductCollection(asins) {
       }
 
       const productUrl = `https://www.amazon.co.jp/dp/${asin}`;
-      log(`[商品情報バッチ] (${i + 1}/${asins.length}) ${asin} を収集中...`, '', 'product');
+      log(`[${asin}] (${i + 1}/${asins.length}) 収集中...`, '', 'product');
 
       try {
         // タブでページを開く
@@ -3948,9 +4043,9 @@ async function startBatchProductCollection(asins) {
           fileName: result.fileName
         });
       } catch (error) {
-        console.error(`[商品情報バッチ] ${asin} エラー:`, error);
+        console.error(`[商品情報] ${asin} エラー:`, error);
         batchProductProgress.failed.push({ asin, error: error.message });
-        log(`[商品情報バッチ] ${asin}: ${error.message}`, 'error', 'product');
+        log(`[${asin}] ${error.message}`, 'error', 'product');
       }
 
       batchProductProgress.current = i + 1;
@@ -3975,7 +4070,7 @@ async function startBatchProductCollection(asins) {
 
     const successCount = batchProductProgress.completed.length;
     const failCount = batchProductProgress.failed.length;
-    log(`[商品情報バッチ] 完了: 成功 ${successCount}件、失敗 ${failCount}件`, successCount > 0 ? 'success' : 'error', 'product');
+    log(`完了: 成功 ${successCount}件、失敗 ${failCount}件`, successCount > 0 ? 'success' : 'error', 'product');
   })();
 
   return { success: true, message: `${asins.length}件のバッチ収集を開始しました` };
