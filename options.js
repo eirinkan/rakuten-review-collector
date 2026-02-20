@@ -265,9 +265,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // URL入力時にランキングかどうか判定して件数入力の表示を切り替え、URLカウントを表示
     productUrl.addEventListener('input', () => {
-      // 高さを自動調整
-      productUrl.style.height = '38px';
-      productUrl.style.height = Math.min(productUrl.scrollHeight, 120) + 'px';
+      // 高さを自動調整（空なら初期サイズに戻す）
+      autoResizeTextarea(productUrl);
 
       const text = productUrl.value.trim();
       const urls = text.split('\n').map(u => u.trim()).filter(u => u.length > 0);
@@ -410,8 +409,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 商品入力欄の高さ自動調整
     if (batchProductAsins) {
       batchProductAsins.addEventListener('input', () => {
-        batchProductAsins.style.height = '38px';
-        batchProductAsins.style.height = Math.min(batchProductAsins.scrollHeight, 120) + 'px';
+        autoResizeTextarea(batchProductAsins);
       });
     }
 
@@ -1522,6 +1520,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // テキストエリアの高さを内容に応じて自動調整（空なら初期サイズに戻す）
+  function autoResizeTextarea(el) {
+    if (!el) return;
+    if (el.value === '') {
+      el.style.height = '38px';
+      return;
+    }
+    el.style.height = '0';
+    el.style.height = Math.max(38, Math.min(el.scrollHeight, 120)) + 'px';
   }
 
   // ========================================
