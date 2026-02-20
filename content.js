@@ -200,18 +200,23 @@
     const origEl = document.querySelector('[class*="item-original-price--"] [class*="value--"]');
     const originalPrice = origEl ? origEl.textContent.trim().replace(/円$/, '') : '';
 
-    // レビュー情報
-    // 1. itemprop（新旧UI共通・最も確実）
-    const ratingMeta = document.querySelector('meta[itemprop="ratingValue"]');
-    const reviewCountMeta = document.querySelector('meta[itemprop="reviewCount"]');
+    // レビュー情報（優先度順にフォールバック）
+    // 1. AggregateRating内のitemprop（個別レビューの評価と区別するため親を限定）
+    const aggRatingEl = document.querySelector('[itemtype*="AggregateRating"] [itemprop="ratingValue"]');
+    const aggCountEl = document.querySelector('[itemtype*="AggregateRating"] [itemprop="reviewCount"]');
     // 2. 新UIのCSS moduleセレクタ
-    const scoreEl = ratingMeta?.content
-      ? { textContent: ratingMeta.content }
-      : document.querySelector('[class*="review-score--"]');
-    let totalEl = reviewCountMeta?.content
-      ? { textContent: reviewCountMeta.content + '件' }
-      : document.querySelector('[class*="review-total--"]');
-    // フォールバック: 旧UI (.normal-reserve-review内の件数リンク)
+    const cssScoreEl = document.querySelector('[class*="review-score--"]');
+    const cssTotalEl = document.querySelector('[class*="review-total--"]');
+
+    // rating: AggregateRating itemprop → CSS module → 空
+    const scoreEl = (aggRatingEl?.content)
+      ? { textContent: aggRatingEl.content }
+      : cssScoreEl || null;
+
+    // reviewCount: AggregateRating itemprop → CSS module → 旧UI件数リンク → ショップレビュー
+    let totalEl = (aggCountEl?.content)
+      ? { textContent: aggCountEl.content + '件' }
+      : cssTotalEl || null;
     if (!totalEl) {
       const reviewLink = document.querySelector('.normal-reserve-review a:not([aria-label="レビューを書く"])');
       if (reviewLink) {
@@ -252,17 +257,24 @@
       // 末尾の価格パターンを除去（例: "【XL】27-30cm2,480円" → "【XL】27-30cm"）
       .map(t => t.replace(/\d{1,3}(,\d{3})*円$/, '').trim());
 
-    // 商品説明テキスト
+    // 商品説明テキスト（.item_desc → og:description のフォールバック）
     const descEl = document.querySelector('.item_desc');
-    const description = descEl ? descEl.textContent.trim() : '';
+    let description = descEl ? descEl.textContent.trim() : '';
+    if (!description) {
+      const ogDesc = document.querySelector('meta[property="og:description"]');
+      if (ogDesc?.content) description = ogDesc.content.trim();
+    }
 
     // 商品画像の収集
     const images = [];
     const seen = new Set();
 
-    // 高解像度URLに変換するヘルパー（tshop.r10s.jp → shop.r10s.jp、クエリ除去）
+    // 高解像度URLに変換するヘルパー（すべてshop.r10s.jpに統一、クエリ除去）
     function toHighResUrl(src) {
-      return src.split('?')[0].replace('tshop.r10s.jp', 'shop.r10s.jp');
+      return src.split('?')[0]
+        .replace('tshop.r10s.jp', 'shop.r10s.jp')
+        .replace('image.rakuten.co.jp', 'shop.r10s.jp')
+        .replace('thumbnail.image.rakuten.co.jp', 'shop.r10s.jp');
     }
 
     // 1. og:image（メイン画像）
