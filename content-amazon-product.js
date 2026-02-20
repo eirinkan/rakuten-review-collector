@@ -478,23 +478,64 @@
     return cleanData;
   }
 
+  /**
+   * ページの主要コンテンツが読み込まれるまで待機
+   * Amazon商品ページは遅延読み込みが多いため、主要要素の出現を確認してから収集する
+   */
+  async function waitForPageReady(maxWaitMs = 8000) {
+    // すでにDOMContentLoadedが完了しているか確認
+    if (document.readyState === 'loading') {
+      await new Promise(resolve => {
+        document.addEventListener('DOMContentLoaded', resolve, { once: true });
+      });
+    }
+
+    // 主要要素が出現するまでポーリング（最大maxWaitMs）
+    const startTime = Date.now();
+    const checkInterval = 300;
+
+    while (Date.now() - startTime < maxWaitMs) {
+      const hasTitle = !!queryFirst(SELECTORS.productTitle);
+      const hasPrice = !!queryFirstWithText(SELECTORS.price);
+      const hasMainImage = !!queryFirst(SELECTORS.mainImage);
+
+      // タイトル＋（価格または画像）が揃えば準備完了
+      if (hasTitle && (hasPrice || hasMainImage)) {
+        // A+コンテンツや画像データ属性が遅延設定されるのを少し待つ
+        await new Promise(r => setTimeout(r, 500));
+        console.log(`[Amazon商品情報収集] ページ準備完了（${Date.now() - startTime}ms）`);
+        return;
+      }
+
+      await new Promise(r => setTimeout(r, checkInterval));
+    }
+
+    console.warn(`[Amazon商品情報収集] ${maxWaitMs}ms待機後もページが完全に読み込まれていない可能性があります。現在の状態で収集を開始します`);
+  }
+
   // ===== メッセージハンドラー =====
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message || !message.action) return;
 
     switch (message.action) {
       case 'collectProductInfo': {
-        try {
-          const data = collectProductInfo();
-          if (data) {
-            sendResponse({ success: true, data });
-          } else {
-            sendResponse({ success: false, error: 'Amazon商品ページではないか、情報を取得できませんでした' });
+        // ページの準備完了を待ってから収集開始
+        waitForPageReady().then(() => {
+          try {
+            const data = collectProductInfo();
+            if (data) {
+              sendResponse({ success: true, data });
+            } else {
+              sendResponse({ success: false, error: 'Amazon商品ページではないか、情報を取得できませんでした' });
+            }
+          } catch (error) {
+            console.error('[Amazon商品情報収集] エラー:', error);
+            sendResponse({ success: false, error: error.message });
           }
-        } catch (error) {
-          console.error('[Amazon商品情報収集] エラー:', error);
+        }).catch(error => {
+          console.error('[Amazon商品情報収集] ページ待機エラー:', error);
           sendResponse({ success: false, error: error.message });
-        }
+        });
         return true; // 非同期レスポンス
       }
 

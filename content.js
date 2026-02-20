@@ -113,12 +113,15 @@
       case 'collectProductInfo':
         // 商品情報を詳細に収集（Google Drive保存用）
         if (isItemPage) {
-          try {
-            const data = collectRakutenProductInfo();
-            sendResponse({ success: true, data });
-          } catch (error) {
-            sendResponse({ success: false, error: error.message });
-          }
+          // ページの主要コンテンツが読み込まれるまで待機してから収集
+          waitForRakutenPageReady().then(() => {
+            try {
+              const data = collectRakutenProductInfo();
+              sendResponse({ success: true, data });
+            } catch (error) {
+              sendResponse({ success: false, error: error.message });
+            }
+          });
         } else {
           sendResponse({ success: false, error: '楽天の商品ページ（item.rakuten.co.jp）で実行してください' });
         }
@@ -165,6 +168,38 @@
       title: title.substring(0, 100),
       addedAt: new Date().toISOString()
     };
+  }
+
+  /**
+   * 楽天商品ページの主要コンテンツが読み込まれるまで待機
+   */
+  async function waitForRakutenPageReady(maxWaitMs = 8000) {
+    if (document.readyState === 'loading') {
+      await new Promise(resolve => {
+        document.addEventListener('DOMContentLoaded', resolve, { once: true });
+      });
+    }
+
+    const startTime = Date.now();
+    const checkInterval = 300;
+
+    while (Date.now() - startTime < maxWaitMs) {
+      // og:title があれば基本的なページ情報は読み込み済み
+      const hasTitle = !!document.querySelector('meta[property="og:title"]');
+      // 画像が1つ以上表示されているか
+      const hasImage = document.querySelectorAll('img[src*="r10s.jp"], img[src*="rakuten"]').length > 0;
+
+      if (hasTitle && hasImage) {
+        // 遅延読み込みの画像やJS描画コンテンツを少し待つ
+        await new Promise(r => setTimeout(r, 500));
+        console.log(`[楽天商品情報収集] ページ準備完了（${Date.now() - startTime}ms）`);
+        return;
+      }
+
+      await new Promise(r => setTimeout(r, checkInterval));
+    }
+
+    console.warn(`[楽天商品情報収集] ${maxWaitMs}ms待機後もページが完全に読み込まれていない可能性があります`);
   }
 
   /**
