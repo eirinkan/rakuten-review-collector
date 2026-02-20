@@ -237,7 +237,15 @@
     // 商品名: og:titleから加工（PC/スマホ共通）
     const ogTitle = document.querySelector('meta[property="og:title"]');
     let title = ogTitle ? ogTitle.content : document.title;
-    title = title.replace(/^【楽天市場】/, '').replace(/：[^：]+$/, '').replace(/\s*:\s*[^:]+$/, '').trim();
+    title = title.replace(/^【楽天市場】/, '');
+    // ショップ名除去: まず全角コロンで試行、なければ半角コロン（スペース必須）で試行
+    const titleBeforeColon = title;
+    title = title.replace(/：[^：]+$/, '');
+    if (title === titleBeforeColon) {
+      // 全角コロンがない場合のみ半角コロンで試行（時刻表記 12:00 等を誤マッチしないよう前後スペース必須）
+      title = title.replace(/\s+:\s+[^:]+$/, '');
+    }
+    title = title.trim();
     // スマホ版のフォールバック: item-name-- クラスから取得
     if (!title && mobile) {
       const mobileTitle = document.querySelector('[class*="item-name--"]');

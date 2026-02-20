@@ -388,12 +388,12 @@
       images: []
     };
 
-    // テキスト収集（重要なテキスト要素のみ）
+    // テキスト収集（重要なテキスト要素のみ、script/styleタグを除外）
     const textElements = aplusEl.querySelectorAll('h1, h2, h3, h4, h5, p, li, td, span.a-text-bold');
     const texts = [];
     const seenTexts = new Set();
     for (const el of textElements) {
-      const text = el.textContent.trim();
+      const text = getCleanText(el);
       if (text && text.length > 2 && !seenTexts.has(text)) {
         texts.push(text);
         seenTexts.add(text);
