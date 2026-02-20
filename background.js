@@ -889,7 +889,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case 'startBatchProductCollection':
-      startBatchProductCollection(message.asins)
+      startBatchProductCollection(message.items || message.asins)
         .then(result => sendResponse(result))
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
@@ -3307,8 +3307,7 @@ async function addAmazonRankingToProductQueue(url, count) {
  * 楽天ランキングから商品キューにASINを追加
  * 楽天商品URLからAmazon ASINを取得する方法はないため、
  * 商品URLを使ってfetchRankingProducts経由で商品情報を取得し、
- * レビューキューと同じ形式でbatchProductQueueに追加する
- * ※ 商品情報収集（Google Drive保存）はAmazon専用のため楽天URLはスキップされる
+ * レビューキューと同じ形式でbatchProductQueueに追加する（楽天URLを商品キューに追加）
  */
 async function addRakutenRankingToProductQueue(url, count) {
   // 楽天ランキングから商品URLを取得（既存のfetchRakutenRankingProducts関数を活用）
@@ -3343,7 +3342,7 @@ async function addRakutenRankingToProductQueue(url, count) {
   forwardToAll({ action: 'batchProductQueueUpdated' });
 
   if (addedCount > 0) {
-    log(`楽天ランキングから${addedCount}件を商品キューに追加（※商品情報収集はAmazon商品のみ対応）`, 'success', 'product');
+    log(`楽天ランキングから${addedCount}件を商品キューに追加`, 'success', 'product');
   } else {
     log('追加する商品がありません（全て重複）', 'info', 'product');
   }
@@ -3353,7 +3352,7 @@ async function addRakutenRankingToProductQueue(url, count) {
 
 /**
  * ポップアップから商品キューの商品情報バッチ収集を開始
- * batchProductQueueに入っているASINを使ってバッチ収集を実行
+ * batchProductQueueに入っているASIN・楽天URLを使ってバッチ収集を実行
  */
 async function startBatchProductFromPopup() {
   const result = await chrome.storage.local.get(['batchProductQueue']);
@@ -3363,17 +3362,24 @@ async function startBatchProductFromPopup() {
     return { success: false, error: '商品キューが空です' };
   }
 
-  // キューからASINを抽出
-  const asins = queue.map(item => {
+  // キューからASINまたはURLを抽出
+  const items = queue.map(item => {
     if (typeof item === 'string') return item;
-    return item.asin || item;
-  }).filter(a => a && /^[A-Z0-9]{10}$/i.test(a));
+    return item.url || item.asin || item;
+  }).filter(a => {
+    if (!a) return false;
+    // 楽天URL
+    if (a.includes('item.rakuten.co.jp')) return true;
+    // Amazon ASIN
+    if (/^[A-Z0-9]{10}$/i.test(a)) return true;
+    return false;
+  });
 
-  if (asins.length === 0) {
-    return { success: false, error: '有効なASINが見つかりません' };
+  if (items.length === 0) {
+    return { success: false, error: '有効な商品が見つかりません' };
   }
 
-  return startBatchProductCollection(asins);
+  return startBatchProductCollection(items);
 }
 
 /**
@@ -3861,43 +3867,49 @@ async function collectAndSaveProductInfo(tabId) {
     throw new Error(`商品情報の取得に失敗: ${error.message}`);
   }
 
-  // 4. 画像をbase64に変換
-  const asin = productData.asin || '???';
-  log(`[${asin}] 画像を取得中...（${productData.images.length}枚 + A+: ${(productData.aplusImages || []).length}枚）`, '', 'product');
+  // Amazon / 楽天の判定
+  const isRakuten = productData.source === 'rakuten';
+  const productId = isRakuten
+    ? (productData.itemSlug || '???')
+    : (productData.asin || '???');
 
-  // 進捗通知用
-  const totalImages = productData.images.length + (productData.aplusImages || []).length;
+  // 4. 画像をbase64に変換
+  const aplusImages = isRakuten ? [] : (productData.aplusImages || []);
+  const totalImages = productData.images.length + aplusImages.length;
+  log(`[${productId}] 画像を取得中...（${productData.images.length}枚${aplusImages.length > 0 ? ` + A+: ${aplusImages.length}枚` : ''}）`, '', 'product');
+
   let processedImages = 0;
 
   // 商品画像
   const imageResults = [];
   for (const img of productData.images) {
-    const result = await fetchImageAsBase64(img.url);
+    const imgUrl = typeof img === 'string' ? img : img.url;
+    const imgType = typeof img === 'string' ? 'product' : img.type;
+    const result = await fetchImageAsBase64(imgUrl);
     processedImages++;
     if (result) {
       imageResults.push({
-        url: img.url,
-        type: img.type,
+        url: imgUrl,
+        type: imgType,
         base64: result.base64,
         mimeType: result.mimeType,
         size: result.size
       });
     }
-    // 進捗通知
     forwardToAll({
       action: 'productInfoProgress',
       progress: {
         phase: 'images',
         current: processedImages,
         total: totalImages,
-        asin: productData.asin
+        productId
       }
     });
   }
 
-  // A+コンテンツ画像
+  // A+コンテンツ画像（Amazonのみ）
   const aplusImageResults = [];
-  if (productData.aplusImages) {
+  if (!isRakuten && productData.aplusImages) {
     for (const imgUrl of productData.aplusImages) {
       const result = await fetchImageAsBase64(imgUrl);
       processedImages++;
@@ -3915,7 +3927,7 @@ async function collectAndSaveProductInfo(tabId) {
           phase: 'images',
           current: processedImages,
           total: totalImages,
-          asin: productData.asin
+          productId
         }
       });
     }
@@ -3940,22 +3952,26 @@ async function collectAndSaveProductInfo(tabId) {
   };
 
   // 6. Google Driveにアップロード
-  log(`[${asin}] Google Driveにアップロード中...`, '', 'product');
+  log(`[${productId}] Google Driveにアップロード中...`, '', 'product');
   forwardToAll({
     action: 'productInfoProgress',
-    progress: { phase: 'upload', asin: productData.asin }
+    progress: { phase: 'upload', productId }
   });
 
-  const fileName = `${productData.asin}_${formatDate(new Date())}.json`;
+  const dateStr = formatDate(new Date());
+  const fileName = isRakuten
+    ? `rakuten_${productData.itemSlug}_${dateStr}.json`
+    : `amazon_${productData.asin}_${dateStr}.json`;
   const uploadResult = await uploadJsonToDrive(token, folderId, fileName, jsonData);
 
-  log(`[${asin}] 保存完了`, 'success', 'product');
+  log(`[${productId}] 保存完了`, 'success', 'product');
 
   return {
     success: true,
     fileName,
     fileId: uploadResult.id,
-    asin: productData.asin,
+    productId,
+    source: isRakuten ? 'rakuten' : 'amazon',
     title: productData.title,
     imageCount: imageResults.length,
     aplusImageCount: aplusImageResults.length
@@ -3963,12 +3979,12 @@ async function collectAndSaveProductInfo(tabId) {
 }
 
 /**
- * ASINリストからバッチで商品情報を収集
- * @param {string[]} asins - ASINリスト
+ * 商品リストからバッチで商品情報を収集（Amazon ASIN / 楽天URLの両方に対応）
+ * @param {string[]} items - ASINまたは商品URLのリスト
  */
-async function startBatchProductCollection(asins) {
-  if (!asins || asins.length === 0) {
-    throw new Error('ASINが入力されていません');
+async function startBatchProductCollection(items) {
+  if (!items || items.length === 0) {
+    throw new Error('商品が入力されていません');
   }
 
   // 設定を事前チェック
@@ -3982,14 +3998,14 @@ async function startBatchProductCollection(asins) {
 
   batchProductCancelled = false;
   batchProductProgress = {
-    total: asins.length,
+    total: items.length,
     current: 0,
     completed: [],
     failed: [],
     isRunning: true
   };
 
-  log(`${asins.length}件の商品情報収集を開始します`, '', 'product');
+  log(`${items.length}件の商品情報収集を開始します`, '', 'product');
   forwardToAll({ action: 'batchProductProgressUpdate', progress: batchProductProgress });
 
   // バッチ処理を非同期で実行（即座にレスポンスを返す）
@@ -4007,22 +4023,36 @@ async function startBatchProductCollection(asins) {
       return;
     }
 
-    for (let i = 0; i < asins.length; i++) {
+    for (let i = 0; i < items.length; i++) {
       if (batchProductCancelled) {
         log('キャンセルされました', '', 'product');
         break;
       }
 
-      const asin = asins[i].trim().toUpperCase();
-      if (!/^[A-Z0-9]{10}$/.test(asin)) {
-        batchProductProgress.failed.push({ asin, error: '無効なASIN形式' });
-        batchProductProgress.current = i + 1;
-        forwardToAll({ action: 'batchProductProgressUpdate', progress: batchProductProgress });
-        continue;
+      const item = items[i].trim();
+      const isRakutenUrl = item.includes('item.rakuten.co.jp');
+      let productUrl, displayId;
+
+      if (isRakutenUrl) {
+        // 楽天URL: そのまま使用
+        productUrl = item.startsWith('http') ? item : `https://${item}`;
+        // URLからitemSlugを抽出（/shop/item/ → item）
+        const slugMatch = productUrl.match(/item\.rakuten\.co\.jp\/[^/]+\/([^/?]+)/);
+        displayId = slugMatch ? slugMatch[1] : '楽天商品';
+      } else {
+        // Amazon: ASINとして処理
+        const asin = item.toUpperCase();
+        if (!/^[A-Z0-9]{10}$/.test(asin)) {
+          batchProductProgress.failed.push({ id: item, error: '無効なASINまたはURL形式' });
+          batchProductProgress.current = i + 1;
+          forwardToAll({ action: 'batchProductProgressUpdate', progress: batchProductProgress });
+          continue;
+        }
+        productUrl = `https://www.amazon.co.jp/dp/${asin}`;
+        displayId = asin;
       }
 
-      const productUrl = `https://www.amazon.co.jp/dp/${asin}`;
-      log(`[${asin}] (${i + 1}/${asins.length}) 収集中...`, '', 'product');
+      log(`[${displayId}] (${i + 1}/${items.length}) 収集中...`, '', 'product');
 
       try {
         // タブでページを開く
@@ -4038,21 +4068,22 @@ async function startBatchProductCollection(asins) {
         const result = await collectAndSaveProductInfo(batchTab.id);
 
         batchProductProgress.completed.push({
-          asin,
+          id: displayId,
+          source: result.source,
           title: result.title,
           fileName: result.fileName
         });
       } catch (error) {
-        console.error(`[商品情報] ${asin} エラー:`, error);
-        batchProductProgress.failed.push({ asin, error: error.message });
-        log(`[${asin}] ${error.message}`, 'error', 'product');
+        console.error(`[商品情報] ${displayId} エラー:`, error);
+        batchProductProgress.failed.push({ id: displayId, error: error.message });
+        log(`[${displayId}] ${error.message}`, 'error', 'product');
       }
 
       batchProductProgress.current = i + 1;
       forwardToAll({ action: 'batchProductProgressUpdate', progress: batchProductProgress });
 
-      // ASIN間のランダム待機（ボット対策: 3〜8秒）
-      if (i < asins.length - 1 && !batchProductCancelled) {
+      // 商品間のランダム待機（ボット対策: 3〜8秒）
+      if (i < items.length - 1 && !batchProductCancelled) {
         const waitMs = 3000 + Math.random() * 5000;
         await sleep(waitMs);
       }
@@ -4073,7 +4104,7 @@ async function startBatchProductCollection(asins) {
     log(`完了: 成功 ${successCount}件、失敗 ${failCount}件`, successCount > 0 ? 'success' : 'error', 'product');
   })();
 
-  return { success: true, message: `${asins.length}件のバッチ収集を開始しました` };
+  return { success: true, message: `${items.length}件のバッチ収集を開始しました` };
 }
 
 /**

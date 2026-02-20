@@ -106,9 +106,22 @@
         sendResponse({ success: true });
         break;
       case 'getProductInfo':
-        // 商品情報を取得
+        // 商品情報を取得（キュー追加用・最小限）
         const productInfo = getProductInfo();
         sendResponse({ success: true, productInfo: productInfo });
+        break;
+      case 'collectProductInfo':
+        // 商品情報を詳細に収集（Google Drive保存用）
+        if (isItemPage) {
+          try {
+            const data = collectRakutenProductInfo();
+            sendResponse({ success: true, data });
+          } catch (error) {
+            sendResponse({ success: false, error: error.message });
+          }
+        } else {
+          sendResponse({ success: false, error: '楽天の商品ページ（item.rakuten.co.jp）で実行してください' });
+        }
         break;
       default:
         return;
@@ -151,6 +164,129 @@
       url: url,
       title: title.substring(0, 100),
       addedAt: new Date().toISOString()
+    };
+  }
+
+  /**
+   * 楽天商品ページから詳細な商品情報を収集（Google Drive保存用）
+   * セレクターは docs/楽天商品情報収集ロジック.md に基づく
+   */
+  function collectRakutenProductInfo() {
+    // 商品名: og:titleから加工
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    let title = ogTitle ? ogTitle.content : document.title;
+    title = title.replace(/^【楽天市場】/, '').replace(/：[^：]+$/, '').trim();
+
+    // URLパスからショップID・商品管理番号を抽出
+    const pathParts = location.pathname.split('/').filter(Boolean);
+    const shopSlug = pathParts[0] || '';
+    const itemSlug = pathParts[1] || '';
+
+    // 販売価格
+    let sellingPrice = '';
+    const priceEl = document.querySelector(
+      '[class*="number-display--"][class*="color-crimson--"][class*="size-l--"] [class*="number--"][class*="primary--"]'
+    );
+    if (priceEl) {
+      sellingPrice = priceEl.textContent.trim();
+    } else {
+      const priceFb = document.querySelector(
+        '[class*="number-display--"][class*="color-crimson--"] [class*="number--"][class*="primary--"]'
+      );
+      if (priceFb) sellingPrice = priceFb.textContent.trim();
+    }
+
+    // 元価格（メーカー希望小売価格）
+    const origEl = document.querySelector('[class*="item-original-price--"] [class*="value--"]');
+    const originalPrice = origEl ? origEl.textContent.trim().replace(/円$/, '') : '';
+
+    // レビュー情報
+    const scoreEl = document.querySelector('[class*="review-score--"]');
+    const totalEl = document.querySelector('[class*="review-total--"]');
+
+    // ショップ名
+    const titleParts = document.title.split('：');
+    const shopName = titleParts.length > 1 ? titleParts[titleParts.length - 1].trim() : '';
+
+    // カテゴリ（JSON-LD BreadcrumbListから）
+    let categories = [];
+    try {
+      const ldScripts = document.querySelectorAll('script[type="application/ld+json"]');
+      for (const ldScript of ldScripts) {
+        const data = JSON.parse(ldScript.textContent);
+        if (data.itemListElement) {
+          categories = data.itemListElement
+            .map(item => item.item?.name || '')
+            .filter(name => name && name !== '楽天市場');
+          break;
+        }
+      }
+    } catch (e) {}
+
+    // バリエーション
+    const varButtons = document.querySelectorAll('[class*="button-multiline--"]');
+    const variations = Array.from(varButtons)
+      .map(b => b.textContent.trim().replace(/\s+/g, ' '))
+      .filter(t => t.length > 0 && t.length < 50 && t !== '―');
+
+    // 商品説明テキスト
+    const descEl = document.querySelector('.item_desc');
+    const description = descEl ? descEl.textContent.trim() : '';
+
+    // 商品画像の収集
+    const images = [];
+    const seen = new Set();
+
+    // 1. og:image（メイン画像）
+    const ogImage = document.querySelector('meta[property="og:image"]');
+    if (ogImage?.content) {
+      images.push({ url: ogImage.content, type: 'main' });
+      seen.add(ogImage.content);
+    }
+
+    // 2. ショップの商品画像（rakuten CDN）
+    document.querySelectorAll('img').forEach(img => {
+      const src = img.src || '';
+      if (src.includes(`image.rakuten.co.jp/${shopSlug}/cabinet/`) && img.naturalWidth > 100 && !seen.has(src)) {
+        images.push({ url: src, type: 'product' });
+        seen.add(src);
+      }
+    });
+
+    // 3. item_desc内の画像
+    if (descEl) {
+      descEl.querySelectorAll('img').forEach(img => {
+        const src = img.src || '';
+        if (src && !src.includes('data:image') && img.naturalWidth > 100 && !seen.has(src)) {
+          images.push({ url: src, type: 'description' });
+          seen.add(src);
+        }
+      });
+    }
+
+    // 送料情報
+    let shipping = '';
+    document.querySelectorAll('[class*="text-display--"]').forEach(el => {
+      if (el.textContent.trim() === '送料無料') shipping = '送料無料';
+    });
+
+    return {
+      source: 'rakuten',
+      title,
+      shopName,
+      shopSlug,
+      itemSlug,
+      url: location.href.split('?')[0],
+      price: sellingPrice ? sellingPrice + '円' : '',
+      listPrice: originalPrice ? originalPrice + '円' : '',
+      rating: scoreEl ? scoreEl.textContent.trim() : '',
+      reviewCount: totalEl ? totalEl.textContent.trim().replace(/[()（）]/g, '') : '',
+      categories,
+      variations,
+      description: description.substring(0, 5000),
+      images,
+      shipping,
+      collectedAt: new Date().toISOString()
     };
   }
 

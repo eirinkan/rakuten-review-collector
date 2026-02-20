@@ -1895,7 +1895,12 @@ document.addEventListener('DOMContentLoaded', () => {
         id: 'pq_' + Date.now(),
         name: name.trim(),
         createdAt: new Date().toISOString(),
-        items: batchProductQueue.map(asin => ({ asin }))
+        items: batchProductQueue.map(item => {
+          if (item.includes('item.rakuten.co.jp')) {
+            return { url: item, source: 'rakuten' };
+          }
+          return { asin: item, source: 'amazon' };
+        })
       });
       chrome.storage.local.set({ savedProductQueues: queues }, () => {
         loadSavedProductQueues();
@@ -1911,8 +1916,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!queue) return;
       let addedCount = 0;
       for (const item of queue.items) {
-        if (!batchProductQueue.includes(item.asin)) {
-          batchProductQueue.push(item.asin);
+        const value = item.url || item.asin;
+        if (value && !batchProductQueue.includes(value)) {
+          batchProductQueue.push(value);
           addedCount++;
         }
       }
@@ -2607,13 +2613,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 入力テキストからASINを抽出するヘルパー
-  function extractAsinsFromText(text) {
+  // 入力テキストからASINまたは楽天URLを抽出するヘルパー
+  function extractProductItems(text) {
     return text.split('\n')
       .map(line => line.trim())
       .filter(line => line.length > 0)
       .map(line => {
-        // URLからASINを抽出
+        // 楽天商品URL（item.rakuten.co.jp/shop/item/）
+        if (line.includes('item.rakuten.co.jp')) {
+          // URLとして正規化（プロトコルがなければ追加）
+          const url = line.startsWith('http') ? line : `https://${line}`;
+          // クエリパラメータを除去
+          return url.split('?')[0];
+        }
+        // Amazon URLからASINを抽出
         const dpMatch = line.match(/\/dp\/([A-Z0-9]{10})/i);
         if (dpMatch) return dpMatch[1].toUpperCase();
         const gpMatch = line.match(/\/gp\/product\/([A-Z0-9]{10})/i);
@@ -2622,7 +2635,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (/^[A-Z0-9]{10}$/i.test(line)) return line.toUpperCase();
         return null;
       })
-      .filter(asin => asin !== null);
+      .filter(item => item !== null);
   }
 
   // 「追加」ボタン — キューに追加
@@ -2633,17 +2646,17 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const asins = extractAsinsFromText(text);
-    if (asins.length === 0) {
+    const items = extractProductItems(text);
+    if (items.length === 0) {
       if (batchProductStatus) showStatus(batchProductStatus, 'error', '有効な商品URLまたはASINが見つかりません');
       return;
     }
 
     // 重複を除いてキューに追加
     let addedCount = 0;
-    for (const asin of asins) {
-      if (!batchProductQueue.includes(asin)) {
-        batchProductQueue.push(asin);
+    for (const item of items) {
+      if (!batchProductQueue.includes(item)) {
+        batchProductQueue.push(item);
         addedCount++;
       }
     }
@@ -2692,15 +2705,26 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    batchProductList.innerHTML = batchProductQueue.map((asin, index) => `
+    batchProductList.innerHTML = batchProductQueue.map((item, index) => {
+      const isRakuten = item.includes('item.rakuten.co.jp');
+      const badge = isRakuten
+        ? '<span class="source-badge source-rakuten">楽天</span>'
+        : '<span class="source-badge source-amazon">Amazon</span>';
+      const displayTitle = isRakuten
+        ? item.replace(/^https?:\/\/item\.rakuten\.co\.jp\//, '')
+        : item;
+      const displayUrl = isRakuten
+        ? item
+        : `https://www.amazon.co.jp/dp/${escapeHtml(item)}`;
+      return `
       <div class="queue-item">
         <div class="queue-item-info">
-          <div class="queue-item-title"><span class="source-badge source-amazon">Amazon</span>${escapeHtml(asin)}</div>
-          <div class="queue-item-url">https://www.amazon.co.jp/dp/${escapeHtml(asin)}</div>
+          <div class="queue-item-title">${badge}${escapeHtml(displayTitle)}</div>
+          <div class="queue-item-url">${escapeHtml(displayUrl)}</div>
         </div>
         <button class="queue-item-remove" data-index="${index}">×</button>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
 
     // 削除ボタンのイベント
     batchProductList.querySelectorAll('.queue-item-remove').forEach(btn => {
@@ -2715,14 +2739,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // 一括収集開始
   function startBatchProductCollection() {
     if (batchProductQueue.length === 0) {
-      if (batchProductStatus) showStatus(batchProductStatus, 'error', '収集するASINがありません');
+      if (batchProductStatus) showStatus(batchProductStatus, 'error', '収集する商品がありません');
       return;
     }
 
-    const asins = [...batchProductQueue];
+    const items = [...batchProductQueue];
 
     // ローカルで即時ログ表示（ストレージ経由ではなく直接メモリに追加）
-    addLog(`${asins.length}件の商品情報収集を開始します...`, 'info', 'product');
+    addLog(`${items.length}件の商品情報収集を開始します...`, 'info', 'product');
 
     // ストレージポーリング開始（background.jsのログをリアルタイムで拾う）
     startProductLogPolling();
@@ -2735,7 +2759,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // バックグラウンドに送信（ログはbackground.jsがストレージに書き込む）
     chrome.runtime.sendMessage({
       action: 'startBatchProductCollection',
-      asins
+      items
     }, (response) => {
       // エラー時（設定未完了、認証失敗など）はUI・ポーリングを戻す
       if (response && !response.success) {
@@ -2787,10 +2811,21 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       if (cancelBatchProductBtn) cancelBatchProductBtn.style.display = 'none';
 
-      // 成功したASINをキューから削除
+      // 成功した商品をキューから削除
       if (completed) {
         completed.forEach(item => {
-          const idx = batchProductQueue.indexOf(item.asin);
+          // id（ASIN or itemSlug）またはasinでキューから検索
+          const identifier = item.id || item.asin;
+          let idx = batchProductQueue.findIndex(q => {
+            if (typeof q === 'string') {
+              // 楽天URLの場合はitemSlugを含むか確認
+              if (q.includes('item.rakuten.co.jp') && item.source === 'rakuten') {
+                return q.includes(identifier);
+              }
+              return q === identifier;
+            }
+            return false;
+          });
           if (idx !== -1) batchProductQueue.splice(idx, 1);
         });
       }

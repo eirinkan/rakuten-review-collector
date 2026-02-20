@@ -237,15 +237,17 @@ document.addEventListener('DOMContentLoaded', () => {
       tab.url.includes('/ranking/')
     );
 
-    // Amazon商品ページ（レビューページではない）の判定 - 商品情報収集ボタン用
+    // 商品ページの判定 - 商品情報収集ボタン用
     const isAmazonProductPage = tab.url && tab.url.includes('amazon.co.jp') && (
       tab.url.includes('/dp/') ||
       tab.url.includes('/gp/product/')
     ) && !tab.url.includes('/product-reviews/');
+    const isRakutenProductPage = tab.url && tab.url.includes('item.rakuten.co.jp');
+    const isProductPage = isAmazonProductPage || isRakutenProductPage;
 
-    // 商品情報収集ボタンの表示
+    // 商品情報収集ボタンの表示（Amazon商品ページ / 楽天商品ページ）
     const productInfoBtn = document.getElementById('productInfoBtn');
-    if (productInfoBtn && isAmazonProductPage) {
+    if (productInfoBtn && isProductPage) {
       productInfoBtn.style.display = 'block';
       productInfoBtn.addEventListener('click', collectProductInfo);
     }
