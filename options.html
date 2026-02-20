@@ -2517,7 +2517,7 @@
     <!-- Queue Card -->
     <div class="card">
       <div class="queue-header">
-        <h2>通常</h2>
+        <h2>レビュー収集</h2>
         <div style="display: flex; align-items: center; gap: 8px;">
           <div class="saved-queues-dropdown-container">
             <button id="loadSavedQueuesBtn" class="icon-btn" title="保存済みキュー">
@@ -2594,15 +2594,16 @@
     <!-- 商品情報一括収集 Card -->
     <div class="card" id="batchProductSection">
       <h2>商品情報収集</h2>
-      <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Amazon商品の情報（テキスト＋画像）をGoogle Driveに保存します</p>
-      <div class="form-group">
-        <label>ASINを入力（1行に1つ）</label>
-        <textarea id="batchProductAsins" class="url-textarea" rows="4" placeholder="B0DWZWJ272&#10;B09B7QBMDC&#10;B0C5H5QR77"></textarea>
+      <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">商品ページの情報（テキスト＋画像）をGoogle Driveに保存します</p>
+      <div class="url-input-row">
+        <textarea id="batchProductAsins" class="url-textarea" placeholder="商品URL または ASIN（改行で複数可）&#10;例: https://www.amazon.co.jp/dp/B0DWZWJ272&#10;例: B0DWZWJ272"></textarea>
+        <button id="startBatchProductBtn" class="btn btn-secondary btn-add">追加</button>
       </div>
       <div style="display: flex; gap: 8px; margin-top: 8px;">
-        <button id="startBatchProductBtn" class="btn btn-success" style="flex: 1;">収集開始</button>
+        <button id="startBatchProductRunBtn" class="btn btn-success" style="flex: 1;" disabled>収集開始・<span id="batchProductCount">0</span>件</button>
         <button id="cancelBatchProductBtn" class="btn btn-danger btn-sm" style="display: none;">中止</button>
       </div>
+      <div id="batchProductList" class="queue-list" style="margin-top: 8px;"></div>
       <div id="batchProductStatus" class="status-message" style="margin-top: 8px;"></div>
       <div id="batchProductProgress" style="display: none; margin-top: 12px;">
         <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">
@@ -2729,7 +2730,7 @@
 
         <!-- スプレッドシート -->
         <div class="settings-section">
-          <h3>スプレッドシート（通常収集）</h3>
+          <h3>スプレッドシート（レビュー収集）</h3>
 
           <div class="form-group">
             <label>楽天用</label>
@@ -2758,7 +2759,7 @@
         <!-- 商品情報収集（Google Drive） -->
         <div class="settings-section">
           <h3>商品情報収集（Google Drive）</h3>
-          <p class="settings-hint">Amazon商品ページの情報（テキスト＋画像）をJSON形式でGoogle Driveに保存します</p>
+          <p class="settings-hint">商品ページの情報（テキスト＋画像）をJSON形式でGoogle Driveに保存します</p>
           <div class="form-group" style="margin-top: 8px;">
             <label>保存先フォルダURL</label>
             <div class="folder-url-row">
@@ -2819,7 +2820,7 @@
             </li>
             <li><strong>シート名:</strong> 「楽・商品管理番号」または「Ama・ASIN」形式で保存（販路混在OK）</li>
             <li><strong>差分のみ収集:</strong> ONにすると前回以降の新着レビューのみ収集（効率的）</li>
-            <li><strong>スプレッドシート:</strong> 各キューに個別のスプレッドシートURLが必須（通常収集用は使用不可）</li>
+            <li><strong>スプレッドシート:</strong> 各キューに個別のスプレッドシートURLが必須（レビュー収集用は使用不可）</li>
             <li><strong>注意:</strong>
               <br>・Chromeブラウザが起動している必要があります
               <br>・定期収集データはCSVには保存されません（スプレッドシートのみ）
@@ -2897,7 +2898,7 @@
             </li>
             <li><strong>テーマ:</strong> ダークモードの切り替え</li>
             <li><strong>CSV:</strong> 商品ごとにCSVを分ける（ZIPでダウンロード）</li>
-            <li><strong>スプレッドシート:</strong> 通常収集用のスプレッドシートURL</li>
+            <li><strong>スプレッドシート:</strong> レビュー収集用のスプレッドシートURL</li>
           </ul>
 
           <h3>キーボードショートカット</h3>

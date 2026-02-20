@@ -130,7 +130,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const productInfoFolderUrlInput = document.getElementById('productInfoFolderUrl');
   const productInfoFolderUrlStatus = document.getElementById('productInfoFolderUrlStatus');
   const batchProductAsins = document.getElementById('batchProductAsins');
-  const startBatchProductBtn = document.getElementById('startBatchProductBtn');
+  const startBatchProductBtn = document.getElementById('startBatchProductBtn');  // 「追加」ボタン
+  const startBatchProductRunBtn = document.getElementById('startBatchProductRunBtn');  // 「収集開始」ボタン
   const cancelBatchProductBtn = document.getElementById('cancelBatchProductBtn');
   const batchProductStatus = document.getElementById('batchProductStatus');
   const batchProductProgress = document.getElementById('batchProductProgress');
@@ -138,6 +139,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const batchProductProgressPercent = document.getElementById('batchProductProgressPercent');
   const batchProductProgressBar = document.getElementById('batchProductProgressBar');
   const batchProductResults = document.getElementById('batchProductResults');
+  const batchProductList = document.getElementById('batchProductList');
+  const batchProductCountEl = document.getElementById('batchProductCount');
+  // 商品情報収集のキューリスト（メモリ上で管理）
+  let batchProductQueue = [];
 
   // 定期収集関連
   const scheduledQueuesList = document.getElementById('scheduledQueuesList');
@@ -358,7 +363,10 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
     if (startBatchProductBtn) {
-      startBatchProductBtn.addEventListener('click', startBatchProductCollection);
+      startBatchProductBtn.addEventListener('click', addToBatchProductQueue);
+    }
+    if (startBatchProductRunBtn) {
+      startBatchProductRunBtn.addEventListener('click', startBatchProductCollection);
     }
     if (cancelBatchProductBtn) {
       cancelBatchProductBtn.addEventListener('click', cancelBatchProductCollection);
@@ -2260,16 +2268,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 一括収集開始
-  function startBatchProductCollection() {
-    const text = batchProductAsins ? batchProductAsins.value.trim() : '';
-    if (!text) {
-      if (batchProductStatus) showStatus(batchProductStatus, 'error', 'ASINを入力してください');
-      return;
-    }
-
-    // ASINを抽出（1行に1つ、空行スキップ）
-    const asins = text.split('\n')
+  // 入力テキストからASINを抽出するヘルパー
+  function extractAsinsFromText(text) {
+    return text.split('\n')
       .map(line => line.trim())
       .filter(line => line.length > 0)
       .map(line => {
@@ -2283,14 +2284,81 @@ document.addEventListener('DOMContentLoaded', () => {
         return null;
       })
       .filter(asin => asin !== null);
+  }
 
-    if (asins.length === 0) {
-      if (batchProductStatus) showStatus(batchProductStatus, 'error', '有効なASINが見つかりません');
+  // 「追加」ボタン — キューに追加
+  function addToBatchProductQueue() {
+    const text = batchProductAsins ? batchProductAsins.value.trim() : '';
+    if (!text) {
+      if (batchProductStatus) showStatus(batchProductStatus, 'error', '商品URLまたはASINを入力してください');
       return;
     }
 
+    const asins = extractAsinsFromText(text);
+    if (asins.length === 0) {
+      if (batchProductStatus) showStatus(batchProductStatus, 'error', '有効な商品URLまたはASINが見つかりません');
+      return;
+    }
+
+    // 重複を除いてキューに追加
+    let addedCount = 0;
+    for (const asin of asins) {
+      if (!batchProductQueue.includes(asin)) {
+        batchProductQueue.push(asin);
+        addedCount++;
+      }
+    }
+
+    if (addedCount > 0) {
+      if (batchProductStatus) showStatus(batchProductStatus, 'success', `${addedCount}件追加しました`);
+    } else {
+      if (batchProductStatus) showStatus(batchProductStatus, 'info', 'すべて追加済みです');
+    }
+
+    // 入力欄をクリア
+    if (batchProductAsins) batchProductAsins.value = '';
+    renderBatchProductQueue();
+  }
+
+  // キューの表示を更新
+  function renderBatchProductQueue() {
+    if (batchProductCountEl) batchProductCountEl.textContent = batchProductQueue.length;
+    if (startBatchProductRunBtn) startBatchProductRunBtn.disabled = batchProductQueue.length === 0;
+
+    if (!batchProductList) return;
+    if (batchProductQueue.length === 0) {
+      batchProductList.innerHTML = '';
+      return;
+    }
+
+    batchProductList.innerHTML = batchProductQueue.map((asin, index) => `
+      <div class="queue-item" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; font-size: 13px;">
+        <span>${escapeHtml(asin)}</span>
+        <button class="icon-btn" data-index="${index}" title="削除" style="padding: 2px 6px; font-size: 12px; cursor: pointer; background: none; border: none; color: var(--error);">✕</button>
+      </div>
+    `).join('');
+
+    // 削除ボタンのイベント
+    batchProductList.querySelectorAll('button[data-index]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.index, 10);
+        batchProductQueue.splice(idx, 1);
+        renderBatchProductQueue();
+      });
+    });
+  }
+
+  // 一括収集開始
+  function startBatchProductCollection() {
+    if (batchProductQueue.length === 0) {
+      if (batchProductStatus) showStatus(batchProductStatus, 'error', '収集するASINがありません');
+      return;
+    }
+
+    const asins = [...batchProductQueue];
+
     // UIを更新
-    if (startBatchProductBtn) startBatchProductBtn.disabled = true;
+    if (startBatchProductRunBtn) startBatchProductRunBtn.disabled = true;
     if (cancelBatchProductBtn) cancelBatchProductBtn.style.display = 'inline-block';
     if (batchProductProgress) batchProductProgress.style.display = 'block';
     if (batchProductResults) batchProductResults.innerHTML = '';
@@ -2338,8 +2406,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 完了時
     if (!isRunning) {
-      if (startBatchProductBtn) startBatchProductBtn.disabled = false;
+      if (startBatchProductRunBtn) startBatchProductRunBtn.disabled = batchProductQueue.length === 0;
       if (cancelBatchProductBtn) cancelBatchProductBtn.style.display = 'none';
+      // 完了したASINをキューから削除
+      if (completed) {
+        completed.forEach(item => {
+          const idx = batchProductQueue.indexOf(item.asin);
+          if (idx !== -1) batchProductQueue.splice(idx, 1);
+        });
+      }
+      renderBatchProductQueue();
       const successCount = completed ? completed.length : 0;
       const failCount = failed ? failed.length : 0;
       if (batchProductStatus) {
