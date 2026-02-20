@@ -434,6 +434,46 @@
       animation: pulse 1.5s infinite;
     }
 
+    /* === Product Info Button === */
+    .btn-product-info {
+      background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(108, 92, 231, 0.3);
+    }
+
+    .btn-product-info:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(108, 92, 231, 0.4);
+    }
+
+    /* === Progress Bar === */
+    .progress-container {
+      display: none;
+      margin-top: 10px;
+    }
+
+    .progress-bar-wrapper {
+      background: var(--bg-glass);
+      border-radius: 6px;
+      overflow: hidden;
+      height: 6px;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #6c5ce7, #a29bfe);
+      border-radius: 6px;
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+
+    .progress-text {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      text-align: center;
+    }
+
     /* === Login Screen === */
     .login-screen {
       padding: 24px 24px 16px;
@@ -576,6 +616,13 @@
         <button id="startBtn" class="btn btn-start">収集開始</button>
         <button id="stopBtn" class="btn btn-stop" style="display: none;">収集停止</button>
         <button id="queueBtn" class="btn btn-queue">キューに追加</button>
+        <button id="productInfoBtn" class="btn btn-product-info" style="display: none;">商品情報を収集</button>
+        <div id="productInfoProgress" class="progress-container">
+          <div class="progress-bar-wrapper">
+            <div id="productInfoProgressBar" class="progress-bar-fill"></div>
+          </div>
+          <div id="productInfoProgressText" class="progress-text"></div>
+        </div>
         <div id="message" class="message"></div>
       </div>
 

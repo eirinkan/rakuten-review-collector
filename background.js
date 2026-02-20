@@ -868,6 +868,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .then(result => sendResponse(result))
         .catch(error => sendResponse({ error: error.message }));
       return true;
+
+    // ===== 商品情報収集（Google Drive保存） =====
+    case 'collectAndSaveProductInfo':
+      collectAndSaveProductInfo(message.tabId)
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'startBatchProductCollection':
+      startBatchProductCollection(message.asins)
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'getBatchProductProgress':
+      sendResponse({ progress: batchProductProgress });
+      return false;
+
+    case 'cancelBatchProductCollection':
+      batchProductCancelled = true;
+      sendResponse({ success: true });
+      return false;
   }
 });
 
@@ -3391,3 +3413,476 @@ chrome.storage.local.get(['scheduledCollection'], (result) => {
     updateScheduledAlarm(settings).catch(console.error);
   }
 });
+
+// ========================================
+// 商品情報収集機能（Google Drive保存）
+// ========================================
+
+// バッチ処理の進捗
+let batchProductProgress = null;
+let batchProductCancelled = false;
+
+/**
+ * 画像URLをfetchしてbase64に変換
+ * @param {string} imageUrl - 画像URL
+ * @returns {Promise<{base64: string, mimeType: string, size: number}>}
+ */
+async function fetchImageAsBase64(imageUrl) {
+  try {
+    const response = await fetch(imageUrl, {
+      headers: {
+        'Accept': 'image/*',
+        'Referer': 'https://www.amazon.co.jp/'
+      }
+    });
+
+    if (!response.ok) {
+      console.warn(`[商品情報] 画像取得失敗: ${response.status} - ${imageUrl.substring(0, 80)}`);
+      return null;
+    }
+
+    const blob = await response.blob();
+    const mimeType = blob.type || 'image/jpeg';
+
+    // BlobをArrayBufferに変換してbase64化
+    const arrayBuffer = await blob.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < uint8Array.length; i++) {
+      binary += String.fromCharCode(uint8Array[i]);
+    }
+    const base64 = btoa(binary);
+
+    return {
+      base64,
+      mimeType,
+      size: blob.size
+    };
+  } catch (error) {
+    console.warn(`[商品情報] 画像取得エラー: ${error.message} - ${imageUrl.substring(0, 80)}`);
+    return null;
+  }
+}
+
+/**
+ * Google DriveフォルダURLからフォルダIDを抽出
+ */
+function extractDriveFolderId(url) {
+  if (!url) return null;
+  // https://drive.google.com/drive/folders/FOLDER_ID
+  const match = url.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Google DriveにJSONファイルをアップロード
+ * @param {string} token - OAuthトークン
+ * @param {string} folderId - 保存先フォルダID
+ * @param {string} fileName - ファイル名
+ * @param {Object} jsonData - 保存するデータ
+ * @returns {Promise<Object>} アップロード結果
+ */
+async function uploadJsonToDrive(token, folderId, fileName, jsonData) {
+  const jsonString = JSON.stringify(jsonData, null, 2);
+  const blob = new Blob([jsonString], { type: 'application/json' });
+
+  // ファイルサイズが5MB未満の場合はシンプルアップロード
+  if (blob.size < 5 * 1024 * 1024) {
+    return await simpleUploadToDrive(token, folderId, fileName, blob);
+  } else {
+    return await resumableUploadToDrive(token, folderId, fileName, blob);
+  }
+}
+
+/**
+ * シンプルアップロード（5MB未満）
+ */
+async function simpleUploadToDrive(token, folderId, fileName, blob) {
+  // multipart/related でメタデータとファイルを一緒に送信
+  const metadata = {
+    name: fileName,
+    mimeType: 'application/json',
+    parents: [folderId]
+  };
+
+  const boundary = '-------314159265358979323846';
+  const delimiter = `\r\n--${boundary}\r\n`;
+  const closeDelimiter = `\r\n--${boundary}--`;
+
+  // ArrayBufferからテキストを作成
+  const fileContent = await blob.text();
+
+  const multipartBody =
+    delimiter +
+    'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+    JSON.stringify(metadata) +
+    delimiter +
+    'Content-Type: application/json\r\n\r\n' +
+    fileContent +
+    closeDelimiter;
+
+  const response = await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': `multipart/related; boundary=${boundary}`
+      },
+      body: multipartBody
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error?.message || `Drive APIエラー: ${response.status}`);
+  }
+
+  return await response.json();
+}
+
+/**
+ * 分割アップロード（5MB以上）
+ */
+async function resumableUploadToDrive(token, folderId, fileName, blob) {
+  // 1. アップロードセッションを開始
+  const metadata = {
+    name: fileName,
+    mimeType: 'application/json',
+    parents: [folderId]
+  };
+
+  const initResponse = await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable',
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'X-Upload-Content-Type': 'application/json',
+        'X-Upload-Content-Length': blob.size
+      },
+      body: JSON.stringify(metadata)
+    }
+  );
+
+  if (!initResponse.ok) {
+    throw new Error(`分割アップロード開始エラー: ${initResponse.status}`);
+  }
+
+  const uploadUrl = initResponse.headers.get('Location');
+
+  // 2. ファイルデータをアップロード
+  const uploadResponse = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': blob.size
+    },
+    body: blob
+  });
+
+  if (!uploadResponse.ok) {
+    throw new Error(`分割アップロードエラー: ${uploadResponse.status}`);
+  }
+
+  return await uploadResponse.json();
+}
+
+/**
+ * 商品情報を収集してGoogle Driveに保存
+ * @param {number} tabId - 対象タブのID
+ */
+async function collectAndSaveProductInfo(tabId) {
+  log('[商品情報] 収集を開始します...');
+
+  // 1. 設定からDriveフォルダURLを取得
+  const settings = await chrome.storage.sync.get(['productInfoFolderUrl']);
+  const folderUrl = settings.productInfoFolderUrl;
+  if (!folderUrl) {
+    throw new Error('Google Driveの保存先フォルダが設定されていません。管理画面の設定で「商品情報の保存先フォルダURL」を設定してください。');
+  }
+
+  const folderId = extractDriveFolderId(folderUrl);
+  if (!folderId) {
+    throw new Error('Google DriveのフォルダURLが正しくありません。');
+  }
+
+  // 2. OAuthトークンを取得
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error('Google認証が必要です。ログインしてください。');
+  }
+
+  // 3. content scriptから商品情報を取得
+  log('[商品情報] ページから情報を読み取り中...');
+  let productData;
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, { action: 'collectProductInfo' });
+    if (!response || !response.success) {
+      throw new Error(response?.error || '商品情報の取得に失敗しました');
+    }
+    productData = response.data;
+  } catch (error) {
+    throw new Error(`商品情報の取得に失敗: ${error.message}`);
+  }
+
+  // 4. 画像をbase64に変換
+  log(`[商品情報] 画像を取得中...（${productData.images.length}枚 + A+: ${(productData.aplusImages || []).length}枚）`);
+
+  // 進捗通知用
+  const totalImages = productData.images.length + (productData.aplusImages || []).length;
+  let processedImages = 0;
+
+  // 商品画像
+  const imageResults = [];
+  for (const img of productData.images) {
+    const result = await fetchImageAsBase64(img.url);
+    processedImages++;
+    if (result) {
+      imageResults.push({
+        url: img.url,
+        type: img.type,
+        base64: result.base64,
+        mimeType: result.mimeType,
+        size: result.size
+      });
+    }
+    // 進捗通知
+    forwardToAll({
+      action: 'productInfoProgress',
+      progress: {
+        phase: 'images',
+        current: processedImages,
+        total: totalImages,
+        asin: productData.asin
+      }
+    });
+  }
+
+  // A+コンテンツ画像
+  const aplusImageResults = [];
+  if (productData.aplusImages) {
+    for (const imgUrl of productData.aplusImages) {
+      const result = await fetchImageAsBase64(imgUrl);
+      processedImages++;
+      if (result) {
+        aplusImageResults.push({
+          url: imgUrl,
+          base64: result.base64,
+          mimeType: result.mimeType,
+          size: result.size
+        });
+      }
+      forwardToAll({
+        action: 'productInfoProgress',
+        progress: {
+          phase: 'images',
+          current: processedImages,
+          total: totalImages,
+          asin: productData.asin
+        }
+      });
+    }
+  }
+
+  // 5. JSONデータを生成
+  const jsonData = {
+    ...productData,
+    images: imageResults.map(img => ({
+      url: img.url,
+      type: img.type,
+      mimeType: img.mimeType,
+      size: img.size,
+      base64: img.base64
+    })),
+    aplusImages: aplusImageResults.length > 0 ? aplusImageResults.map(img => ({
+      url: img.url,
+      mimeType: img.mimeType,
+      size: img.size,
+      base64: img.base64
+    })) : undefined
+  };
+
+  // 6. Google Driveにアップロード
+  log('[商品情報] Google Driveにアップロード中...');
+  forwardToAll({
+    action: 'productInfoProgress',
+    progress: { phase: 'upload', asin: productData.asin }
+  });
+
+  const fileName = `${productData.asin}_${formatDate(new Date())}.json`;
+  const uploadResult = await uploadJsonToDrive(token, folderId, fileName, jsonData);
+
+  log(`[商品情報] 保存完了: ${productData.title?.substring(0, 40)}... (${fileName})`, 'success');
+
+  return {
+    success: true,
+    fileName,
+    fileId: uploadResult.id,
+    asin: productData.asin,
+    title: productData.title,
+    imageCount: imageResults.length,
+    aplusImageCount: aplusImageResults.length
+  };
+}
+
+/**
+ * ASINリストからバッチで商品情報を収集
+ * @param {string[]} asins - ASINリスト
+ */
+async function startBatchProductCollection(asins) {
+  if (!asins || asins.length === 0) {
+    throw new Error('ASINが入力されていません');
+  }
+
+  // 設定を事前チェック
+  const settings = await chrome.storage.sync.get(['productInfoFolderUrl']);
+  if (!settings.productInfoFolderUrl) {
+    throw new Error('Google Driveの保存先フォルダが設定されていません。');
+  }
+
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error('Google認証が必要です。ログインしてください。');
+  }
+
+  batchProductCancelled = false;
+  batchProductProgress = {
+    total: asins.length,
+    current: 0,
+    completed: [],
+    failed: [],
+    isRunning: true
+  };
+
+  log(`[商品情報バッチ] ${asins.length}件の商品情報収集を開始します`);
+  forwardToAll({ action: 'batchProductProgressUpdate', progress: batchProductProgress });
+
+  // バッチ処理を非同期で実行（即座にレスポンスを返す）
+  (async () => {
+    // バッチ収集用のタブを作成
+    let batchTab;
+    try {
+      batchTab = await chrome.tabs.create({
+        url: 'about:blank',
+        active: false
+      });
+    } catch (e) {
+      log('[商品情報バッチ] タブ作成に失敗しました', 'error');
+      batchProductProgress.isRunning = false;
+      return;
+    }
+
+    for (let i = 0; i < asins.length; i++) {
+      if (batchProductCancelled) {
+        log('[商品情報バッチ] キャンセルされました');
+        break;
+      }
+
+      const asin = asins[i].trim().toUpperCase();
+      if (!/^[A-Z0-9]{10}$/.test(asin)) {
+        batchProductProgress.failed.push({ asin, error: '無効なASIN形式' });
+        batchProductProgress.current = i + 1;
+        forwardToAll({ action: 'batchProductProgressUpdate', progress: batchProductProgress });
+        continue;
+      }
+
+      const productUrl = `https://www.amazon.co.jp/dp/${asin}`;
+      log(`[商品情報バッチ] (${i + 1}/${asins.length}) ${asin} を収集中...`);
+
+      try {
+        // タブでページを開く
+        await chrome.tabs.update(batchTab.id, { url: productUrl });
+
+        // ページ読み込み完了を待つ
+        await waitForTabComplete(batchTab.id, 15000);
+
+        // 少し待ってDOMが安定するのを待つ
+        await sleep(1500);
+
+        // 商品情報を収集してDriveに保存
+        const result = await collectAndSaveProductInfo(batchTab.id);
+
+        batchProductProgress.completed.push({
+          asin,
+          title: result.title,
+          fileName: result.fileName
+        });
+      } catch (error) {
+        console.error(`[商品情報バッチ] ${asin} エラー:`, error);
+        batchProductProgress.failed.push({ asin, error: error.message });
+        log(`[商品情報バッチ] ${asin}: ${error.message}`, 'error');
+      }
+
+      batchProductProgress.current = i + 1;
+      forwardToAll({ action: 'batchProductProgressUpdate', progress: batchProductProgress });
+
+      // ASIN間のランダム待機（ボット対策: 3〜8秒）
+      if (i < asins.length - 1 && !batchProductCancelled) {
+        const waitMs = 3000 + Math.random() * 5000;
+        await sleep(waitMs);
+      }
+    }
+
+    // バッチタブを閉じる
+    try {
+      await chrome.tabs.remove(batchTab.id);
+    } catch (e) {
+      // 既に閉じられている場合は無視
+    }
+
+    batchProductProgress.isRunning = false;
+    forwardToAll({ action: 'batchProductProgressUpdate', progress: batchProductProgress });
+
+    const successCount = batchProductProgress.completed.length;
+    const failCount = batchProductProgress.failed.length;
+    log(`[商品情報バッチ] 完了: 成功 ${successCount}件、失敗 ${failCount}件`, successCount > 0 ? 'success' : 'error');
+  })();
+
+  return { success: true, message: `${asins.length}件のバッチ収集を開始しました` };
+}
+
+/**
+ * タブのページ読み込み完了を待つ
+ */
+function waitForTabComplete(tabId, timeoutMs = 15000) {
+  return new Promise((resolve, reject) => {
+    const startTime = Date.now();
+
+    function listener(updatedTabId, changeInfo) {
+      if (updatedTabId === tabId && changeInfo.status === 'complete') {
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    }
+
+    chrome.tabs.onUpdated.addListener(listener);
+
+    // タイムアウト
+    const checkInterval = setInterval(async () => {
+      if (Date.now() - startTime > timeoutMs) {
+        clearInterval(checkInterval);
+        chrome.tabs.onUpdated.removeListener(listener);
+        // タイムアウトしてもページが読み込まれている可能性がある
+        try {
+          const tab = await chrome.tabs.get(tabId);
+          if (tab.status === 'complete') {
+            resolve();
+          } else {
+            reject(new Error('ページの読み込みがタイムアウトしました'));
+          }
+        } catch (e) {
+          reject(new Error('タブが閉じられました'));
+        }
+      }
+    }, 1000);
+  });
+}
+
+/**
+ * 指定ミリ秒待機
+ */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}

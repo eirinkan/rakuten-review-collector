@@ -126,6 +126,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // 現在のビュー状態
   let currentView = 'main';
 
+  // 商品情報収集（Drive）関連
+  const productInfoFolderUrlInput = document.getElementById('productInfoFolderUrl');
+  const productInfoFolderUrlStatus = document.getElementById('productInfoFolderUrlStatus');
+  const batchProductAsins = document.getElementById('batchProductAsins');
+  const startBatchProductBtn = document.getElementById('startBatchProductBtn');
+  const cancelBatchProductBtn = document.getElementById('cancelBatchProductBtn');
+  const batchProductStatus = document.getElementById('batchProductStatus');
+  const batchProductProgress = document.getElementById('batchProductProgress');
+  const batchProductProgressText = document.getElementById('batchProductProgressText');
+  const batchProductProgressPercent = document.getElementById('batchProductProgressPercent');
+  const batchProductProgressBar = document.getElementById('batchProductProgressBar');
+  const batchProductResults = document.getElementById('batchProductResults');
+
   // 定期収集関連
   const scheduledQueuesList = document.getElementById('scheduledQueuesList');
   const addScheduledQueueBtn = document.getElementById('addScheduledQueueBtn');
@@ -334,6 +347,23 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
+    // 商品情報収集（Drive）関連
+    if (productInfoFolderUrlInput) {
+      let folderUrlSaveTimeout = null;
+      productInfoFolderUrlInput.addEventListener('input', () => {
+        if (folderUrlSaveTimeout) clearTimeout(folderUrlSaveTimeout);
+        folderUrlSaveTimeout = setTimeout(() => {
+          saveProductInfoFolderUrl();
+        }, 500);
+      });
+    }
+    if (startBatchProductBtn) {
+      startBatchProductBtn.addEventListener('click', startBatchProductCollection);
+    }
+    if (cancelBatchProductBtn) {
+      cancelBatchProductBtn.addEventListener('click', cancelBatchProductCollection);
+    }
+
     // バックグラウンドからのメッセージ
     chrome.runtime.onMessage.addListener(handleMessage);
 
@@ -345,7 +375,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function loadSettings() {
-    chrome.storage.sync.get(['separateSheets', 'separateCsvFiles', 'spreadsheetUrl', 'amazonSpreadsheetUrl', 'enableNotification', 'notifyPerProduct', 'showScheduledCollection', 'dateFilterFrom', 'dateFilterTo'], (result) => {
+    chrome.storage.sync.get(['separateSheets', 'separateCsvFiles', 'spreadsheetUrl', 'amazonSpreadsheetUrl', 'enableNotification', 'notifyPerProduct', 'showScheduledCollection', 'dateFilterFrom', 'dateFilterTo', 'productInfoFolderUrl'], (result) => {
       // 楽天用スプレッドシートURL（Sheets API直接連携）
       if (result.spreadsheetUrl && spreadsheetUrlInput) {
         spreadsheetUrlInput.value = result.spreadsheetUrl;
@@ -396,6 +426,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       if (dateFilterToInput && result.dateFilterTo) {
         dateFilterToInput.value = result.dateFilterTo;
+      }
+      // 商品情報収集フォルダURL
+      if (productInfoFolderUrlInput && result.productInfoFolderUrl) {
+        productInfoFolderUrlInput.value = result.productInfoFolderUrl;
       }
     });
 
@@ -1346,6 +1380,9 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'log':
         addLog(msg.text, msg.type);
         break;
+      case 'batchProductProgressUpdate':
+        updateBatchProductProgress(msg.progress);
+        break;
     }
   }
 
@@ -2196,5 +2233,117 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   updateStats();
+
+  // ===== 商品情報収集（Google Drive）関連 =====
+
+  // フォルダURL保存
+  function saveProductInfoFolderUrl() {
+    const url = productInfoFolderUrlInput ? productInfoFolderUrlInput.value.trim() : '';
+    if (url && !url.includes('drive.google.com/drive/folders/')) {
+      if (productInfoFolderUrlStatus) {
+        showStatus(productInfoFolderUrlStatus, 'error', 'Google DriveのフォルダURLを入力してください');
+      }
+      return;
+    }
+    chrome.storage.sync.set({ productInfoFolderUrl: url }, () => {
+      if (productInfoFolderUrlStatus) {
+        if (url) {
+          showStatus(productInfoFolderUrlStatus, 'success', '保存しました');
+        } else {
+          productInfoFolderUrlStatus.className = 'status-message';
+          productInfoFolderUrlStatus.textContent = '';
+        }
+      }
+    });
+  }
+
+  // 一括収集開始
+  function startBatchProductCollection() {
+    const text = batchProductAsins ? batchProductAsins.value.trim() : '';
+    if (!text) {
+      if (batchProductStatus) showStatus(batchProductStatus, 'error', 'ASINを入力してください');
+      return;
+    }
+
+    // ASINを抽出（1行に1つ、空行スキップ）
+    const asins = text.split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0)
+      .map(line => {
+        // URLからASINを抽出
+        const dpMatch = line.match(/\/dp\/([A-Z0-9]{10})/i);
+        if (dpMatch) return dpMatch[1].toUpperCase();
+        const gpMatch = line.match(/\/gp\/product\/([A-Z0-9]{10})/i);
+        if (gpMatch) return gpMatch[1].toUpperCase();
+        // 直接ASIN入力
+        if (/^[A-Z0-9]{10}$/i.test(line)) return line.toUpperCase();
+        return null;
+      })
+      .filter(asin => asin !== null);
+
+    if (asins.length === 0) {
+      if (batchProductStatus) showStatus(batchProductStatus, 'error', '有効なASINが見つかりません');
+      return;
+    }
+
+    // UIを更新
+    if (startBatchProductBtn) startBatchProductBtn.disabled = true;
+    if (cancelBatchProductBtn) cancelBatchProductBtn.style.display = 'inline-block';
+    if (batchProductProgress) batchProductProgress.style.display = 'block';
+    if (batchProductResults) batchProductResults.innerHTML = '';
+    if (batchProductStatus) showStatus(batchProductStatus, 'info', `${asins.length}件の商品情報を収集します...`);
+
+    // バックグラウンドに送信
+    chrome.runtime.sendMessage({
+      action: 'startBatchProductCollection',
+      asins
+    });
+  }
+
+  // 一括収集中止
+  function cancelBatchProductCollection() {
+    chrome.runtime.sendMessage({ action: 'cancelBatchProductCollection' });
+    if (batchProductStatus) showStatus(batchProductStatus, 'info', '中止しています...');
+  }
+
+  // 一括収集の進捗更新
+  function updateBatchProductProgress(progress) {
+    if (!progress) return;
+
+    const { current, total, isRunning, completed, failed } = progress;
+    const percent = total > 0 ? Math.round((current / total) * 100) : 0;
+
+    if (batchProductProgressText) batchProductProgressText.textContent = `${current} / ${total}`;
+    if (batchProductProgressPercent) batchProductProgressPercent.textContent = `${percent}%`;
+    if (batchProductProgressBar) batchProductProgressBar.style.width = `${percent}%`;
+
+    // 結果表示
+    if (batchProductResults) {
+      let html = '';
+      if (completed && completed.length > 0) {
+        completed.forEach(item => {
+          html += `<div style="color: var(--success); margin-bottom: 2px;">✓ ${escapeHtml(item.asin)} - ${escapeHtml(item.title || '保存完了')}</div>`;
+        });
+      }
+      if (failed && failed.length > 0) {
+        failed.forEach(item => {
+          html += `<div style="color: var(--error); margin-bottom: 2px;">✗ ${escapeHtml(item.asin)} - ${escapeHtml(item.error || '失敗')}</div>`;
+        });
+      }
+      batchProductResults.innerHTML = html;
+    }
+
+    // 完了時
+    if (!isRunning) {
+      if (startBatchProductBtn) startBatchProductBtn.disabled = false;
+      if (cancelBatchProductBtn) cancelBatchProductBtn.style.display = 'none';
+      const successCount = completed ? completed.length : 0;
+      const failCount = failed ? failed.length : 0;
+      if (batchProductStatus) {
+        showStatus(batchProductStatus, failCount > 0 ? 'warning' : 'success',
+          `完了: ${successCount}件成功${failCount > 0 ? `、${failCount}件失敗` : ''}`);
+      }
+    }
+  }
 
 });

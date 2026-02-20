@@ -235,6 +235,19 @@ document.addEventListener('DOMContentLoaded', () => {
       tab.url.includes('/ranking/')
     );
 
+    // Amazon商品ページ（レビューページではない）の判定 - 商品情報収集ボタン用
+    const isAmazonProductPage = tab.url && tab.url.includes('amazon.co.jp') && (
+      tab.url.includes('/dp/') ||
+      tab.url.includes('/gp/product/')
+    ) && !tab.url.includes('/product-reviews/');
+
+    // 商品情報収集ボタンの表示
+    const productInfoBtn = document.getElementById('productInfoBtn');
+    if (productInfoBtn && isAmazonProductPage) {
+      productInfoBtn.style.display = 'block';
+      productInfoBtn.addEventListener('click', collectProductInfo);
+    }
+
     // 対応ページの判定
     const isSupportedPage = isRakutenPage || isAmazonPage;
     const isRankingPage = isRakutenRankingPage || isAmazonRankingPage;
@@ -511,6 +524,64 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.runtime.openOptionsPage();
   }
 
+  /**
+   * 商品情報を収集してGoogle Driveに保存
+   */
+  async function collectProductInfo() {
+    const productInfoBtn = document.getElementById('productInfoBtn');
+    const progressContainer = document.getElementById('productInfoProgress');
+    const progressBar = document.getElementById('productInfoProgressBar');
+    const progressText = document.getElementById('productInfoProgressText');
+
+    if (!productInfoBtn) return;
+
+    productInfoBtn.disabled = true;
+    productInfoBtn.textContent = '収集中...';
+    if (progressContainer) progressContainer.style.display = 'block';
+    if (progressText) progressText.textContent = 'ページから情報を読み取り中...';
+    if (progressBar) progressBar.style.width = '10%';
+
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+      chrome.runtime.sendMessage({
+        action: 'collectAndSaveProductInfo',
+        tabId: tab.id
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          showMessage('エラー: ' + chrome.runtime.lastError.message, 'error');
+          resetProductInfoBtn();
+          return;
+        }
+
+        if (response && response.success) {
+          if (progressBar) progressBar.style.width = '100%';
+          if (progressText) progressText.textContent = '保存完了!';
+          showMessage(`保存しました (画像${response.imageCount}枚)`, 'success');
+          setTimeout(resetProductInfoBtn, 2000);
+        } else {
+          showMessage(response?.error || '保存に失敗しました', 'error');
+          resetProductInfoBtn();
+        }
+      });
+    } catch (error) {
+      showMessage('エラー: ' + error.message, 'error');
+      resetProductInfoBtn();
+    }
+  }
+
+  function resetProductInfoBtn() {
+    const productInfoBtn = document.getElementById('productInfoBtn');
+    const progressContainer = document.getElementById('productInfoProgress');
+    if (productInfoBtn) {
+      productInfoBtn.disabled = false;
+      productInfoBtn.textContent = '商品情報を収集';
+    }
+    if (progressContainer) {
+      setTimeout(() => { progressContainer.style.display = 'none'; }, 500);
+    }
+  }
+
   function handleMessage(msg) {
     if (!msg || !msg.action) return;
 
@@ -532,6 +603,22 @@ document.addEventListener('DOMContentLoaded', () => {
           showMessage(`全て収集済み（${msg.count}件重複）`, 'error');
         }
         break;
+      case 'productInfoProgress': {
+        // 商品情報収集の進捗
+        const progressBar = document.getElementById('productInfoProgressBar');
+        const progressText = document.getElementById('productInfoProgressText');
+        if (msg.progress) {
+          if (msg.progress.phase === 'images' && progressBar && progressText) {
+            const pct = Math.round((msg.progress.current / msg.progress.total) * 80) + 10;
+            progressBar.style.width = pct + '%';
+            progressText.textContent = `画像を取得中... (${msg.progress.current}/${msg.progress.total})`;
+          } else if (msg.progress.phase === 'upload' && progressBar && progressText) {
+            progressBar.style.width = '90%';
+            progressText.textContent = 'Google Driveにアップロード中...';
+          }
+        }
+        break;
+      }
     }
   }
 

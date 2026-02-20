@@ -2360,6 +2360,31 @@
       <div id="scheduledQueuesList" class="scheduled-queues-list"></div>
     </div>
 
+    <!-- 商品情報一括収集 Card -->
+    <div class="card" id="batchProductSection">
+      <h2>商品情報収集</h2>
+      <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Amazon商品の情報（テキスト＋画像）をGoogle Driveに保存します</p>
+      <div class="form-group">
+        <label>ASINを入力（1行に1つ）</label>
+        <textarea id="batchProductAsins" class="url-textarea" rows="4" placeholder="B0DWZWJ272&#10;B09B7QBMDC&#10;B0C5H5QR77"></textarea>
+      </div>
+      <div style="display: flex; gap: 8px; margin-top: 8px;">
+        <button id="startBatchProductBtn" class="btn btn-success" style="flex: 1;">収集開始</button>
+        <button id="cancelBatchProductBtn" class="btn btn-danger btn-sm" style="display: none;">中止</button>
+      </div>
+      <div id="batchProductStatus" class="status-message" style="margin-top: 8px;"></div>
+      <div id="batchProductProgress" style="display: none; margin-top: 12px;">
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">
+          <span id="batchProductProgressText">0 / 0</span>
+          <span id="batchProductProgressPercent">0%</span>
+        </div>
+        <div style="background: var(--bg-input); border-radius: 4px; height: 8px; overflow: hidden;">
+          <div id="batchProductProgressBar" style="background: linear-gradient(90deg, #6c5ce7, #a29bfe); height: 100%; width: 0%; transition: width 0.3s ease; border-radius: 4px;"></div>
+        </div>
+        <div id="batchProductResults" style="margin-top: 8px; font-size: 12px; max-height: 120px; overflow-y: auto;"></div>
+      </div>
+    </div>
+
     <!-- Log Card -->
     <div id="logCard" class="card" style="display: none;">
       <div class="log-header">
@@ -2499,6 +2524,17 @@
           </label>
         </div>
 
+        <!-- 商品情報収集（Google Drive） -->
+        <div class="settings-section">
+          <h3>商品情報収集（Google Drive）</h3>
+          <p class="settings-hint">Amazon商品ページの情報（テキスト＋画像）をJSON形式でGoogle Driveに保存します</p>
+          <div class="form-group" style="margin-top: 8px;">
+            <label>保存先フォルダURL</label>
+            <input type="text" id="productInfoFolderUrl" placeholder="https://drive.google.com/drive/folders/...">
+            <div id="productInfoFolderUrlStatus" class="status-message"></div>
+          </div>
+        </div>
+
         <!-- 定期収集表示設定 -->
         <div class="settings-section">
           <h3>定期収集</h3>
@@ -2554,6 +2590,15 @@
               <br>・Chromeブラウザが起動している必要があります
               <br>・定期収集データはCSVには保存されません（スプレッドシートのみ）
             </li>
+          </ul>
+
+          <h3>商品情報収集（Google Drive保存）</h3>
+          <ul>
+            <li><strong>概要:</strong> Amazon商品ページのテキスト情報と画像をJSON形式でGoogle Driveに保存</li>
+            <li><strong>単体収集:</strong> Amazon商品ページで拡張機能アイコン → 「商品情報を収集」ボタン</li>
+            <li><strong>一括収集:</strong> メイン画面の「商品情報収集」カードでASINを入力して「収集開始」</li>
+            <li><strong>設定:</strong> 設定画面で「保存先フォルダURL」にGoogle DriveのフォルダURLを入力</li>
+            <li><strong>保存形式:</strong> 商品ごとにJSONファイル（画像はbase64埋め込み）</li>
           </ul>
 
           <h3>データの保存方法</h3>
