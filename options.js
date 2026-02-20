@@ -140,11 +140,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const startBatchProductRunBtn = document.getElementById('startBatchProductRunBtn');  // 「収集開始」ボタン
   const cancelBatchProductBtn = document.getElementById('cancelBatchProductBtn');
   const batchProductStatus = document.getElementById('batchProductStatus');
-  const batchProductProgress = document.getElementById('batchProductProgress');
-  const batchProductProgressText = document.getElementById('batchProductProgressText');
-  const batchProductProgressPercent = document.getElementById('batchProductProgressPercent');
-  const batchProductProgressBar = document.getElementById('batchProductProgressBar');
-  const batchProductResults = document.getElementById('batchProductResults');
   const batchProductList = document.getElementById('batchProductList');
   const batchProductCountEl = document.getElementById('batchProductCount');
   // 商品情報収集のキューリスト（メモリ上で管理）
@@ -2608,61 +2603,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const asins = [...batchProductQueue];
 
-    // UIを更新（レビュー収集と同じボタン切り替え）
+    // UIを更新（ボタン切り替え）
     if (startBatchProductRunBtn) startBatchProductRunBtn.style.display = 'none';
     if (cancelBatchProductBtn) cancelBatchProductBtn.style.display = 'block';
-    if (batchProductProgress) batchProductProgress.style.display = 'block';
-    if (batchProductResults) batchProductResults.innerHTML = '';
-    if (batchProductStatus) showStatus(batchProductStatus, 'info', `${asins.length}件の商品情報を収集します...`);
+    if (batchProductStatus) batchProductStatus.textContent = '';
 
-    // バックグラウンドに送信
+    // バックグラウンドに送信（ログはbackground.jsが出力する）
     chrome.runtime.sendMessage({
       action: 'startBatchProductCollection',
       asins
     });
   }
 
-  // 一括収集中止
+  // 一括収集中止（即時UI反映）
   function cancelBatchProductCollection() {
     chrome.runtime.sendMessage({ action: 'cancelBatchProductCollection' });
-    if (batchProductStatus) showStatus(batchProductStatus, 'info', '中止しています...');
+
+    // 即座にボタンを戻す
+    if (startBatchProductRunBtn) {
+      startBatchProductRunBtn.style.display = 'block';
+      startBatchProductRunBtn.disabled = batchProductQueue.length === 0;
+    }
+    if (cancelBatchProductBtn) cancelBatchProductBtn.style.display = 'none';
+
+    // ログに中止メッセージを出力
+    addLog('収集を中止しました', 'warning', 'product');
   }
 
-  // 一括収集の進捗更新
+  // 一括収集の進捗更新（ログはbackground.jsが出力済み、ここではUI状態の管理のみ）
   function updateBatchProductProgress(progress) {
     if (!progress) return;
 
-    const { current, total, isRunning, completed, failed } = progress;
-    const percent = total > 0 ? Math.round((current / total) * 100) : 0;
+    const { isRunning, completed, failed } = progress;
 
-    if (batchProductProgressText) batchProductProgressText.textContent = `${current} / ${total}`;
-    if (batchProductProgressPercent) batchProductProgressPercent.textContent = `${percent}%`;
-    if (batchProductProgressBar) batchProductProgressBar.style.width = `${percent}%`;
-
-    // 結果表示
-    if (batchProductResults) {
-      let html = '';
-      if (completed && completed.length > 0) {
-        completed.forEach(item => {
-          html += `<div style="color: var(--success); margin-bottom: 2px;">✓ ${escapeHtml(item.asin)} - ${escapeHtml(item.title || '保存完了')}</div>`;
-        });
-      }
-      if (failed && failed.length > 0) {
-        failed.forEach(item => {
-          html += `<div style="color: var(--error); margin-bottom: 2px;">✗ ${escapeHtml(item.asin)} - ${escapeHtml(item.error || '失敗')}</div>`;
-        });
-      }
-      batchProductResults.innerHTML = html;
-    }
-
-    // 完了時（レビュー収集と同じボタン切り替え）
+    // 完了時のUI更新
     if (!isRunning) {
       if (startBatchProductRunBtn) {
         startBatchProductRunBtn.style.display = 'block';
         startBatchProductRunBtn.disabled = batchProductQueue.length === 0;
       }
       if (cancelBatchProductBtn) cancelBatchProductBtn.style.display = 'none';
-      // 完了したASINをキューから削除
+
+      // 成功したASINをキューから削除
       if (completed) {
         completed.forEach(item => {
           const idx = batchProductQueue.indexOf(item.asin);
@@ -2670,12 +2652,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       }
       renderBatchProductQueue();
-      const successCount = completed ? completed.length : 0;
-      const failCount = failed ? failed.length : 0;
-      if (batchProductStatus) {
-        showStatus(batchProductStatus, failCount > 0 ? 'warning' : 'success',
-          `完了: ${successCount}件成功${failCount > 0 ? `、${failCount}件失敗` : ''}`);
-      }
     }
   }
 
