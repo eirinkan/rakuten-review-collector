@@ -3670,11 +3670,8 @@ async function collectAndSaveProductInfo(tabId) {
     throw new Error('Google DriveのフォルダURLが正しくありません。');
   }
 
-  // 2. OAuthトークンを取得
-  const token = await getAuthToken();
-  if (!token) {
-    throw new Error('Google認証が必要です。ログインしてください。');
-  }
+  // 2. OAuthトークンを取得（未認証なら対話型ダイアログを表示）
+  const token = await getAuthTokenWithFallback();
 
   // 3. content scriptから商品情報を取得
   log('[商品情報] ページから情報を読み取り中...', '', 'product');
@@ -3804,10 +3801,8 @@ async function startBatchProductCollection(asins) {
     throw new Error('Google Driveの保存先フォルダが設定されていません。');
   }
 
-  const token = await getAuthToken();
-  if (!token) {
-    throw new Error('Google認証が必要です。ログインしてください。');
-  }
+  // 認証トークン取得（未認証なら対話型ダイアログを表示）
+  const token = await getAuthTokenWithFallback();
 
   batchProductCancelled = false;
   batchProductProgress = {
