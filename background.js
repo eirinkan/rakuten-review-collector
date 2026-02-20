@@ -3209,16 +3209,24 @@ function forwardToAll(message) {
 }
 
 /**
- * ログを送信
- * ストレージへの保存はoptions.jsのaddLog()が行うため、ここでは転送のみ
+ * ログを保存＆転送
+ * ストレージに直接保存し、options.jsにも通知して表示を更新
  */
 function log(text, type = '', category = 'review') {
   console.log(`[レビュー収集] ${text}`);
 
+  const time = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const storageKey = category === 'product' ? 'productLogs' : 'logs';
+
+  chrome.storage.local.get([storageKey], (result) => {
+    const logs = result[storageKey] || [];
+    logs.push({ time, text, type });
+    chrome.storage.local.set({ [storageKey]: logs });
+  });
+
+  // options.jsに通知（表示更新用）
   forwardToAll({
-    action: 'log',
-    text: text,
-    type: type,
+    action: 'logUpdated',
     category: category
   });
 }

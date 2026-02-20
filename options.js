@@ -1482,8 +1482,8 @@ document.addEventListener('DOMContentLoaded', () => {
         loadQueue();
         loadState(); // ボタン状態も更新
         break;
-      case 'log':
-        addLog(msg.text, msg.type, msg.category || 'review');
+      case 'logUpdated':
+        loadLogs(msg.category);
         break;
       case 'batchProductProgressUpdate':
         updateBatchProductProgress(msg.progress);
@@ -2608,9 +2608,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const asins = [...batchProductQueue];
 
-    // UIを更新
-    if (startBatchProductRunBtn) startBatchProductRunBtn.disabled = true;
-    if (cancelBatchProductBtn) cancelBatchProductBtn.style.display = 'inline-block';
+    // UIを更新（レビュー収集と同じボタン切り替え）
+    if (startBatchProductRunBtn) startBatchProductRunBtn.style.display = 'none';
+    if (cancelBatchProductBtn) cancelBatchProductBtn.style.display = 'block';
     if (batchProductProgress) batchProductProgress.style.display = 'block';
     if (batchProductResults) batchProductResults.innerHTML = '';
     if (batchProductStatus) showStatus(batchProductStatus, 'info', `${asins.length}件の商品情報を収集します...`);
@@ -2655,9 +2655,12 @@ document.addEventListener('DOMContentLoaded', () => {
       batchProductResults.innerHTML = html;
     }
 
-    // 完了時
+    // 完了時（レビュー収集と同じボタン切り替え）
     if (!isRunning) {
-      if (startBatchProductRunBtn) startBatchProductRunBtn.disabled = batchProductQueue.length === 0;
+      if (startBatchProductRunBtn) {
+        startBatchProductRunBtn.style.display = 'block';
+        startBatchProductRunBtn.disabled = batchProductQueue.length === 0;
+      }
       if (cancelBatchProductBtn) cancelBatchProductBtn.style.display = 'none';
       // 完了したASINをキューから削除
       if (completed) {
