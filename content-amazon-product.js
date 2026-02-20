@@ -26,8 +26,10 @@
     price: [
       '#corePriceDisplay_desktop_feature_div .a-price .a-offscreen',
       '#corePrice_feature_div .a-price .a-offscreen',
+      '#tp_price_block_total_price_ww .a-price .a-offscreen',
       '#priceblock_ourprice',
       '#priceblock_dealprice',
+      '.a-color-price',
       '.a-price .a-offscreen'
     ],
     // セール価格（元価格）
