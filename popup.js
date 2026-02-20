@@ -68,6 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const stopBtn = document.getElementById('stopBtn');
   const queueBtn = document.getElementById('queueBtn');
   const settingsBtn = document.getElementById('settingsBtn');
+  const productQueueBtn = document.getElementById('productQueueBtn');
   const startRankingBtn = document.getElementById('startRankingBtn');
   const startRankingProductBtn = document.getElementById('startRankingProductBtn');
   const addRankingBtn = document.getElementById('addRankingBtn');
@@ -141,6 +142,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (userInfo && user) {
       userInfo.style.display = 'flex';
       if (userEmail) userEmail.textContent = user.email;
+    }
+
+    // バージョン表示
+    const versionDisplay = document.getElementById('versionDisplay');
+    if (versionDisplay) {
+      const manifest = chrome.runtime.getManifest();
+      versionDisplay.textContent = `v${manifest.version}`;
     }
 
     // メイン機能を初期化
@@ -245,11 +253,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const isRakutenProductPage = tab.url && tab.url.includes('item.rakuten.co.jp');
     const isProductPage = isAmazonProductPage || isRakutenProductPage;
 
-    // 商品情報収集ボタンの表示（Amazon商品ページ / 楽天商品ページ）
+    // 商品ページの場合: 商品情報収集ボタン＋商品情報キュー追加ボタンを表示
     const productInfoBtn = document.getElementById('productInfoBtn');
-    if (productInfoBtn && isProductPage) {
-      productInfoBtn.style.display = 'block';
-      productInfoBtn.addEventListener('click', collectProductInfo);
+    if (isProductPage) {
+      if (productInfoBtn) {
+        productInfoBtn.style.display = 'block';
+        productInfoBtn.addEventListener('click', collectProductInfo);
+      }
+      if (productQueueBtn) {
+        productQueueBtn.style.display = 'block';
+        productQueueBtn.addEventListener('click', addToProductQueue);
+      }
     }
 
     // 対応ページの判定
@@ -458,6 +472,50 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  /**
+   * 現在の商品ページを商品情報キュー(batchProductQueue)に追加
+   */
+  async function addToProductQueue() {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+    const isAmazonPage = tab.url.includes('amazon.co.jp');
+    const isRakutenPage = tab.url.includes('item.rakuten.co.jp');
+
+    if (!isAmazonPage && !isRakutenPage) {
+      showMessage('商品ページを開いてください', 'error');
+      return;
+    }
+
+    let item;
+    if (isAmazonPage) {
+      // AmazonページからASINを抽出
+      const dpMatch = tab.url.match(/\/dp\/([A-Z0-9]{10})/i);
+      const gpMatch = tab.url.match(/\/gp\/product\/([A-Z0-9]{10})/i);
+      const asin = (dpMatch && dpMatch[1]) || (gpMatch && gpMatch[1]);
+      if (!asin) {
+        showMessage('ASINが取得できませんでした', 'error');
+        return;
+      }
+      item = asin.toUpperCase();
+    } else {
+      // 楽天ページのURL（クエリパラメータ除去）
+      item = tab.url.split('?')[0];
+    }
+
+    chrome.storage.local.get(['batchProductQueue'], (result) => {
+      const queue = result.batchProductQueue || [];
+      if (queue.includes(item)) {
+        showMessage('既に商品キューに追加済みです', 'error');
+        return;
+      }
+      queue.push(item);
+      chrome.storage.local.set({ batchProductQueue: queue }, () => {
+        showMessage('商品情報キューに追加しました', 'success');
+        chrome.runtime.sendMessage({ action: 'batchProductQueueUpdated' });
+      });
+    });
+  }
+
   async function startRankingCollection() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const count = parseInt(rankingCountInput.value) || 10;
@@ -562,7 +620,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
-   * ランキングから商品キューに追加して商品情報バッチ収集を開始
+   * ランキングから商品キューに追加して、追加分のみ商品情報バッチ収集を開始
    */
   async function startRankingProductCollection() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -582,8 +640,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }, (response) => {
       if (response && response.success && response.addedCount > 0) {
         showRankingMessage(`${response.addedCount}件追加、商品情報収集開始...`, 'success');
-        // 商品情報バッチ収集を開始
-        chrome.runtime.sendMessage({ action: 'startBatchProductFromPopup' }, (res) => {
+        // 追加分のみバッチ収集を開始（キュー全体ではなく今回追加した商品だけ）
+        chrome.runtime.sendMessage({
+          action: 'startBatchProductCollection',
+          items: response.addedItems
+        }, (res) => {
           resetRankingProductBtn();
           if (res && res.success) {
             showRankingMessage(`${response.addedCount}件の商品情報収集を開始しました`, 'success');

@@ -3231,10 +3231,12 @@ async function addAmazonRankingToProductQueue(url, count) {
   const result = await chrome.storage.local.get(['batchProductQueue']);
   const queue = result.batchProductQueue || [];
   let addedCount = 0;
+  const addedItems = [];
   for (const product of products) {
     const asin = product.asin;
     if (!queue.includes(asin)) {
       queue.push(asin);
+      addedItems.push(asin);
       addedCount++;
     }
   }
@@ -3248,7 +3250,7 @@ async function addAmazonRankingToProductQueue(url, count) {
     log('追加する商品がありません（全て重複）', 'info', 'product');
   }
 
-  return { success: true, addedCount, totalCount: queue.length };
+  return { success: true, addedCount, addedItems, totalCount: queue.length };
 }
 
 /**
@@ -3265,10 +3267,12 @@ async function addRakutenRankingToProductQueue(url, count) {
   const queue = result.batchProductQueue || [];
   const existingUrls = new Set(queue);
   let addedCount = 0;
+  const addedItems = [];
   for (const product of products) {
     if (!existingUrls.has(product.url)) {
       queue.push(product.url);
       existingUrls.add(product.url);
+      addedItems.push(product.url);
       addedCount++;
     }
   }
@@ -3282,7 +3286,7 @@ async function addRakutenRankingToProductQueue(url, count) {
     log('追加する商品がありません（全て重複）', 'info', 'product');
   }
 
-  return { success: true, addedCount, totalCount: queue.length };
+  return { success: true, addedCount, addedItems, totalCount: queue.length };
 }
 
 /**

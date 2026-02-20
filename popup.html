@@ -597,6 +597,14 @@
       background: rgba(220, 53, 69, 0.15);
       color: var(--error);
     }
+
+    .version-display {
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-muted);
+      padding: 6px 0 8px;
+      opacity: 0.6;
+    }
   </style>
 </head>
 <body>
@@ -629,16 +637,17 @@
     <div id="mainContent" class="content" style="display: none;">
       <!-- 通常モード（商品・レビューページ） -->
       <div id="normalMode">
-        <button id="startBtn" class="btn btn-start">収集開始</button>
+        <button id="startBtn" class="btn btn-start">レビュー収集開始</button>
         <button id="stopBtn" class="btn btn-stop" style="display: none;">収集停止</button>
-        <button id="queueBtn" class="btn btn-queue">キューに追加</button>
-        <button id="productInfoBtn" class="btn btn-product-info" style="display: none;">商品情報を収集</button>
+        <button id="productInfoBtn" class="btn btn-product-info" style="display: none;">商品情報収集開始</button>
         <div id="productInfoProgress" class="progress-container">
           <div class="progress-bar-wrapper">
             <div id="productInfoProgressBar" class="progress-bar-fill"></div>
           </div>
           <div id="productInfoProgressText" class="progress-text"></div>
         </div>
+        <button id="queueBtn" class="btn btn-queue">レビューキューに追加</button>
+        <button id="productQueueBtn" class="btn btn-queue btn-product-queue" style="display: none;">商品情報キューに追加</button>
         <div id="message" class="message"></div>
       </div>
 
@@ -671,6 +680,9 @@
     <div id="userInfo" class="user-info">
       <button id="logoutBtn" class="btn-logout">ログアウト</button>
     </div>
+
+    <!-- バージョン表示 -->
+    <div id="versionDisplay" class="version-display"></div>
   </div>
 
   <script src="popup.js"></script>
