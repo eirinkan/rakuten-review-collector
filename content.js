@@ -201,8 +201,22 @@
     const originalPrice = origEl ? origEl.textContent.trim().replace(/円$/, '') : '';
 
     // レビュー情報
+    // 新UIのCSS moduleセレクタ
     const scoreEl = document.querySelector('[class*="review-score--"]');
-    const totalEl = document.querySelector('[class*="review-total--"]');
+    let totalEl = document.querySelector('[class*="review-total--"]');
+    // フォールバック: 旧UI (.normal-reserve-review内の件数リンク)
+    if (!totalEl) {
+      const reviewLink = document.querySelector('.normal-reserve-review a[aria-label]');
+      if (reviewLink) {
+        totalEl = { textContent: reviewLink.getAttribute('aria-label') };
+      }
+    }
+    if (!totalEl) {
+      const rnkReview = document.querySelector('.rnkInShopItemReview span');
+      if (rnkReview) {
+        totalEl = rnkReview;
+      }
+    }
 
     // ショップ名
     const titleParts = document.title.split('：');
@@ -237,30 +251,49 @@
     const images = [];
     const seen = new Set();
 
+    // 高解像度URLに変換するヘルパー（tshop.r10s.jp → shop.r10s.jp、クエリ除去）
+    function toHighResUrl(src) {
+      return src.split('?')[0].replace('tshop.r10s.jp', 'shop.r10s.jp');
+    }
+
     // 1. og:image（メイン画像）
     const ogImage = document.querySelector('meta[property="og:image"]');
     if (ogImage?.content) {
-      images.push({ url: ogImage.content, type: 'main' });
-      seen.add(ogImage.content);
+      const url = toHighResUrl(ogImage.content);
+      images.push({ url, type: 'main' });
+      seen.add(url);
     }
 
-    // 2. ショップの商品画像（rakuten CDN）
+    // 2. ショップの商品画像（複数CDNドメイン対応）
+    // image.rakuten.co.jp/{shop}/cabinet/、tshop.r10s.jp/{shop}/cabinet/、shop.r10s.jp/{shop}/cabinet/
     document.querySelectorAll('img').forEach(img => {
       const src = img.src || '';
-      if (src.includes(`image.rakuten.co.jp/${shopSlug}/cabinet/`) && img.naturalWidth > 100 && !seen.has(src)) {
-        images.push({ url: src, type: 'product' });
-        seen.add(src);
-      }
+      if (!src || src.includes('data:image')) return;
+      const isShopCdn = (
+        src.includes(`image.rakuten.co.jp/${shopSlug}/cabinet/`) ||
+        src.includes(`tshop.r10s.jp/${shopSlug}/cabinet/`) ||
+        src.includes(`shop.r10s.jp/${shopSlug}/cabinet/`)
+      );
+      if (!isShopCdn) return;
+      const url = toHighResUrl(src);
+      if (seen.has(url)) return;
+      // naturalWidthが0の場合はロード前の可能性があるため、サイズチェックを緩和
+      // 1x1のトラッキングピクセルのみ除外
+      if (img.naturalWidth > 0 && img.naturalWidth <= 2) return;
+      images.push({ url, type: 'product' });
+      seen.add(url);
     });
 
     // 3. item_desc内の画像
     if (descEl) {
       descEl.querySelectorAll('img').forEach(img => {
         const src = img.src || '';
-        if (src && !src.includes('data:image') && img.naturalWidth > 100 && !seen.has(src)) {
-          images.push({ url: src, type: 'description' });
-          seen.add(src);
-        }
+        if (!src || src.includes('data:image')) return;
+        const url = toHighResUrl(src);
+        if (seen.has(url)) return;
+        if (img.naturalWidth > 0 && img.naturalWidth <= 2) return;
+        images.push({ url, type: 'description' });
+        seen.add(url);
       });
     }
 
