@@ -1594,6 +1594,9 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'batchProductProgressUpdate':
         updateBatchProductProgress(msg.progress);
         break;
+      case 'batchJsonProgress':
+        updateBatchJsonProgress(msg.progress);
+        break;
       case 'batchProductQueueUpdated':
         loadBatchProductQueue();
         break;
@@ -2859,7 +2862,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 一括収集開始
+  // 一括収集開始（Google Drive保存）
   function startBatchProductCollection() {
     if (batchProductQueue.length === 0) {
       if (batchProductStatus) showStatus(batchProductStatus, 'error', '収集する商品がありません');
@@ -2868,7 +2871,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const items = [...batchProductQueue];
 
-    // ローカルで即時ログ表示（ストレージ経由ではなく直接メモリに追加）
+    // ローカルで即時ログ表示
     addLog(`${items.length}件の商品情報収集を開始します...`, 'info', 'product');
 
     // ストレージポーリング開始（background.jsのログをリアルタイムで拾う）
@@ -2879,12 +2882,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (cancelBatchProductBtn) cancelBatchProductBtn.style.display = 'block';
     if (batchProductStatus) batchProductStatus.textContent = '';
 
-    // バックグラウンドに送信（ログはbackground.jsがストレージに書き込む）
+    // バックグラウンドに一括収集を送信（Amazon・楽天両対応）
     chrome.runtime.sendMessage({
       action: 'startBatchProductCollection',
       items
     }, (response) => {
-      // エラー時（設定未完了、認証失敗など）はUI・ポーリングを戻す
       if (response && !response.success) {
         stopProductLogPolling();
         addLog(`エラー: ${response.error}`, 'error', 'product');
@@ -2966,6 +2968,36 @@ document.addEventListener('DOMContentLoaded', () => {
           _lastPolledProductLogCount = (result.productLogs || []).length;
         });
       }, 500);
+    }
+  }
+
+  // JSON一括ダウンロードの進捗更新
+  function updateBatchJsonProgress(progress) {
+    if (!progress) return;
+
+    if (progress.phase === 'done') {
+      // 完了
+      stopProductLogPolling();
+
+      if (startBatchProductRunBtn) {
+        startBatchProductRunBtn.style.display = 'block';
+        startBatchProductRunBtn.disabled = batchProductQueue.length === 0;
+      }
+      if (cancelBatchProductBtn) cancelBatchProductBtn.style.display = 'none';
+
+      // 完了した商品をキューから削除
+      if (progress.current > 0) {
+        const completed = batchProductQueue.slice(0, progress.current);
+        batchProductQueue = batchProductQueue.slice(progress.current);
+        chrome.storage.local.set({ batchProductQueue: [...batchProductQueue] });
+        renderBatchProductQueue();
+      }
+    } else if (progress.currentAsin) {
+      // 進捗表示
+      if (batchProductStatus) {
+        batchProductStatus.textContent = `${progress.current}/${progress.total}件処理中: ${progress.currentAsin}`;
+        batchProductStatus.className = 'status-message info';
+      }
     }
   }
 
