@@ -389,7 +389,9 @@
     };
 
     // テキスト収集（重要なテキスト要素のみ、script/styleタグを除外）
-    const textElements = aplusEl.querySelectorAll('h1, h2, h3, h4, h5, p, li, td, span.a-text-bold');
+    // 除外対象: 比較テーブル（standard/premium）、カルーセル（売れ筋商品等）
+    const textElements = [...aplusEl.querySelectorAll('h1, h2, h3, h4, h5, p, li, td, span.a-text-bold')]
+      .filter(el => !el.closest('.apm-tablemodule, .comparison-table, [class*="carousel"]'));
     const texts = [];
     const seenTexts = new Set();
     for (const el of textElements) {
@@ -546,12 +548,12 @@
     // 箇条書き
     const bulletEls = queryAllFirst(SELECTORS.featureBullets);
     const bullets = bulletEls
-      .map(el => el.textContent.trim())
+      .map(el => getCleanText(el))
       .filter(text => text.length > 0 && !text.includes('この商品について'));
 
     // 商品説明
     const descEl = queryFirst(SELECTORS.productDescription);
-    const description = descEl ? descEl.textContent.trim() : '';
+    const description = descEl ? getCleanText(descEl) : '';
 
     // A+コンテンツ
     const aplusContent = collectAplusContent();
@@ -590,9 +592,18 @@
       }
     }
 
-    // バリエーション
+    // バリエーション（ボタン内のバリエーション名のみ抽出、価格・在庫情報を除外）
     const variationEls = queryAllFirst(SELECTORS.variations);
-    const variations = variationEls.map(el => el.textContent.trim()).filter(t => t.length > 0);
+    const variations = variationEls.map(el => {
+      // swatch-title-text があればそこからバリエーション名のみ取得
+      const nameEl = el.querySelector('.swatch-title-text, .swatch-title-text-display');
+      if (nameEl) return nameEl.textContent.trim();
+      // フォールバック: getCleanTextから価格・在庫パターンを除去
+      return getCleanText(el)
+        .replace(/[￥¥][\d,]+.*$/, '')  // 価格以降を除去
+        .replace(/在庫.*$/, '')          // 在庫情報を除去
+        .trim();
+    }).filter(t => t.length > 0);
 
     // 画像URL一覧
     const images = collectImageUrls();

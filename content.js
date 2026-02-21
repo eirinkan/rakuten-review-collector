@@ -330,7 +330,7 @@
       }
     }
 
-    // カテゴリ（JSON-LD BreadcrumbListから）
+    // カテゴリ（JSON-LD BreadcrumbList → DOMフォールバック）
     let categories = [];
     try {
       const ldScripts = document.querySelectorAll('script[type="application/ld+json"]');
@@ -344,6 +344,13 @@
         }
       }
     } catch (e) {}
+    // SP版等でJSON-LDにBreadcrumbListがない場合、DOMのパンくずリストから取得
+    if (categories.length === 0) {
+      const breadcrumbLinks = document.querySelectorAll('[class*="breadcrumb--"] a, .breadcrumb a, nav[aria-label*="パンくず"] a');
+      categories = [...breadcrumbLinks]
+        .map(a => a.textContent.trim())
+        .filter(t => t && t !== '楽天市場' && t !== 'TOP' && t.length < 30);
+    }
 
     // バリエーション
     const varButtons = document.querySelectorAll('[class*="button-multiline--"]');
