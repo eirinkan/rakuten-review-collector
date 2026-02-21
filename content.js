@@ -145,6 +145,8 @@
             } catch (error) {
               sendResponse({ success: false, error: error.message });
             }
+          }).catch(error => {
+            sendResponse({ success: false, error: `ページ待機エラー: ${error.message}` });
           });
         } else {
           sendResponse({ success: false, error: '楽天の商品ページ（item.rakuten.co.jp）で実行してください' });
