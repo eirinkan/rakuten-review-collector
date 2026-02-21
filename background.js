@@ -3998,22 +3998,28 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
       ? `rakuten_${productData.itemSlug}_${dateStr}`
       : `amazon_${productData.asin}_${dateStr}`);
 
-  // 4. 商品フォルダとサブフォルダ（pc/sp）を作成
-  let productParentFolderId; // 商品フォルダID（pcとspの親）
-  let productFolderId;       // 実際のファイル保存先（pc or spサブフォルダ）
+  // 4. 商品フォルダを作成（楽天はpc/spサブフォルダ、Amazonはフォルダ直下）
+  let productParentFolderId; // 商品フォルダID（楽天: pcとspの親、Amazon: 保存先そのもの）
+  let productFolderId;       // 実際のファイル保存先
   if (isMobile && mobileOptions?.parentFolderId) {
-    // スマホ版: 商品フォルダは既にPC版で作成済み → spサブフォルダを作成
+    // 楽天スマホ版: 商品フォルダは既にPC版で作成済み → spサブフォルダを作成
     productParentFolderId = mobileOptions.parentFolderId;
     log(`[${modeLabel}][${productId}] spフォルダを作成中...`, '', 'product');
     const spFolderResult = await createDriveFolder(subFolderName, productParentFolderId);
     productFolderId = spFolderResult.folder.id;
-  } else {
-    // PC版: 商品フォルダを新規作成 → pcサブフォルダを作成
+  } else if (isRakuten) {
+    // 楽天PC版: 商品フォルダを新規作成 → pcサブフォルダを作成
     log(`[${modeLabel}][${productId}] 保存フォルダを作成中...`, '', 'product');
     const productFolderResult = await createDriveFolder(baseName, parentFolderId);
     productParentFolderId = productFolderResult.folder.id;
     const pcFolderResult = await createDriveFolder(subFolderName, productParentFolderId);
     productFolderId = pcFolderResult.folder.id;
+  } else {
+    // Amazon: 商品フォルダを新規作成 → 直下に保存（PC/SP同一データ）
+    log(`[${modeLabel}][${productId}] 保存フォルダを作成中...`, '', 'product');
+    const productFolderResult = await createDriveFolder(baseName, parentFolderId);
+    productParentFolderId = productFolderResult.folder.id;
+    productFolderId = productFolderResult.folder.id; // サブフォルダなし
   }
 
   // 5. 画像をダウンロード → Driveにアップロード（個別ファイル）
@@ -4387,8 +4393,8 @@ async function startBatchProductCollection(items) {
         await sleep(1500);
         const desktopResult = await collectAndSaveProductInfo(batchTab.id, 'desktop');
 
-        // --- スマホ版の収集 ---
-        if (!batchProductCancelled) {
+        // --- スマホ版の収集（楽天のみ、AmazonはPC/SP同一データのためスキップ） ---
+        if (!batchProductCancelled && isRakutenUrl) {
           log(`[${displayId}] (${i + 1}/${items.length}) スマホ版を収集中...`, '', 'product');
           try {
             await enableMobileUA(batchTab.id);
@@ -4539,11 +4545,18 @@ async function collectProductInfoWithMobile(tabId) {
   // 現在のタブのURLを取得
   const tab = await chrome.tabs.get(tabId);
   const productUrl = tab.url;
+  const isAmazonUrl = productUrl.includes('amazon.co.jp');
 
   // PC版を収集
   const desktopResult = await collectAndSaveProductInfo(tabId, 'desktop');
 
-  // スマホ版をバックグラウンドタブで収集
+  // AmazonはPC/SPで同じデータのためスマホ版収集をスキップ
+  if (isAmazonUrl) {
+    log('収集完了', 'success', 'product');
+    return desktopResult;
+  }
+
+  // 楽天のみ: スマホ版をバックグラウンドタブで収集
   let mobileTab;
   try {
     mobileTab = await chrome.tabs.create({ url: 'about:blank', active: false });
