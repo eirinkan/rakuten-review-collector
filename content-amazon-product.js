@@ -198,7 +198,8 @@
     if (!url) return '';
     // ファイル名中の「.」から拡張子前の「.」までのサイズ指定部分を丸ごと置換
     // 例: 51zKH8u9AlL._AC_US100_.jpg → 51zKH8u9AlL._SL1500_.jpg
-    return url.replace(/\._{1,2}[A-Z]{2}[^.]+_*\./, '._SL1500_.');
+    //      51cvOwC5rkL.SX38_SY50_CR,...__.jpg → 51cvOwC5rkL._SL1500_.jpg
+    return url.replace(/\._{0,2}[A-Z]{2}[^.]+_*\./, '._SL1500_.');
   }
 
   /**
@@ -403,8 +404,9 @@
     }
     result.text = texts.join('\n');
 
-    // 画像収集
-    const imgs = aplusEl.querySelectorAll('img');
+    // 画像収集（比較テーブル・カルーセル内の画像を除外）
+    const imgs = [...aplusEl.querySelectorAll('img')]
+      .filter(img => !img.closest('.apm-tablemodule, .comparison-table, [class*="carousel"]'));
     const seen = new Set();
     for (const img of imgs) {
       // data-src（遅延読み込み）またはsrc
