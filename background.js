@@ -4327,17 +4327,11 @@ function getSectionDescription(section, order) {
 async function removeFromBatchProductQueue(originalItem) {
   const result = await chrome.storage.local.get(['batchProductQueue']);
   const queue = result.batchProductQueue || [];
-  console.log('[removeFromBatchProductQueue] 検索値:', JSON.stringify(originalItem));
-  console.log('[removeFromBatchProductQueue] キュー:', JSON.stringify(queue.slice(0, 3)));
   const idx = queue.indexOf(originalItem);
-  console.log('[removeFromBatchProductQueue] indexOf結果:', idx);
   if (idx !== -1) {
     queue.splice(idx, 1);
     await chrome.storage.local.set({ batchProductQueue: queue });
-    console.log('[removeFromBatchProductQueue] 削除成功。残り:', queue.length);
     forwardToAll({ action: 'batchProductQueueUpdated' });
-  } else {
-    console.log('[removeFromBatchProductQueue] 見つからず。型:', typeof originalItem, '/ キュー先頭の型:', typeof queue[0]);
   }
 }
 
