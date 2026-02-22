@@ -4706,16 +4706,21 @@ async function getDriveFolders(parentId = 'root', driveId = null) {
     params.set('supportsAllDrives', 'true');
     params.set('corpora', 'drive');
     params.set('driveId', driveId);
+  } else {
+    params.set('supportsAllDrives', 'true');
   }
 
+  console.log('[getDriveFolders]', { parentId, driveId });
   const response = await driveApiFetch(`https://www.googleapis.com/drive/v3/files?${params}`);
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
+    console.error('[getDriveFolders] エラー:', errorData);
     throw new Error(errorData.error?.message || `Drive API エラー (${response.status})`);
   }
 
   const data = await response.json();
+  console.log('[getDriveFolders] 結果:', data.files?.length, '件');
   return {
     success: true,
     folders: (data.files || []).map(f => ({ id: f.id, name: f.name }))
@@ -4742,13 +4747,19 @@ async function searchDriveFolders(query, driveId = null) {
     pageSize: '50'
   });
 
+  // 共有ドライブ内検索とマイドライブ検索の両方をサポート
   if (driveId) {
     params.set('includeItemsFromAllDrives', 'true');
     params.set('supportsAllDrives', 'true');
     params.set('corpora', 'drive');
     params.set('driveId', driveId);
+  } else {
+    // マイドライブでもsupportsAllDrivesを付与（共有されたフォルダも検索可能に）
+    params.set('supportsAllDrives', 'true');
+    params.set('includeItemsFromAllDrives', 'true');
   }
 
+  console.log('[searchDriveFolders]', { query, driveId, q: params.get('q') });
   const response = await driveApiFetch(`https://www.googleapis.com/drive/v3/files?${params}`);
 
   if (!response.ok) {
@@ -4815,10 +4826,12 @@ async function createDriveFolder(name, parentId = 'root') {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
+    console.error('[createDriveFolder] エラー:', { name, parentId, status: response.status, error: errorData });
     throw new Error(errorData.error?.message || `フォルダ作成エラー (${response.status})`);
   }
 
   const folder = await response.json();
+  console.log('[createDriveFolder] 成功:', { id: folder.id, name: folder.name, parentId });
   return {
     success: true,
     folder: { id: folder.id, name: folder.name }
