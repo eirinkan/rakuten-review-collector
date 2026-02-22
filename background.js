@@ -4095,7 +4095,8 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
       if (r) imageMetadata.push(r);
       processedMedia++;
     }
-    log(`[${productId}]${modeLabel} メディア ${processedMedia}/${totalMedia}`, '', 'product');
+    const imgDone = Math.min(i + 2, imgTasks.length);
+    log(`[${productId}]${modeLabel} 画像 ${imgDone}/${imgTasks.length} アップロード中...`, '', 'product');
     forwardToAll({ action: 'productInfoProgress', progress: { phase: 'images', current: processedMedia, total: totalMedia, productId } });
   }
 
@@ -4125,7 +4126,8 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
         if (r) aplusImageMetadata.push(r);
         processedMedia++;
       }
-      log(`[${productId}]${modeLabel} メディア ${processedMedia}/${totalMedia}`, '', 'product');
+      const aplusDone = Math.min(i + 2, aplusImgUrls.length);
+      log(`[${productId}]${modeLabel} A+画像 ${aplusDone}/${aplusImgUrls.length} アップロード中...`, '', 'product');
       forwardToAll({ action: 'productInfoProgress', progress: { phase: 'images', current: processedMedia, total: totalMedia, productId } });
     }
   }
@@ -4137,7 +4139,7 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
     for (const video of rawVideos) {
       videoOrder++;
       processedMedia++;
-      log(`[${productId}]${modeLabel} メディア ${processedMedia}/${totalMedia}`, '', 'product');
+      log(`[${productId}]${modeLabel} 動画 ${videoOrder}/${rawVideos.length} アップロード中...`, '', 'product');
 
       // HLSストリーミング（m3u8）はダウンロード不可
       if (video.type === 'hls') {
@@ -4453,6 +4455,8 @@ async function startBatchProductCollection(items) {
         console.error(`[商品情報] ${displayId} エラー:`, error);
         batchProductProgress.failed.push({ id: displayId, error: error.message });
         log(`[${displayId}] ${error.message}`, 'error', 'product');
+        // 失敗した商品もキューから削除（ログに記録済みなので再試行はユーザー判断）
+        await removeFromBatchProductQueue(displayId, isRakutenUrl);
       }
 
       batchProductProgress.current = i + 1;

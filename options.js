@@ -2690,21 +2690,11 @@ document.addEventListener('DOMContentLoaded', () => {
     renderBatchProductQueue();
   }
 
-  // ストレージから商品キューを読み込み（ポップアップからの追加を反映）
+  // ストレージから商品キューを読み込み（追加・削除の両方を反映）
   function loadBatchProductQueue() {
     chrome.storage.local.get(['batchProductQueue'], (result) => {
-      const stored = result.batchProductQueue || [];
-      // ストレージのASINをメモリに反映（重複排除）
-      let addedCount = 0;
-      for (const asin of stored) {
-        if (!batchProductQueue.includes(asin)) {
-          batchProductQueue.push(asin);
-          addedCount++;
-        }
-      }
-      if (addedCount > 0) {
-        renderBatchProductQueue();
-      }
+      batchProductQueue = result.batchProductQueue || [];
+      renderBatchProductQueue();
     });
   }
 
