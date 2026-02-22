@@ -1935,6 +1935,7 @@ document.addEventListener('DOMContentLoaded', () => {
           addedCount++;
         }
       }
+      chrome.storage.local.set({ batchProductQueue: [...batchProductQueue] });
       renderBatchProductQueue();
       addLog(`「${queue.name}」から${addedCount}件をキューに追加`, 'success', 'product');
     });
