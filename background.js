@@ -4065,94 +4065,66 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
 
   let processedMedia = 0;
 
-  // --- 商品画像のアップロード ---
+  // --- 商品画像のアップロード（2件並列） ---
   const imageMetadata = [];
-  let imgOrder = 0;
-  for (const img of productData.images) {
-    const imgUrl = typeof img === 'string' ? img : img.url;
-    const imgSection = typeof img === 'string' ? 'product' : (img.type || 'product');
+  const imgTasks = productData.images.map((img, i) => ({
+    order: i + 1,
+    url: typeof img === 'string' ? img : img.url,
+    section: typeof img === 'string' ? 'product' : (img.type || 'product')
+  }));
 
-    imgOrder++;
-    const mediaResult = await fetchMediaAsBlob(imgUrl);
-    processedMedia++;
-
-    if (mediaResult) {
-      const ext = getExtensionFromMimeType(mediaResult.mimeType, imgUrl);
-      const fileName = `img_${String(imgOrder).padStart(2, '0')}_${imgSection}.${ext}`;
-
-      try {
-        const uploaded = await uploadMediaToDrive(token, productFolderId, fileName, mediaResult.blob, mediaResult.mimeType);
-        imageMetadata.push({
-          order: imgOrder,
-          section: imgSection,
-          description: getSectionDescription(imgSection, imgOrder),
-          fileName,
-          originalUrl: imgUrl,
-          mimeType: mediaResult.mimeType,
-          driveFileId: uploaded.id
-        });
-      } catch (uploadError) {
-        console.warn(`[商品情報] 画像アップロード失敗: ${uploadError.message} - ${fileName}`);
-        imageMetadata.push({
-          order: imgOrder,
-          section: imgSection,
-          description: getSectionDescription(imgSection, imgOrder),
-          fileName,
-          originalUrl: imgUrl,
-          mimeType: mediaResult.mimeType,
-          driveFileId: null,
-          error: uploadError.message
-        });
-      }
-    }
-
-    forwardToAll({
-      action: 'productInfoProgress',
-      progress: { phase: 'images', current: processedMedia, total: totalMedia, productId }
-    });
-  }
-
-  // --- A+コンテンツ画像のアップロード（Amazonのみ） ---
-  const aplusImageMetadata = [];
-  if (!isRakuten && aplusImgUrls.length > 0) {
-    let aplusOrder = 0;
-    for (const imgUrl of aplusImgUrls) {
-      aplusOrder++;
-      const mediaResult = await fetchMediaAsBlob(imgUrl);
-      processedMedia++;
-
+  for (let i = 0; i < imgTasks.length; i += 2) {
+    const chunk = imgTasks.slice(i, i + 2);
+    const results = await Promise.all(chunk.map(async (task) => {
+      const mediaResult = await fetchMediaAsBlob(task.url);
       if (mediaResult) {
-        const ext = getExtensionFromMimeType(mediaResult.mimeType, imgUrl);
-        const fileName = `aplus_${String(aplusOrder).padStart(2, '0')}.${ext}`;
-
+        const ext = getExtensionFromMimeType(mediaResult.mimeType, task.url);
+        const fileName = `img_${String(task.order).padStart(2, '0')}_${task.section}.${ext}`;
         try {
           const uploaded = await uploadMediaToDrive(token, productFolderId, fileName, mediaResult.blob, mediaResult.mimeType);
-          aplusImageMetadata.push({
-            order: aplusOrder,
-            description: `A+コンテンツ画像${aplusOrder}枚目`,
-            fileName,
-            originalUrl: imgUrl,
-            mimeType: mediaResult.mimeType,
-            driveFileId: uploaded.id
-          });
+          return { order: task.order, section: task.section, description: getSectionDescription(task.section, task.order), fileName, originalUrl: task.url, mimeType: mediaResult.mimeType, driveFileId: uploaded.id };
         } catch (uploadError) {
-          console.warn(`[商品情報] A+画像アップロード失敗: ${uploadError.message}`);
-          aplusImageMetadata.push({
-            order: aplusOrder,
-            description: `A+コンテンツ画像${aplusOrder}枚目`,
-            fileName,
-            originalUrl: imgUrl,
-            mimeType: mediaResult.mimeType,
-            driveFileId: null,
-            error: uploadError.message
-          });
+          console.warn(`[商品情報] 画像アップロード失敗: ${uploadError.message} - ${fileName}`);
+          return { order: task.order, section: task.section, description: getSectionDescription(task.section, task.order), fileName, originalUrl: task.url, mimeType: mediaResult.mimeType, driveFileId: null, error: uploadError.message };
         }
       }
+      return null;
+    }));
 
-      forwardToAll({
-        action: 'productInfoProgress',
-        progress: { phase: 'images', current: processedMedia, total: totalMedia, productId }
-      });
+    for (const r of results) {
+      if (r) imageMetadata.push(r);
+      processedMedia++;
+    }
+    forwardToAll({ action: 'productInfoProgress', progress: { phase: 'images', current: processedMedia, total: totalMedia, productId } });
+  }
+
+  // --- A+コンテンツ画像のアップロード（Amazonのみ、2件並列） ---
+  const aplusImageMetadata = [];
+  if (!isRakuten && aplusImgUrls.length > 0) {
+    for (let i = 0; i < aplusImgUrls.length; i += 2) {
+      const chunk = aplusImgUrls.slice(i, i + 2);
+      const results = await Promise.all(chunk.map(async (imgUrl, j) => {
+        const order = i + j + 1;
+        const mediaResult = await fetchMediaAsBlob(imgUrl);
+        if (mediaResult) {
+          const ext = getExtensionFromMimeType(mediaResult.mimeType, imgUrl);
+          const fileName = `aplus_${String(order).padStart(2, '0')}.${ext}`;
+          try {
+            const uploaded = await uploadMediaToDrive(token, productFolderId, fileName, mediaResult.blob, mediaResult.mimeType);
+            return { order, description: `A+コンテンツ画像${order}枚目`, fileName, originalUrl: imgUrl, mimeType: mediaResult.mimeType, driveFileId: uploaded.id };
+          } catch (uploadError) {
+            console.warn(`[商品情報] A+画像アップロード失敗: ${uploadError.message}`);
+            return { order, description: `A+コンテンツ画像${order}枚目`, fileName, originalUrl: imgUrl, mimeType: mediaResult.mimeType, driveFileId: null, error: uploadError.message };
+          }
+        }
+        return null;
+      }));
+
+      for (const r of results) {
+        if (r) aplusImageMetadata.push(r);
+        processedMedia++;
+      }
+      forwardToAll({ action: 'productInfoProgress', progress: { phase: 'images', current: processedMedia, total: totalMedia, productId } });
     }
   }
 
