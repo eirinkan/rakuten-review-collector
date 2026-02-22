@@ -3973,9 +3973,10 @@ async function resumableUploadToDrive(token, folderId, fileName, blob) {
  */
 async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions = null) {
   const isMobile = mode === 'mobile';
-  const modeLabel = isMobile ? 'スマホ版' : 'PC版';
   const subFolderName = isMobile ? 'sp' : 'pc';
-  log(`[${modeLabel}] 収集を開始します...`, '', 'product');
+  // modeLabelはAmazon/楽天判定後に設定（Amazon: ラベルなし、楽天: PC版/スマホ版）
+  let modeLabel = '';
+  log('収集を開始します...', '', 'product');
 
   // 1. 設定チェック（スマホ版は既存の商品フォルダを使うため親フォルダ不要）
   let parentFolderId = null;
@@ -3995,7 +3996,7 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
   const token = await getAuthTokenWithFallback();
 
   // 3. content scriptから商品情報を取得（メッセージチャンネル切断時は1回リトライ）
-  log(`[${modeLabel}] ページから情報を読み取り中...`, '', 'product');
+  log('ページから情報を読み取り中...', '', 'product');
   let productData;
   const maxRetries = 2;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -4018,6 +4019,8 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
 
   // Amazon / 楽天の判定
   const isRakuten = productData.source === 'rakuten';
+  // AmazonはPC/SP同一データのためラベルなし、楽天はPC版/スマホ版を表示
+  modeLabel = isRakuten ? (isMobile ? '[スマホ版]' : '[PC版]') : '';
   const productId = isRakuten
     ? (productData.itemSlug || '???')
     : (productData.asin || '???');
@@ -4035,19 +4038,19 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
   if (isMobile && mobileOptions?.parentFolderId) {
     // 楽天スマホ版: 商品フォルダは既にPC版で作成済み → spサブフォルダを作成
     productParentFolderId = mobileOptions.parentFolderId;
-    log(`[${productId}][${modeLabel}] spフォルダを作成中...`, '', 'product');
+    log(`[${productId}]${modeLabel} spフォルダを作成中...`, '', 'product');
     const spFolderResult = await createDriveFolder(subFolderName, productParentFolderId);
     productFolderId = spFolderResult.folder.id;
   } else if (isRakuten) {
     // 楽天PC版: 商品フォルダを新規作成 → pcサブフォルダを作成
-    log(`[${productId}][${modeLabel}] 保存フォルダを作成中...`, '', 'product');
+    log(`[${productId}]${modeLabel} 保存フォルダを作成中...`, '', 'product');
     const productFolderResult = await createDriveFolder(baseName, parentFolderId);
     productParentFolderId = productFolderResult.folder.id;
     const pcFolderResult = await createDriveFolder(subFolderName, productParentFolderId);
     productFolderId = pcFolderResult.folder.id;
   } else {
     // Amazon: 商品フォルダを新規作成 → 直下に保存（PC/SP同一データ）
-    log(`[${productId}][${modeLabel}] 保存フォルダを作成中...`, '', 'product');
+    log(`[${productId}]${modeLabel} 保存フォルダを作成中...`, '', 'product');
     const productFolderResult = await createDriveFolder(baseName, parentFolderId);
     productParentFolderId = productFolderResult.folder.id;
     productFolderId = productFolderResult.folder.id; // サブフォルダなし
@@ -4058,7 +4061,7 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
   const rawVideos = productData.videos || [];
   const videoThumbs = productData.videoThumbnails || [];
   const totalMedia = productData.images.length + aplusImgUrls.length + rawVideos.length;
-  log(`[${productId}][${modeLabel}] メディアをアップロード中...（画像: ${productData.images.length}枚${aplusImgUrls.length > 0 ? ` + A+: ${aplusImgUrls.length}枚` : ''}${rawVideos.length > 0 ? ` + 動画: ${rawVideos.length}件` : ''}）`, '', 'product');
+  log(`[${productId}]${modeLabel} メディアをアップロード中...（画像: ${productData.images.length}枚${aplusImgUrls.length > 0 ? ` + A+: ${aplusImgUrls.length}枚` : ''}${rawVideos.length > 0 ? ` + 動画: ${rawVideos.length}件` : ''}）`, '', 'product');
 
   let processedMedia = 0;
 
@@ -4274,7 +4277,7 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
   }
 
   // 6. 軽量JSONを生成（画像バイナリなし、メタデータのみ）
-  log(`[${productId}][${modeLabel}] JSONを保存中...`, '', 'product');
+  log(`[${productId}]${modeLabel} JSONを保存中...`, '', 'product');
   forwardToAll({
     action: 'productInfoProgress',
     progress: { phase: 'upload', productId }
@@ -4308,7 +4311,7 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
 
   const totalImageCount = imageMetadata.length + aplusImageMetadata.length;
   const savedVideoCount = videoMetadata.filter(v => v.saved).length;
-  log(`[${productId}][${modeLabel}] 保存完了（画像: ${totalImageCount}枚, 動画: ${savedVideoCount}/${videoMetadata.length}件）`, 'success', 'product');
+  log(`[${productId}]${modeLabel} 保存完了（画像: ${totalImageCount}枚, 動画: ${savedVideoCount}/${videoMetadata.length}件）`, 'success', 'product');
 
   return {
     success: true,
@@ -4415,7 +4418,7 @@ async function startBatchProductCollection(items) {
         displayId = asin;
       }
 
-      log(`[${displayId}] (${i + 1}/${items.length}) PC版を収集中...`, '', 'product');
+      log(`[${displayId}] (${i + 1}/${items.length}) ${isRakutenUrl ? 'PC版を' : ''}収集中...`, '', 'product');
 
       try {
         // --- PC版の収集 ---
