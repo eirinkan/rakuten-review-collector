@@ -3204,13 +3204,27 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // フォルダ検索
+    // フォルダ検索（現在のフォルダ配下をローカルフィルタリング）
+    // Google Drive APIのname containsは前方一致のみのため、
+    // サブフォルダ一覧を取得してクライアント側で部分一致検索する
     function searchFolders(query) {
       listEl.innerHTML = '<div class="fp-loading">検索中...</div>';
       selectedFolder = null;
-      selectBtn.disabled = true;
+      selectBtn.disabled = false;
 
-      const msg = { action: 'searchDriveFolders', query };
+      const lowerQuery = query.toLowerCase();
+
+      // キャッシュがあればそこからフィルタ
+      const cacheKey = `list:${currentParentId}:${currentDriveId || ''}`;
+      const cached = getCached(cacheKey);
+      if (cached) {
+        const filtered = cached.filter(f => f.name.toLowerCase().includes(lowerQuery));
+        renderFolders(filtered, true);
+        return;
+      }
+
+      // キャッシュがなければAPIで取得してからフィルタ
+      const msg = { action: 'getDriveFolders', parentId: currentParentId };
       if (currentDriveId) msg.driveId = currentDriveId;
 
       chrome.runtime.sendMessage(msg, (response) => {
@@ -3219,10 +3233,12 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
         if (!response || !response.success) {
-          listEl.innerHTML = `<div class="fp-empty">エラー: ${escapeHtml(response?.error || '検索に失敗しました')}</div>`;
+          listEl.innerHTML = `<div class="fp-empty">エラー: ${escapeHtml(response?.error || '取得に失敗しました')}</div>`;
           return;
         }
-        renderFolders(response.folders, true);
+        setCache(cacheKey, response.folders);
+        const filtered = response.folders.filter(f => f.name.toLowerCase().includes(lowerQuery));
+        renderFolders(filtered, true);
       });
     }
 
@@ -3331,7 +3347,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       isSearchMode = true;
-      breadcrumbs.innerHTML = '<span class="fp-crumb current">検索結果</span>';
 
       searchTimeout = setTimeout(() => {
         searchFolders(query);
