@@ -903,6 +903,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: true });
       return false;
 
+    // ===== 商品情報JSONダウンロード =====
+    case 'downloadProductInfoJson':
+      downloadProductInfoAsJson(message.tabId)
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'startBatchJsonDownload':
+      startBatchJsonDownload(message.items)
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'getBatchJsonProgress':
+      sendResponse({ progress: batchJsonProgress });
+      return false;
+
+    case 'cancelBatchJsonDownload':
+      batchJsonCancelled = true;
+      sendResponse({ success: true });
+      return false;
+
     // ===== フォルダピッカー（Google Drive） =====
     case 'getDriveFolders':
       getDriveFolders(message.parentId, message.driveId)
@@ -3759,7 +3781,7 @@ async function uploadMediaToDrive(token, folderId, fileName, blob, mimeType) {
     body.set(closingPart, metadataPart.length + blobBuffer.byteLength);
 
     const response = await fetch(
-      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name',
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name&supportsAllDrives=true',
       {
         method: 'POST',
         headers: {
@@ -3779,7 +3801,7 @@ async function uploadMediaToDrive(token, folderId, fileName, blob, mimeType) {
   } else {
     // 大きいファイル: resumable upload
     const initResponse = await fetch(
-      'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name',
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name&supportsAllDrives=true',
       {
         method: 'POST',
         headers: {
@@ -3876,7 +3898,7 @@ async function simpleUploadToDrive(token, folderId, fileName, blob) {
     closeDelimiter;
 
   const response = await fetch(
-    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true',
     {
       method: 'POST',
       headers: {
@@ -3907,7 +3929,7 @@ async function resumableUploadToDrive(token, folderId, fileName, blob) {
   };
 
   const initResponse = await fetch(
-    'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable',
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true',
     {
       method: 'POST',
       headers: {
@@ -4777,7 +4799,8 @@ async function createDriveFolder(name, parentId = 'root') {
     throw new Error('フォルダ名を入力してください');
   }
 
-  const response = await driveApiFetch('https://www.googleapis.com/drive/v3/files', {
+  // 共有ドライブでもマイドライブでも動作するようsupportsAllDrivesを常に付与
+  const response = await driveApiFetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -4813,7 +4836,7 @@ async function getDriveFolderPath(folderId) {
   let currentId = folderId;
 
   for (let i = 0; i < 10; i++) {
-    const params = new URLSearchParams({ fields: 'id,name,parents' });
+    const params = new URLSearchParams({ fields: 'id,name,parents', supportsAllDrives: 'true' });
     const response = await driveApiFetch(
       `https://www.googleapis.com/drive/v3/files/${currentId}?${params}`
     );
@@ -4832,4 +4855,278 @@ async function getDriveFolderPath(folderId) {
   }
 
   return { success: true, path };
+}
+
+// ===== 商品情報JSONダウンロード（base64画像埋め込み） =====
+
+// バッチJSONダウンロード用の状態管理
+let batchJsonProgress = { total: 0, current: 0, currentAsin: '' };
+let batchJsonCancelled = false;
+
+/**
+ * 価格文字列から数値を抽出
+ */
+function parsePriceToNumber(priceStr) {
+  if (!priceStr) return null;
+  const match = priceStr.replace(/,/g, '').match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+/**
+ * 評価文字列から数値を抽出
+ */
+function parseRatingToNumber(ratingStr) {
+  if (!ratingStr) return null;
+  const match = ratingStr.match(/([\d.]+)/);
+  return match ? parseFloat(match[1]) : null;
+}
+
+/**
+ * レビュー件数文字列から数値を抽出
+ */
+function parseReviewCountToNumber(countStr) {
+  if (!countStr) return null;
+  const match = countStr.replace(/,/g, '').match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+/**
+ * 商品情報をJSONファイル（base64画像埋め込み）としてダウンロード
+ * @param {number} tabId - 商品ページのタブID
+ * @returns {Promise<{success: boolean, asin: string, fileName: string}>}
+ */
+async function downloadProductInfoAsJson(tabId) {
+  // 1. content scriptから商品情報を取得
+  log('ページから情報を読み取り中...', '', 'product');
+  forwardToAll({ action: 'productJsonProgress', progress: { phase: 'collecting' } });
+
+  let productData;
+  const maxRetries = 2;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, { action: 'collectProductInfo' });
+      if (!response || !response.success) {
+        throw new Error(response?.error || '商品情報の取得に失敗しました');
+      }
+      productData = response.data;
+      break;
+    } catch (error) {
+      if (attempt < maxRetries && error.message.includes('message channel closed')) {
+        console.warn('[JSON DL] メッセージチャンネル切断、リトライ...');
+        await sleep(2000);
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  const asin = productData.asin;
+  if (!asin) throw new Error('ASINを取得できませんでした');
+
+  // 2. 画像をbase64に変換
+  const images = productData.images || [];
+  const aplusImageUrls = productData.aplusImages || [];
+  const totalImages = images.length + aplusImageUrls.length;
+  let processedImages = 0;
+
+  let mainImageBase64 = '';
+  const subImagesBase64 = [];
+  const aplusImagesBase64 = [];
+
+  // 商品画像（メイン + サブ）
+  for (const img of images) {
+    const url = typeof img === 'string' ? img : img.url;
+    const type = typeof img === 'string' ? 'gallery' : (img.type || 'gallery');
+    processedImages++;
+
+    forwardToAll({
+      action: 'productJsonProgress',
+      progress: { phase: 'images', current: processedImages, total: totalImages, productId: asin }
+    });
+
+    const result = await fetchImageAsBase64(url);
+    if (result) {
+      const dataUri = `data:${result.mimeType};base64,${result.base64}`;
+      if (type === 'main' && !mainImageBase64) {
+        mainImageBase64 = dataUri;
+      } else {
+        subImagesBase64.push(dataUri);
+      }
+    }
+  }
+
+  // A+コンテンツ画像
+  for (const url of aplusImageUrls) {
+    processedImages++;
+    forwardToAll({
+      action: 'productJsonProgress',
+      progress: { phase: 'images', current: processedImages, total: totalImages, productId: asin }
+    });
+
+    const result = await fetchImageAsBase64(url);
+    if (result) {
+      aplusImagesBase64.push(`data:${result.mimeType};base64,${result.base64}`);
+    }
+  }
+
+  // 3. 仕様通りのJSON構造を構築
+  const jsonData = {
+    asin: asin,
+    title: productData.title || '',
+    brand: productData.brand || '',
+    price: parsePriceToNumber(productData.price),
+    original_price: parsePriceToNumber(productData.listPrice),
+    rating: parseRatingToNumber(productData.rating),
+    review_count: parseReviewCountToNumber(productData.reviewCount),
+    bullet_points: productData.bullets || [],
+    description: productData.description || '',
+    aplus_text: productData.aplusText || '',
+    categories: productData.categories || [],
+    ranking: productData.ranking || '',
+    variations: productData.structuredVariations || [],
+    images: {
+      main: mainImageBase64,
+      sub: subImagesBase64,
+      aplus: aplusImagesBase64
+    },
+    url: productData.url || `https://www.amazon.co.jp/dp/${asin}`,
+    collected_at: new Date().toISOString()
+  };
+
+  // 4. JSONファイルをダウンロード
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  const fileName = `${asin}_${dateStr}.json`;
+
+  forwardToAll({
+    action: 'productJsonProgress',
+    progress: { phase: 'download', productId: asin }
+  });
+
+  const jsonString = JSON.stringify(jsonData, null, 2);
+  const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8' });
+  const blobUrl = URL.createObjectURL(blob);
+
+  await chrome.downloads.download({
+    url: blobUrl,
+    filename: fileName,
+    saveAs: false
+  });
+
+  // Blob URLの後片付け
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+
+  forwardToAll({
+    action: 'productJsonProgress',
+    progress: { phase: 'done', productId: asin, fileName }
+  });
+
+  log(`[${asin}] JSONダウンロード完了: ${fileName} (画像: ${totalImages}枚)`, '', 'product');
+
+  return { success: true, asin, fileName };
+}
+
+/**
+ * 複数商品のJSONを一括ダウンロード
+ * @param {string[]} items - ASINまたはURLのリスト
+ */
+async function startBatchJsonDownload(items) {
+  if (!items || items.length === 0) {
+    throw new Error('商品が入力されていません');
+  }
+
+  batchJsonCancelled = false;
+  batchJsonProgress = { total: items.length, current: 0, currentAsin: '' };
+
+  forwardToAll({
+    action: 'batchJsonProgress',
+    progress: batchJsonProgress
+  });
+
+  // 収集用ウィンドウを作成
+  const win = await chrome.windows.create({
+    url: 'about:blank',
+    width: 1280,
+    height: 800,
+    focused: true
+  });
+  const windowId = win.id;
+  const tabId = win.tabs[0].id;
+
+  try {
+    for (let i = 0; i < items.length; i++) {
+      if (batchJsonCancelled) {
+        log('一括JSON収集がキャンセルされました', '', 'product');
+        break;
+      }
+
+      const item = items[i];
+      // ASINからURLを生成（URLでない場合）
+      const url = item.includes('http') ? item : `https://www.amazon.co.jp/dp/${item}`;
+      const asinMatch = url.match(/\/dp\/([A-Z0-9]{10})/i) || url.match(/\/gp\/product\/([A-Z0-9]{10})/i);
+      const asin = asinMatch ? asinMatch[1].toUpperCase() : item;
+
+      batchJsonProgress.current = i + 1;
+      batchJsonProgress.currentAsin = asin;
+      forwardToAll({
+        action: 'batchJsonProgress',
+        progress: batchJsonProgress
+      });
+
+      log(`[${i + 1}/${items.length}] ${asin} を処理中...`, '', 'product');
+
+      try {
+        // タブでページを開く
+        await chrome.tabs.update(tabId, { url });
+
+        // ページ読み込みを待機
+        await new Promise((resolve) => {
+          const listener = (updatedTabId, info) => {
+            if (updatedTabId === tabId && info.status === 'complete') {
+              chrome.tabs.onUpdated.removeListener(listener);
+              resolve();
+            }
+          };
+          chrome.tabs.onUpdated.addListener(listener);
+          // タイムアウト
+          setTimeout(() => {
+            chrome.tabs.onUpdated.removeListener(listener);
+            resolve();
+          }, 30000);
+        });
+
+        // ボット対策: ページ遷移前のランダムウェイト
+        const waitTime = Math.max(1500, Math.min(-1500 * Math.log(1 - Math.random()), 8000));
+        await sleep(waitTime);
+
+        // JSONダウンロード
+        await downloadProductInfoAsJson(tabId);
+
+      } catch (error) {
+        log(`[${asin}] エラー: ${error.message}`, 'error', 'product');
+      }
+
+      // 次の商品への待機（ボット対策）
+      if (i < items.length - 1) {
+        const interval = Math.max(2000, Math.min(-2000 * Math.log(1 - Math.random()), 10000));
+        await sleep(interval);
+      }
+    }
+  } finally {
+    // ウィンドウを閉じる
+    try {
+      await chrome.windows.remove(windowId);
+    } catch (e) {
+      // ウィンドウが既に閉じられている場合
+    }
+  }
+
+  batchJsonProgress.currentAsin = '';
+  forwardToAll({
+    action: 'batchJsonProgress',
+    progress: { ...batchJsonProgress, phase: 'done' }
+  });
+
+  log(`一括JSON収集完了: ${batchJsonProgress.current}/${batchJsonProgress.total}件`, '', 'product');
+  return { success: true, total: items.length, completed: batchJsonProgress.current };
 }
