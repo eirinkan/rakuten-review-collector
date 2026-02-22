@@ -2917,7 +2917,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateBatchProductProgress(progress) {
     if (!progress) return;
 
-    const { isRunning, completed, failed } = progress;
+    const { isRunning } = progress;
 
     // 完了時のUI更新
     if (!isRunning) {
@@ -2930,29 +2930,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       if (cancelBatchProductBtn) cancelBatchProductBtn.style.display = 'none';
 
-      // 成功した商品をキューから削除
-      if (completed) {
-        completed.forEach(item => {
-          // id（ASIN or itemSlug）またはasinでキューから検索
-          const identifier = item.id || item.asin;
-          let idx = batchProductQueue.findIndex(q => {
-            if (typeof q === 'string') {
-              // 楽天URLの場合はitemSlugを含むか確認
-              if (q.includes('item.rakuten.co.jp') && item.source === 'rakuten') {
-                return q.includes(identifier);
-              }
-              return q === identifier;
-            }
-            return false;
-          });
-          if (idx !== -1) batchProductQueue.splice(idx, 1);
-        });
-      }
-      chrome.storage.local.set({ batchProductQueue: [...batchProductQueue] });
-      renderBatchProductQueue();
+      // キューはbackground.jsが管理済み。ストレージから読み直すだけ
+      loadBatchProductQueue();
 
-      // 最終同期は不要（appendLogメッセージで即時受信済み）
-      // ただしページ復帰時の安全策として、少し遅延後にカウンターだけ同期
+      // ページ復帰時の安全策として、少し遅延後にカウンターだけ同期
       setTimeout(() => {
         chrome.storage.local.get(['productLogs'], (result) => {
           _lastPolledProductLogCount = (result.productLogs || []).length;
