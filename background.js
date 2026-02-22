@@ -4320,6 +4320,24 @@ function getSectionDescription(section, order) {
 }
 
 /**
+ * 成功した商品をbatchProductQueueから削除
+ */
+async function removeFromBatchProductQueue(identifier, isRakuten = false) {
+  const result = await chrome.storage.local.get(['batchProductQueue']);
+  const queue = result.batchProductQueue || [];
+  const idx = queue.findIndex(q => {
+    if (typeof q !== 'string') return false;
+    if (isRakuten && q.includes('item.rakuten.co.jp')) return q.includes(identifier);
+    return q === identifier;
+  });
+  if (idx !== -1) {
+    queue.splice(idx, 1);
+    await chrome.storage.local.set({ batchProductQueue: queue });
+    forwardToAll({ action: 'batchProductQueueUpdated' });
+  }
+}
+
+/**
  * 商品リストからバッチで商品情報を収集（Amazon ASIN / 楽天URLの両方に対応）
  * @param {string[]} items - ASINまたは商品URLのリスト
  */
@@ -4428,6 +4446,9 @@ async function startBatchProductCollection(items) {
           title: desktopResult.title,
           fileName: desktopResult.fileName
         });
+
+        // 成功した商品をキューから即時削除
+        await removeFromBatchProductQueue(displayId, isRakutenUrl);
       } catch (error) {
         console.error(`[商品情報] ${displayId} エラー:`, error);
         batchProductProgress.failed.push({ id: displayId, error: error.message });
