@@ -4095,6 +4095,7 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
       if (r) imageMetadata.push(r);
       processedMedia++;
     }
+    log(`[${productId}]${modeLabel} メディア ${processedMedia}/${totalMedia}`, '', 'product');
     forwardToAll({ action: 'productInfoProgress', progress: { phase: 'images', current: processedMedia, total: totalMedia, productId } });
   }
 
@@ -4124,6 +4125,7 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
         if (r) aplusImageMetadata.push(r);
         processedMedia++;
       }
+      log(`[${productId}]${modeLabel} メディア ${processedMedia}/${totalMedia}`, '', 'product');
       forwardToAll({ action: 'productInfoProgress', progress: { phase: 'images', current: processedMedia, total: totalMedia, productId } });
     }
   }
@@ -4135,6 +4137,7 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
     for (const video of rawVideos) {
       videoOrder++;
       processedMedia++;
+      log(`[${productId}]${modeLabel} メディア ${processedMedia}/${totalMedia}`, '', 'product');
 
       // HLSストリーミング（m3u8）はダウンロード不可
       if (video.type === 'hls') {
