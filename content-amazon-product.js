@@ -433,6 +433,139 @@
   }
 
   /**
+   * ランキング情報を収集
+   * 「Amazon 売れ筋ランキング」からカテゴリ内順位を取得
+   */
+  function collectRanking() {
+    // 方法1: 商品詳細テーブル内の「Amazon 売れ筋ランキング」行
+    const detailBullets = document.querySelectorAll('#detailBulletsWrapper_feature_div .a-list-item, #productDetails_detailBullets_sections1 tr, #detailBullets_feature_div .a-list-item');
+    for (const item of detailBullets) {
+      const text = item.textContent || '';
+      if (text.includes('売れ筋ランキング') || text.includes('Best Sellers Rank')) {
+        // テキストからランキング情報を抽出（改行・空白を正規化）
+        const cleaned = text.replace(/\s+/g, ' ').trim();
+        // 例: "Amazon 売れ筋ランキング: - 15位ゴミ箱"
+        const rankMatch = cleaned.match(/[\-–]\s*(\d[\d,]*)\s*位\s*(.+?)(?:\s*[\(（]|$)/);
+        if (rankMatch) {
+          return `${rankMatch[2].trim()}: ${rankMatch[1]}位`;
+        }
+        // フォールバック: 「#数字 カテゴリ名」形式
+        const hashMatch = cleaned.match(/#([\d,]+)\s+(?:in\s+)?(.+?)(?:\s*[\(（]|$)/);
+        if (hashMatch) {
+          return `${hashMatch[2].trim()}: ${hashMatch[1]}位`;
+        }
+        // 最終フォールバック: 行全体を返す（「Amazon 売れ筋ランキング: 」以降）
+        const afterLabel = cleaned.replace(/.*(?:売れ筋ランキング|Best Sellers Rank)[：:]\s*/, '').trim();
+        if (afterLabel) return afterLabel;
+      }
+    }
+
+    // 方法2: productDetails テーブル
+    const rows = document.querySelectorAll('#productDetails_detailBullets_sections1 tr, #detailBulletsWrapper_feature_div tr');
+    for (const row of rows) {
+      const th = row.querySelector('th');
+      const td = row.querySelector('td');
+      if (th && td) {
+        const label = th.textContent.trim();
+        if (label.includes('売れ筋ランキング') || label.includes('Best Sellers Rank')) {
+          const rankText = td.textContent.replace(/\s+/g, ' ').trim();
+          const match = rankText.match(/(\d[\d,]*)\s*位\s*(.+?)(?:\s*[\(（]|$)/);
+          if (match) return `${match[2].trim()}: ${match[1]}位`;
+          return rankText;
+        }
+      }
+    }
+
+    return '';
+  }
+
+  /**
+   * 構造化バリエーション情報を収集（type + options形式）
+   * PC版: #twister内の各次元（color, size等）
+   * スマホ版: #inline-twister内
+   */
+  function collectStructuredVariations() {
+    const result = [];
+    const mobile = isMobilePage();
+
+    if (mobile) {
+      // スマホ版: inline-twister-row-{dimension} を探す
+      const rows = document.querySelectorAll('[id^="inline-twister-row-"]');
+      for (const row of rows) {
+        const labelEl = row.querySelector('.a-form-label, .inline-twister-dim-title-value-truncate');
+        let type = '';
+        if (labelEl) {
+          type = labelEl.textContent.replace(/[：:]/g, '').trim();
+        } else {
+          // IDから推測 (e.g., inline-twister-row-color_name → カラー)
+          const id = row.id || '';
+          if (id.includes('color')) type = 'カラー';
+          else if (id.includes('size')) type = 'サイズ';
+          else if (id.includes('style')) type = 'スタイル';
+          else if (id.includes('pattern')) type = 'パターン';
+        }
+        if (!type) continue;
+
+        const options = [];
+        const buttons = row.querySelectorAll('.a-button-text, .swatch-title-text, .swatch-title-text-display');
+        for (const btn of buttons) {
+          const text = btn.textContent.trim()
+            .replace(/[￥¥][\d,]+.*$/, '')
+            .replace(/在庫.*$/, '')
+            .trim();
+          if (text && !options.includes(text)) options.push(text);
+        }
+        if (options.length > 0) result.push({ type, options });
+      }
+    } else {
+      // PC版: #twister内の各 .a-row を探す
+      const twisterRows = document.querySelectorAll('#twister .a-row, #variation_color_name, #variation_size_name, #variation_style_name, #variation_pattern_name');
+      const seen = new Set();
+      for (const row of twisterRows) {
+        const labelEl = row.querySelector('.a-form-label, label.a-form-label');
+        let type = '';
+        if (labelEl) {
+          type = labelEl.textContent.replace(/[：:]/g, '').trim();
+        } else {
+          const id = row.id || '';
+          if (id.includes('color')) type = 'カラー';
+          else if (id.includes('size')) type = 'サイズ';
+          else if (id.includes('style')) type = 'スタイル';
+          else if (id.includes('pattern')) type = 'パターン';
+        }
+        if (!type || seen.has(type)) continue;
+        seen.add(type);
+
+        const options = [];
+        // ボタン形式のバリエーション
+        const buttons = row.querySelectorAll('.a-button-text');
+        for (const btn of buttons) {
+          const nameEl = btn.querySelector('.swatch-title-text, .swatch-title-text-display');
+          const text = nameEl ? nameEl.textContent.trim() : btn.textContent.trim();
+          const clean = text
+            .replace(/[￥¥][\d,]+.*$/, '')
+            .replace(/在庫.*$/, '')
+            .replace(/クリックすると.*$/, '')
+            .trim();
+          if (clean && !options.includes(clean)) options.push(clean);
+        }
+        // ドロップダウン形式
+        const select = row.querySelector('select');
+        if (select && options.length === 0) {
+          const opts = select.querySelectorAll('option');
+          for (const opt of opts) {
+            const val = opt.textContent.trim();
+            if (val && !val.includes('選択') && !options.includes(val)) options.push(val);
+          }
+        }
+        if (options.length > 0) result.push({ type, options });
+      }
+    }
+
+    return result;
+  }
+
+  /**
    * 技術仕様を収集
    */
   function collectTechSpecs() {
@@ -607,6 +740,12 @@
         .trim();
     }).filter(t => t.length > 0);
 
+    // 構造化バリエーション（type + options形式）
+    const structuredVariations = collectStructuredVariations();
+
+    // ランキング情報
+    const ranking = collectRanking();
+
     // 画像URL一覧
     const images = collectImageUrls();
 
@@ -626,7 +765,9 @@
       categories: categories.length > 0 ? categories : undefined,
       rating: rating || undefined,
       reviewCount: reviewCount || undefined,
+      ranking: ranking || undefined,
       variations: variations.length > 0 ? variations : undefined,
+      structuredVariations: structuredVariations.length > 0 ? structuredVariations : undefined,
       bullets: bullets.length > 0 ? bullets : undefined,
       description: description || undefined,
       aplusText: aplusContent?.text || undefined,

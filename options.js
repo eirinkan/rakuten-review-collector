@@ -2821,43 +2821,70 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // キューの表示を更新
   function renderBatchProductQueue() {
-    if (batchProductCountEl) batchProductCountEl.textContent = batchProductQueue.length;
-    if (startBatchProductRunBtn) startBatchProductRunBtn.disabled = batchProductQueue.length === 0;
+    // ストレージから最新のキュー＋収集中アイテムを取得して描画
+    chrome.storage.local.get(['batchProductQueue', 'batchProductCollectingItem'], (result) => {
+      batchProductQueue = result.batchProductQueue || [];
+      const collectingItem = result.batchProductCollectingItem || null;
+      const totalCount = batchProductQueue.length + (collectingItem ? 1 : 0);
 
-    if (!batchProductList) return;
-    if (batchProductQueue.length === 0) {
-      batchProductList.innerHTML = '';
-      return;
-    }
+      if (batchProductCountEl) batchProductCountEl.textContent = totalCount;
+      if (startBatchProductRunBtn) startBatchProductRunBtn.disabled = totalCount === 0;
 
-    batchProductList.innerHTML = batchProductQueue.map((item, index) => {
-      const isRakuten = item.includes('item.rakuten.co.jp');
-      const badge = isRakuten
-        ? '<span class="source-badge source-rakuten">楽天</span>'
-        : '<span class="source-badge source-amazon">Amazon</span>';
-      const displayTitle = isRakuten
-        ? item.replace(/^https?:\/\/item\.rakuten\.co\.jp\//, '')
-        : item;
-      const displayUrl = isRakuten
-        ? item
-        : `https://www.amazon.co.jp/dp/${escapeHtml(item)}`;
-      return `
-      <div class="queue-item">
-        <div class="queue-item-info">
-          <div class="queue-item-title">${badge}${escapeHtml(displayTitle)}</div>
-          <div class="queue-item-url">${escapeHtml(displayUrl)}</div>
-        </div>
-        <button class="queue-item-remove" data-index="${index}">×</button>
-      </div>`;
-    }).join('');
+      if (!batchProductList) return;
+      if (totalCount === 0) {
+        batchProductList.innerHTML = '';
+        return;
+      }
 
-    // 削除ボタンのイベント
-    batchProductList.querySelectorAll('.queue-item-remove').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const idx = parseInt(btn.dataset.index, 10);
-        batchProductQueue.splice(idx, 1);
-        chrome.storage.local.set({ batchProductQueue: [...batchProductQueue] });
-        renderBatchProductQueue();
+      // 収集中アイテムを先頭に表示
+      let collectingHtml = '';
+      if (collectingItem) {
+        const isRakuten = collectingItem.includes('item.rakuten.co.jp');
+        const badge = isRakuten
+          ? '<span class="source-badge source-rakuten">楽天</span>'
+          : '<span class="source-badge source-amazon">Amazon</span>';
+        const displayTitle = isRakuten
+          ? collectingItem.replace(/^https?:\/\/item\.rakuten\.co\.jp\//, '')
+          : collectingItem;
+        collectingHtml = `
+        <div class="queue-item collecting">
+          <div class="queue-item-info">
+            <div class="queue-item-title">
+              <span class="collecting-badge">収集中</span>
+              ${badge}${escapeHtml(displayTitle)}
+            </div>
+          </div>
+        </div>`;
+      }
+
+      // 待機中アイテム
+      const waitingHtml = batchProductQueue.map((item, index) => {
+        const isRakuten = item.includes('item.rakuten.co.jp');
+        const badge = isRakuten
+          ? '<span class="source-badge source-rakuten">楽天</span>'
+          : '<span class="source-badge source-amazon">Amazon</span>';
+        const displayTitle = isRakuten
+          ? item.replace(/^https?:\/\/item\.rakuten\.co\.jp\//, '')
+          : item;
+        return `
+        <div class="queue-item">
+          <div class="queue-item-info">
+            <div class="queue-item-title">${badge}${escapeHtml(displayTitle)}</div>
+          </div>
+          <button class="queue-item-remove" data-index="${index}">×</button>
+        </div>`;
+      }).join('');
+
+      batchProductList.innerHTML = collectingHtml + waitingHtml;
+
+      // 削除ボタンのイベント
+      batchProductList.querySelectorAll('.queue-item-remove').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.dataset.index, 10);
+          batchProductQueue.splice(idx, 1);
+          chrome.storage.local.set({ batchProductQueue: [...batchProductQueue] });
+          renderBatchProductQueue();
+        });
       });
     });
   }
@@ -2869,10 +2896,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const items = [...batchProductQueue];
-
     // ローカルで即時ログ表示
-    addLog(`${items.length}件の商品情報収集を開始します...`, 'info', 'product');
+    addLog(`${batchProductQueue.length}件の商品情報収集を開始します...`, 'info', 'product');
 
     // ストレージポーリング開始（background.jsのログをリアルタイムで拾う）
     startProductLogPolling();
@@ -2882,10 +2907,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (cancelBatchProductBtn) cancelBatchProductBtn.style.display = 'block';
     if (batchProductStatus) batchProductStatus.textContent = '';
 
-    // バックグラウンドに一括収集を送信（Amazon・楽天両対応）
+    // バックグラウンドに一括収集を送信（background.jsがストレージからキューを読む）
     chrome.runtime.sendMessage({
-      action: 'startBatchProductCollection',
-      items
+      action: 'startBatchProductCollection'
     }, (response) => {
       if (response && !response.success) {
         stopProductLogPolling();
@@ -2927,7 +2951,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateBatchProductProgress(progress) {
     if (!progress) return;
 
-    const { isRunning, completed, failed } = progress;
+    const { isRunning } = progress;
 
     // 完了時のUI更新
     if (!isRunning) {
@@ -2940,29 +2964,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       if (cancelBatchProductBtn) cancelBatchProductBtn.style.display = 'none';
 
-      // 成功した商品をキューから削除
-      if (completed) {
-        completed.forEach(item => {
-          // id（ASIN or itemSlug）またはasinでキューから検索
-          const identifier = item.id || item.asin;
-          let idx = batchProductQueue.findIndex(q => {
-            if (typeof q === 'string') {
-              // 楽天URLの場合はitemSlugを含むか確認
-              if (q.includes('item.rakuten.co.jp') && item.source === 'rakuten') {
-                return q.includes(identifier);
-              }
-              return q === identifier;
-            }
-            return false;
-          });
-          if (idx !== -1) batchProductQueue.splice(idx, 1);
-        });
-      }
-      chrome.storage.local.set({ batchProductQueue: [...batchProductQueue] });
+      // キュー表示を更新（background.jsがshift方式で管理済み）
       renderBatchProductQueue();
 
-      // 最終同期は不要（appendLogメッセージで即時受信済み）
-      // ただしページ復帰時の安全策として、少し遅延後にカウンターだけ同期
+      // ページ復帰時の安全策として、少し遅延後にカウンターだけ同期
       setTimeout(() => {
         chrome.storage.local.get(['productLogs'], (result) => {
           _lastPolledProductLogCount = (result.productLogs || []).length;

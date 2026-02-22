@@ -711,8 +711,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showRankingMessage(`${response.addedCount}件追加、商品情報収集開始...`, 'success');
         // 追加分のみバッチ収集を開始（キュー全体ではなく今回追加した商品だけ）
         chrome.runtime.sendMessage({
-          action: 'startBatchProductCollection',
-          items: response.addedItems
+          action: 'startBatchProductCollection'
         }, (res) => {
           // 他のボタンは戻す
           startRankingBtn.disabled = false;
@@ -826,8 +825,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 商品情報収集開始
         if (productRes && productRes.success && productRes.addedItems && productRes.addedItems.length > 0) {
           chrome.runtime.sendMessage({
-            action: 'startBatchProductCollection',
-            items: productRes.addedItems
+            action: 'startBatchProductCollection'
           }, (res) => {
             if (res && !res.error) updateRankingProductUI(true);
           });
@@ -865,67 +863,51 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
-   * 商品情報を収集（キューに追加してからバッチ収集を開始）
+   * 商品情報を収集してJSONダウンロード（base64画像埋め込み）
    */
   async function collectProductInfo() {
     const productInfoBtn = document.getElementById('productInfoBtn');
     if (!productInfoBtn) return;
 
     productInfoBtn.disabled = true;
-    productInfoBtn.textContent = '追加中...';
+    productInfoBtn.textContent = '収集中...';
 
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
       const isAmazonPage = tab.url.includes('amazon.co.jp');
-      const isRakutenPage = tab.url.includes('item.rakuten.co.jp');
-
-      if (!isAmazonPage && !isRakutenPage) {
-        showMessage('商品ページを開いてください', 'error');
+      if (!isAmazonPage) {
+        showMessage('Amazon商品ページを開いてください', 'error');
         resetProductInfoBtn();
         return;
       }
 
-      // キュー用のアイテムを作成
-      let item;
-      if (isAmazonPage) {
-        const dpMatch = tab.url.match(/\/dp\/([A-Z0-9]{10})/i);
-        const gpMatch = tab.url.match(/\/gp\/product\/([A-Z0-9]{10})/i);
-        const asin = (dpMatch && dpMatch[1]) || (gpMatch && gpMatch[1]);
-        if (!asin) {
-          showMessage('ASINが取得できませんでした', 'error');
+      const dpMatch = tab.url.match(/\/dp\/([A-Z0-9]{10})/i);
+      const gpMatch = tab.url.match(/\/gp\/product\/([A-Z0-9]{10})/i);
+      const asin = (dpMatch && dpMatch[1]) || (gpMatch && gpMatch[1]);
+      if (!asin) {
+        showMessage('ASINが取得できませんでした', 'error');
+        resetProductInfoBtn();
+        return;
+      }
+
+      showMessage('商品情報を収集中...', 'success');
+
+      chrome.runtime.sendMessage({
+        action: 'downloadProductInfoJson',
+        tabId: tab.id
+      }, (res) => {
+        if (chrome.runtime.lastError) {
+          showMessage('エラー: ' + chrome.runtime.lastError.message, 'error');
           resetProductInfoBtn();
           return;
         }
-        item = asin.toUpperCase();
-      } else {
-        item = tab.url.split('?')[0];
-      }
-
-      // 商品キューに追加
-      chrome.storage.local.get(['batchProductQueue'], (result) => {
-        const queue = result.batchProductQueue || [];
-        const alreadyInQueue = queue.includes(item);
-
-        if (!alreadyInQueue) {
-          queue.push(item);
-          chrome.storage.local.set({ batchProductQueue: queue });
-          chrome.runtime.sendMessage({ action: 'batchProductQueueUpdated' });
+        if (res && res.success) {
+          showMessage(`JSONダウンロード完了: ${res.fileName}`, 'success');
+        } else {
+          showMessage(res?.error || '収集に失敗しました', 'error');
         }
-
-        // バッチ収集を開始（この1件だけ）
-        chrome.runtime.sendMessage({
-          action: 'startBatchProductCollection',
-          items: [item]
-        }, (res) => {
-          if (res && !res.error) {
-            productInfoBtn.textContent = '収集中...';
-            showMessage('商品情報の収集を開始しました', 'success');
-          } else {
-            showMessage(res?.error || '収集開始に失敗しました', 'error');
-            resetProductInfoBtn();
-          }
-        });
+        resetProductInfoBtn();
       });
     } catch (error) {
       showMessage('エラー: ' + error.message, 'error');
@@ -967,7 +949,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         break;
       case 'productInfoProgress': {
-        // 商品情報収集の進捗
+        // 商品情報収集の進捗（Google Drive版・レガシー）
         const progressBar = document.getElementById('productInfoProgressBar');
         const progressText = document.getElementById('productInfoProgressText');
         if (msg.progress) {
@@ -982,6 +964,24 @@ document.addEventListener('DOMContentLoaded', () => {
           } else if (msg.progress.phase === 'upload' && progressBar && progressText) {
             progressBar.style.width = '90%';
             progressText.textContent = 'JSONを保存中...';
+          }
+        }
+        break;
+      }
+      case 'productJsonProgress': {
+        // 商品情報JSON出力の進捗
+        const productInfoBtn = document.getElementById('productInfoBtn');
+        if (msg.progress && productInfoBtn) {
+          switch (msg.progress.phase) {
+            case 'collecting':
+              productInfoBtn.textContent = '情報取得中...';
+              break;
+            case 'images':
+              productInfoBtn.textContent = `画像取得中... ${msg.progress.current}/${msg.progress.total}`;
+              break;
+            case 'download':
+              productInfoBtn.textContent = 'ダウンロード中...';
+              break;
           }
         }
         break;
