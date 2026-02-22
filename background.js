@@ -4322,16 +4322,12 @@ function getSectionDescription(section, order) {
 }
 
 /**
- * 成功した商品をbatchProductQueueから削除
+ * 商品をbatchProductQueueから削除（キューに入っている元の値で完全一致検索）
  */
-async function removeFromBatchProductQueue(identifier, isRakuten = false) {
+async function removeFromBatchProductQueue(originalItem) {
   const result = await chrome.storage.local.get(['batchProductQueue']);
   const queue = result.batchProductQueue || [];
-  const idx = queue.findIndex(q => {
-    if (typeof q !== 'string') return false;
-    if (isRakuten && q.includes('item.rakuten.co.jp')) return q.includes(identifier);
-    return q === identifier;
-  });
+  const idx = queue.indexOf(originalItem);
   if (idx !== -1) {
     queue.splice(idx, 1);
     await chrome.storage.local.set({ batchProductQueue: queue });
@@ -4449,14 +4445,14 @@ async function startBatchProductCollection(items) {
           fileName: desktopResult.fileName
         });
 
-        // 成功した商品をキューから即時削除
-        await removeFromBatchProductQueue(displayId, isRakutenUrl);
+        // 成功した商品をキューから即時削除（元のキュー値で完全一致）
+        await removeFromBatchProductQueue(item);
       } catch (error) {
         console.error(`[商品情報] ${displayId} エラー:`, error);
         batchProductProgress.failed.push({ id: displayId, error: error.message });
         log(`[${displayId}] ${error.message}`, 'error', 'product');
         // 失敗した商品もキューから削除（ログに記録済みなので再試行はユーザー判断）
-        await removeFromBatchProductQueue(displayId, isRakutenUrl);
+        await removeFromBatchProductQueue(item);
       }
 
       batchProductProgress.current = i + 1;
