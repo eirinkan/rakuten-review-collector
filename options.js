@@ -1923,10 +1923,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function loadProductQueue(queueId) {
-    chrome.storage.local.get(['savedProductQueues'], (result) => {
+    chrome.storage.local.get(['savedProductQueues', 'batchProductQueue'], (result) => {
       const queues = result.savedProductQueues || [];
       const queue = queues.find(q => q.id === queueId);
       if (!queue) return;
+      // ストレージから最新のキューを取得してマージ
+      batchProductQueue = result.batchProductQueue || [];
       let addedCount = 0;
       for (const item of queue.items) {
         const value = item.url || item.asin;
@@ -1935,8 +1937,10 @@ document.addEventListener('DOMContentLoaded', () => {
           addedCount++;
         }
       }
-      renderBatchProductQueue();
-      addLog(`「${queue.name}」から${addedCount}件をキューに追加`, 'success', 'product');
+      chrome.storage.local.set({ batchProductQueue: [...batchProductQueue] }, () => {
+        renderBatchProductQueue();
+        addLog(`「${queue.name}」から${addedCount}件をキューに追加`, 'success', 'product');
+      });
     });
   }
 
