@@ -27,15 +27,12 @@ async function generateProductImagesPDF(images, options) {
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  // セクション定義
+  // セクション定義（楽天/Amazonで表示名を分ける）
+  const isAmazon = options.source === 'amazon';
   const sectionOrder = ['main', 'gallery', 'product', 'description', 'aplus'];
-  const sectionLabels = {
-    main: 'Thumbnail',
-    gallery: 'Flick Images',
-    product: 'Product Images',
-    description: 'LP',
-    aplus: 'A+ Content'
-  };
+  const sectionLabels = isAmazon
+    ? { main: 'Main Image', gallery: 'Sub Images', product: 'Product Images', description: 'Description Images', aplus: 'A+ Content' }
+    : { main: 'Thumbnail', gallery: 'Flick Images', product: 'Product Images', description: 'LP', aplus: 'A+ Content' };
 
   // 画像をセクション別にグループ化
   const groupedImages = {};

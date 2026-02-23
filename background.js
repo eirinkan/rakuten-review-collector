@@ -4215,7 +4215,7 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
         imageMetadata.push({
           order: r.order,
           section: r.section,
-          description: getSectionDescription(r.section, r.order),
+          description: getSectionDescription(r.section, r.order, isRakuten),
           originalUrl: r.originalUrl,
           mimeType: r.mimeType
         });
@@ -4337,13 +4337,20 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
     images: imageMetadata,
     aplusImages: aplusImageMetadata.length > 0 ? aplusImageMetadata : undefined,
     videos: videoMetadata.length > 0 ? videoMetadata : undefined,
-    sectionDescriptions: {
-      main: 'メイン画像 - 商品ページで最初に大きく表示される代表画像',
-      gallery: 'ギャラリー画像 - メイン画像の下に並ぶサムネイル画像群',
-      product: '商品画像 - ショップが掲載した商品関連画像',
-      description: '商品説明欄 - ページ下部のLP（ランディングページ）部分に掲載された画像',
-      aplus: 'A+コンテンツ - Amazonの拡張商品説明エリアの画像'
-    }
+    sectionDescriptions: isRakuten
+      ? {
+          main: 'サムネイル - 商品ページで最初に大きく表示される代表画像',
+          gallery: 'フリック画像 - サムネイルの下に並ぶ画像群',
+          product: '商品画像 - ショップが掲載した商品関連画像',
+          description: 'LP - ページ下部のランディングページ部分に掲載された画像'
+        }
+      : {
+          main: 'メイン画像 - 商品ページで最初に大きく表示される代表画像',
+          gallery: 'サブ画像 - メイン画像の下に並ぶ画像群',
+          product: '商品画像',
+          description: '商品説明画像',
+          aplus: 'A+コンテンツ - 拡張商品説明エリアの画像'
+        }
   };
 
   // undefinedキーを除去
@@ -4376,13 +4383,21 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
 /**
  * セクション名から説明文を生成
  */
-function getSectionDescription(section, order) {
-  const descriptions = {
-    main: 'メイン画像（商品ページで最初に表示される代表画像）',
-    gallery: `ギャラリー画像${order}枚目`,
-    product: `商品画像${order}枚目`,
-    description: '商品説明欄の画像（ページ下部のLP部分）'
-  };
+function getSectionDescription(section, order, isRakuten = true) {
+  const descriptions = isRakuten
+    ? {
+        main: 'サムネイル（代表画像）',
+        gallery: `フリック画像${order}枚目`,
+        product: `商品画像${order}枚目`,
+        description: `LP画像${order}枚目`
+      }
+    : {
+        main: 'メイン画像（代表画像）',
+        gallery: `サブ画像${order}枚目`,
+        product: `商品画像${order}枚目`,
+        description: `商品説明画像${order}枚目`,
+        aplus: `A+コンテンツ画像${order}枚目`
+      };
   return descriptions[section] || `画像${order}枚目`;
 }
 
