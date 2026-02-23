@@ -4,6 +4,9 @@
  * 楽天市場・Amazon両対応
  */
 
+// PDF生成ライブラリの読み込み
+importScripts('pdf-lib.min.js', 'pdf-generator.js');
+
 // ===== 収集項目の定義 =====
 // 楽天のフィールド定義（順序固定）
 const RAKUTEN_FIELD_DEFINITIONS = [
@@ -3965,15 +3968,143 @@ async function resumableUploadToDrive(token, folderId, fileName, blob) {
   return await uploadResponse.json();
 }
 
+// ===== PDF生成用: offscreenドキュメント管理 =====
+
+let offscreenCreated = false;
+
 /**
- * 商品情報を収集してGoogle Driveに保存（メディア分離形式）
- * - 画像/GIF/動画は個別ファイルとしてメディアサブフォルダに保存
- * - JSONにはテキスト + メディアメタデータ（LP構造情報）のみ保存
+ * offscreenドキュメントを作成（既に存在する場合はスキップ）
+ */
+async function ensureOffscreenDocument() {
+  if (offscreenCreated) return;
+  try {
+    // 既存のoffscreenドキュメントがあるか確認
+    const existingContexts = await chrome.runtime.getContexts({
+      contextTypes: ['OFFSCREEN_DOCUMENT']
+    });
+    if (existingContexts.length > 0) {
+      offscreenCreated = true;
+      return;
+    }
+  } catch (e) {
+    // getContexts未対応の古いChromeの場合は無視
+  }
+
+  try {
+    await chrome.offscreen.createDocument({
+      url: 'offscreen.html',
+      reasons: ['CANVAS'],
+      justification: 'WebP→JPEG変換と画像リサイズのためCanvasが必要'
+    });
+    offscreenCreated = true;
+  } catch (e) {
+    if (!e.message.includes('already exists')) {
+      throw e;
+    }
+    offscreenCreated = true;
+  }
+}
+
+/**
+ * offscreenドキュメントを閉じる
+ */
+async function closeOffscreenDocument() {
+  if (!offscreenCreated) return;
+  try {
+    await chrome.offscreen.closeDocument();
+  } catch (e) {
+    // 既に閉じている場合は無視
+  }
+  offscreenCreated = false;
+}
+
+/**
+ * 画像をPDF用に処理（WebP変換 / リサイズ）
+ * offscreenドキュメント経由でCanvas APIを使用
+ * @param {string} base64 - Base64エンコードされた画像データ
+ * @param {string} mimeType - 元のMIMEタイプ
+ * @returns {Promise<{base64: string, mimeType: string, width: number, height: number}>}
+ */
+async function processImageForPdf(base64, mimeType) {
+  await ensureOffscreenDocument();
+  const response = await chrome.runtime.sendMessage({
+    action: 'processImageForPdf',
+    imageBase64: base64,
+    mimeType: mimeType
+  });
+  if (response?.error) {
+    throw new Error(`画像処理エラー: ${response.error}`);
+  }
+  return response;
+}
+
+/**
+ * 画像URLをフェッチしてPDF埋め込み用のUint8Arrayに変換
+ * WebP画像は自動でJPEGに変換、幅1500px超は1200pxにリサイズ
+ * @param {string} imageUrl - 画像URL
+ * @returns {Promise<{data: Uint8Array, mimeType: string}|null>}
+ */
+async function fetchImageForPdf(imageUrl) {
+  try {
+    // 画像をBlobとして取得
+    const mediaResult = await fetchMediaAsBlob(imageUrl);
+    if (!mediaResult) return null;
+
+    const isWebP = mediaResult.mimeType === 'image/webp';
+    const isJpeg = mediaResult.mimeType === 'image/jpeg' || mediaResult.mimeType === 'image/jpg';
+    const isPng = mediaResult.mimeType === 'image/png';
+
+    // JPG/PNGでサイズが小さい場合はそのまま使用（offscreen不要）
+    // 500KB以下ならリサイズ不要と判断（ヒューリスティック）
+    if ((isJpeg || isPng) && mediaResult.size <= 500 * 1024) {
+      const arrayBuffer = await mediaResult.blob.arrayBuffer();
+      return { data: new Uint8Array(arrayBuffer), mimeType: mediaResult.mimeType };
+    }
+
+    // WebP or 大きい画像 → offscreenで処理
+    // Blob → base64に変換
+    const arrayBuffer = await mediaResult.blob.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+
+    // 大きい画像（JPG/PNG 500KB超）もoffscreenで処理（リサイズ判定のため）
+    if (isWebP || mediaResult.size > 500 * 1024) {
+      let base64 = '';
+      // Uint8Array → base64（チャンク分割でスタックオーバーフロー回避）
+      const chunkSize = 8192;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize);
+        base64 += String.fromCharCode.apply(null, chunk);
+      }
+      base64 = btoa(base64);
+
+      const processed = await processImageForPdf(base64, mediaResult.mimeType);
+
+      // base64 → Uint8Array
+      const processedBinary = atob(processed.base64);
+      const processedBytes = new Uint8Array(processedBinary.length);
+      for (let i = 0; i < processedBinary.length; i++) {
+        processedBytes[i] = processedBinary.charCodeAt(i);
+      }
+      return { data: processedBytes, mimeType: processed.mimeType };
+    }
+
+    // その他（GIF等のサポート外形式）→ そのまま返す（pdf-libで埋め込めないがエラーページで処理）
+    return { data: bytes, mimeType: mediaResult.mimeType };
+  } catch (error) {
+    console.warn(`[PDF] 画像取得/処理エラー: ${error.message} - ${imageUrl}`);
+    return null;
+  }
+}
+
+/**
+ * 商品情報を収集してGoogle Driveに保存（PDF形式）
+ * - 画像はPDFにまとめて保存（個別ファイルはアップロードしない）
+ * - 動画のサムネイルもPDFに含める
+ * - JSONにはテキスト + メディアメタデータのみ保存
  * @param {number} tabId - 対象タブのID
  */
 async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions = null) {
   const isMobile = mode === 'mobile';
-  const subFolderName = isMobile ? 'sp' : 'pc';
   // modeLabelはAmazon/楽天判定後に設定（Amazon: ラベルなし、楽天: PC版/スマホ版）
   let modeLabel = '';
   log('収集を開始します...', '', 'product');
@@ -4032,41 +4163,30 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
       ? `rakuten_${productData.itemSlug}_${dateStr}`
       : `amazon_${productData.asin}_${dateStr}`);
 
-  // 4. 商品フォルダを作成（楽天はpc/spサブフォルダ、Amazonはフォルダ直下）
-  let productParentFolderId; // 商品フォルダID（楽天: pcとspの親、Amazon: 保存先そのもの）
-  let productFolderId;       // 実際のファイル保存先
+  // 4. 商品フォルダを作成（サブフォルダなし、フラット構造）
+  let productFolderId; // 商品フォルダID（JSONとPDFの保存先）
   if (isMobile && mobileOptions?.parentFolderId) {
-    // 楽天スマホ版: 商品フォルダは既にPC版で作成済み → spサブフォルダを作成
-    productParentFolderId = mobileOptions.parentFolderId;
-    log(`[${productId}]${modeLabel} spフォルダを作成中...`, '', 'product');
-    const spFolderResult = await createDriveFolder(subFolderName, productParentFolderId);
-    productFolderId = spFolderResult.folder.id;
-  } else if (isRakuten) {
-    // 楽天PC版: 商品フォルダを新規作成 → pcサブフォルダを作成
-    log(`[${productId}]${modeLabel} 保存フォルダを作成中...`, '', 'product');
-    const productFolderResult = await createDriveFolder(baseName, parentFolderId);
-    productParentFolderId = productFolderResult.folder.id;
-    const pcFolderResult = await createDriveFolder(subFolderName, productParentFolderId);
-    productFolderId = pcFolderResult.folder.id;
+    // 楽天スマホ版: 商品フォルダは既にPC版で作成済み → 同じフォルダを使用
+    productFolderId = mobileOptions.parentFolderId;
   } else {
-    // Amazon: 商品フォルダを新規作成 → 直下に保存（PC/SP同一データ）
+    // 新規: 商品フォルダを作成
     log(`[${productId}]${modeLabel} 保存フォルダを作成中...`, '', 'product');
     const productFolderResult = await createDriveFolder(baseName, parentFolderId);
-    productParentFolderId = productFolderResult.folder.id;
-    productFolderId = productFolderResult.folder.id; // サブフォルダなし
+    productFolderId = productFolderResult.folder.id;
   }
 
-  // 5. 画像をダウンロード → Driveにアップロード（個別ファイル）
+  // 5. 画像をダウンロード → PDF生成 → Driveにアップロード
   const aplusImgUrls = isRakuten ? [] : (productData.aplusImages || []);
   const rawVideos = productData.videos || [];
   const videoThumbs = productData.videoThumbnails || [];
-  const totalMedia = productData.images.length + aplusImgUrls.length + rawVideos.length;
-  log(`[${productId}]${modeLabel} メディアをアップロード中...（画像: ${productData.images.length}枚${aplusImgUrls.length > 0 ? ` + A+: ${aplusImgUrls.length}枚` : ''}${rawVideos.length > 0 ? ` + 動画: ${rawVideos.length}件` : ''}）`, '', 'product');
+  const totalImages = productData.images.length + aplusImgUrls.length;
+  log(`[${productId}]${modeLabel} 画像を取得中...（${totalImages}枚）`, '', 'product');
 
-  let processedMedia = 0;
+  // --- 画像をフェッチしてPDF用データに変換（2件並列） ---
+  const pdfImages = []; // PDF埋め込み用: {data, mimeType, section, order, originalUrl}
+  const imageMetadata = []; // JSONメタデータ用
 
-  // --- 商品画像のアップロード（2件並列） ---
-  const imageMetadata = [];
+  // 商品画像
   const imgTasks = productData.images.map((img, i) => ({
     order: i + 1,
     url: typeof img === 'string' ? img : img.url,
@@ -4076,189 +4196,134 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
   for (let i = 0; i < imgTasks.length; i += 2) {
     const chunk = imgTasks.slice(i, i + 2);
     const results = await Promise.all(chunk.map(async (task) => {
-      const mediaResult = await fetchMediaAsBlob(task.url);
-      if (mediaResult) {
-        const ext = getExtensionFromMimeType(mediaResult.mimeType, task.url);
-        const fileName = `img_${String(task.order).padStart(2, '0')}_${task.section}.${ext}`;
-        try {
-          const uploaded = await uploadMediaToDrive(token, productFolderId, fileName, mediaResult.blob, mediaResult.mimeType);
-          return { order: task.order, section: task.section, description: getSectionDescription(task.section, task.order), fileName, originalUrl: task.url, mimeType: mediaResult.mimeType, driveFileId: uploaded.id };
-        } catch (uploadError) {
-          console.warn(`[商品情報] 画像アップロード失敗: ${uploadError.message} - ${fileName}`);
-          return { order: task.order, section: task.section, description: getSectionDescription(task.section, task.order), fileName, originalUrl: task.url, mimeType: mediaResult.mimeType, driveFileId: null, error: uploadError.message };
-        }
+      const imgData = await fetchImageForPdf(task.url);
+      if (imgData) {
+        return {
+          data: imgData.data,
+          mimeType: imgData.mimeType,
+          section: task.section,
+          order: task.order,
+          originalUrl: task.url
+        };
       }
       return null;
     }));
 
     for (const r of results) {
-      if (r) imageMetadata.push(r);
-      processedMedia++;
+      if (r) {
+        pdfImages.push(r);
+        imageMetadata.push({
+          order: r.order,
+          section: r.section,
+          description: getSectionDescription(r.section, r.order),
+          originalUrl: r.originalUrl,
+          mimeType: r.mimeType
+        });
+      }
     }
     const imgDone = Math.min(i + 2, imgTasks.length);
-    log(`[${productId}]${modeLabel} 画像 ${imgDone}/${imgTasks.length} アップロード中...`, '', 'product');
-    forwardToAll({ action: 'productInfoProgress', progress: { phase: 'images', current: processedMedia, total: totalMedia, productId } });
+    log(`[${productId}]${modeLabel} 画像 ${imgDone}/${imgTasks.length} 取得中...`, '', 'product');
+    forwardToAll({ action: 'productInfoProgress', progress: { phase: 'images', current: imgDone, total: totalImages, productId } });
   }
 
-  // --- A+コンテンツ画像のアップロード（Amazonのみ、2件並列） ---
+  // A+コンテンツ画像（Amazonのみ）
   const aplusImageMetadata = [];
   if (!isRakuten && aplusImgUrls.length > 0) {
     for (let i = 0; i < aplusImgUrls.length; i += 2) {
       const chunk = aplusImgUrls.slice(i, i + 2);
       const results = await Promise.all(chunk.map(async (imgUrl, j) => {
         const order = i + j + 1;
-        const mediaResult = await fetchMediaAsBlob(imgUrl);
-        if (mediaResult) {
-          const ext = getExtensionFromMimeType(mediaResult.mimeType, imgUrl);
-          const fileName = `aplus_${String(order).padStart(2, '0')}.${ext}`;
-          try {
-            const uploaded = await uploadMediaToDrive(token, productFolderId, fileName, mediaResult.blob, mediaResult.mimeType);
-            return { order, description: `A+コンテンツ画像${order}枚目`, fileName, originalUrl: imgUrl, mimeType: mediaResult.mimeType, driveFileId: uploaded.id };
-          } catch (uploadError) {
-            console.warn(`[商品情報] A+画像アップロード失敗: ${uploadError.message}`);
-            return { order, description: `A+コンテンツ画像${order}枚目`, fileName, originalUrl: imgUrl, mimeType: mediaResult.mimeType, driveFileId: null, error: uploadError.message };
-          }
+        const imgData = await fetchImageForPdf(imgUrl);
+        if (imgData) {
+          return {
+            data: imgData.data,
+            mimeType: imgData.mimeType,
+            section: 'aplus',
+            order,
+            originalUrl: imgUrl
+          };
         }
         return null;
       }));
 
       for (const r of results) {
-        if (r) aplusImageMetadata.push(r);
-        processedMedia++;
+        if (r) {
+          pdfImages.push(r);
+          aplusImageMetadata.push({
+            order: r.order,
+            description: `A+コンテンツ画像${r.order}枚目`,
+            originalUrl: r.originalUrl,
+            mimeType: r.mimeType
+          });
+        }
       }
       const aplusDone = Math.min(i + 2, aplusImgUrls.length);
-      log(`[${productId}]${modeLabel} A+画像 ${aplusDone}/${aplusImgUrls.length} アップロード中...`, '', 'product');
-      forwardToAll({ action: 'productInfoProgress', progress: { phase: 'images', current: processedMedia, total: totalMedia, productId } });
+      log(`[${productId}]${modeLabel} A+画像 ${aplusDone}/${aplusImgUrls.length} 取得中...`, '', 'product');
+      forwardToAll({ action: 'productInfoProgress', progress: { phase: 'images', current: imgTasks.length + aplusDone, total: totalImages, productId } });
     }
   }
 
-  // --- 動画のダウンロード試行 ---
+  // --- PDF生成 ---
+  let pdfFileName = null;
+  let pdfDriveFileId = null;
+  if (pdfImages.length > 0) {
+    log(`[${productId}]${modeLabel} PDF生成中...（${pdfImages.length}枚）`, '', 'product');
+    forwardToAll({ action: 'productInfoProgress', progress: { phase: 'pdf', productId } });
+
+    try {
+      const pdfBytes = await generateProductImagesPDF(pdfImages, {
+        productId,
+        source: isRakuten ? 'rakuten' : 'amazon',
+        baseName,
+        mode
+      });
+
+      // PDFファイル名: 楽天はPC/SP別、Amazonは_images
+      if (isRakuten) {
+        pdfFileName = `${baseName}_${isMobile ? 'sp' : 'pc'}.pdf`;
+      } else {
+        pdfFileName = `${baseName}_images.pdf`;
+      }
+
+      const pdfSizeMB = (pdfBytes.length / 1024 / 1024).toFixed(1);
+      log(`[${productId}]${modeLabel} PDFをアップロード中...（${pdfSizeMB}MB）`, '', 'product');
+      forwardToAll({ action: 'productInfoProgress', progress: { phase: 'upload', productId } });
+
+      const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const pdfUploaded = await uploadMediaToDrive(token, productFolderId, pdfFileName, pdfBlob, 'application/pdf');
+      pdfDriveFileId = pdfUploaded.id;
+
+      log(`[${productId}]${modeLabel} PDF保存完了（${pdfSizeMB}MB, ${pdfImages.length}枚）`, '', 'product');
+    } catch (pdfError) {
+      console.warn(`[商品情報] PDF生成/アップロードエラー: ${pdfError.message}`);
+      log(`[${productId}]${modeLabel} PDF生成に失敗（収集は続行）: ${pdfError.message}`, 'warning', 'product');
+    }
+  }
+
+  // offscreenドキュメントを閉じる（リソース解放）
+  await closeOffscreenDocument();
+
+  // --- 動画情報の記録（アップロードはせず、URLのみ記録） ---
   const videoMetadata = [];
   if (rawVideos.length > 0) {
     let videoOrder = 0;
     for (const video of rawVideos) {
       videoOrder++;
-      processedMedia++;
-      log(`[${productId}]${modeLabel} 動画 ${videoOrder}/${rawVideos.length} アップロード中...`, '', 'product');
-
-      // HLSストリーミング（m3u8）はダウンロード不可
-      if (video.type === 'hls') {
-        // サムネイルがあれば保存
-        let thumbFileName = null;
-        let thumbDriveId = null;
-        if (videoThumbs[videoOrder - 1]) {
-          const thumbResult = await fetchMediaAsBlob(videoThumbs[videoOrder - 1]);
-          if (thumbResult) {
-            thumbFileName = `video_${String(videoOrder).padStart(2, '0')}_thumb.jpg`;
-            try {
-              const thumbUploaded = await uploadMediaToDrive(token, productFolderId, thumbFileName, thumbResult.blob, thumbResult.mimeType);
-              thumbDriveId = thumbUploaded.id;
-            } catch (e) {
-              console.warn(`[商品情報] 動画サムネイルアップロード失敗: ${e.message}`);
-            }
-          }
-        }
-
-        videoMetadata.push({
-          order: videoOrder,
-          description: '商品紹介動画',
-          originalUrl: video.url,
-          saved: false,
-          reason: 'HLSストリーミングのためダウンロード不可',
-          thumbnailFileName: thumbFileName,
-          thumbnailDriveFileId: thumbDriveId
-        });
-        continue;
-      }
-
-      // blob: URLはダウンロード不可
-      if (video.url.startsWith('blob:')) {
-        let thumbFileName = null;
-        let thumbDriveId = null;
-        if (videoThumbs[videoOrder - 1]) {
-          const thumbResult = await fetchMediaAsBlob(videoThumbs[videoOrder - 1]);
-          if (thumbResult) {
-            thumbFileName = `video_${String(videoOrder).padStart(2, '0')}_thumb.jpg`;
-            try {
-              const thumbUploaded = await uploadMediaToDrive(token, productFolderId, thumbFileName, thumbResult.blob, thumbResult.mimeType);
-              thumbDriveId = thumbUploaded.id;
-            } catch (e) {
-              console.warn(`[商品情報] 動画サムネイルアップロード失敗: ${e.message}`);
-            }
-          }
-        }
-        videoMetadata.push({
-          order: videoOrder,
-          description: '商品紹介動画',
-          originalUrl: video.url,
-          saved: false,
-          reason: 'ストリーミング配信のためダウンロード不可',
-          thumbnailFileName: thumbFileName,
-          thumbnailDriveFileId: thumbDriveId
-        });
-        continue;
-      }
-
-      // MP4など直接ダウンロード可能な動画を試行
-      try {
-        const videoBlob = await fetchMediaAsBlob(video.url);
-        if (videoBlob && videoBlob.size > 1000) { // 1KB未満は不正なレスポンス
-          const ext = getExtensionFromMimeType(videoBlob.mimeType, video.url);
-          const fileName = `video_${String(videoOrder).padStart(2, '0')}.${ext}`;
-          const uploaded = await uploadMediaToDrive(token, productFolderId, fileName, videoBlob.blob, videoBlob.mimeType);
-
-          videoMetadata.push({
-            order: videoOrder,
-            description: '商品紹介動画',
-            fileName,
-            originalUrl: video.url,
-            driveFileId: uploaded.id,
-            saved: true
-          });
-        } else {
-          throw new Error('動画データが小さすぎます（不正なレスポンス）');
-        }
-      } catch (videoError) {
-        // ダウンロード失敗 → URLのみ記録 + サムネイル保存
-        let thumbFileName = null;
-        let thumbDriveId = null;
-        if (videoThumbs[videoOrder - 1]) {
-          const thumbResult = await fetchMediaAsBlob(videoThumbs[videoOrder - 1]);
-          if (thumbResult) {
-            thumbFileName = `video_${String(videoOrder).padStart(2, '0')}_thumb.jpg`;
-            try {
-              const thumbUploaded = await uploadMediaToDrive(token, productFolderId, thumbFileName, thumbResult.blob, thumbResult.mimeType);
-              thumbDriveId = thumbUploaded.id;
-            } catch (e) {
-              console.warn(`[商品情報] 動画サムネイルアップロード失敗: ${e.message}`);
-            }
-          }
-        }
-
-        videoMetadata.push({
-          order: videoOrder,
-          description: '商品紹介動画',
-          originalUrl: video.url,
-          saved: false,
-          reason: videoError.message,
-          thumbnailFileName: thumbFileName,
-          thumbnailDriveFileId: thumbDriveId
-        });
-      }
-
-      forwardToAll({
-        action: 'productInfoProgress',
-        progress: { phase: 'videos', current: processedMedia, total: totalMedia, productId }
+      videoMetadata.push({
+        order: videoOrder,
+        description: '商品紹介動画',
+        originalUrl: video.url,
+        type: video.type,
+        saved: false,
+        reason: video.type === 'hls' ? 'HLSストリーミングのためダウンロード不可' :
+                video.url.startsWith('blob:') ? 'ストリーミング配信のためダウンロード不可' :
+                'PDF形式のため動画は保存不可'
       });
     }
   }
 
   // 6. 軽量JSONを生成（画像バイナリなし、メタデータのみ）
   log(`[${productId}]${modeLabel} JSONを保存中...`, '', 'product');
-  forwardToAll({
-    action: 'productInfoProgress',
-    progress: { phase: 'upload', productId }
-  });
 
   // content scriptから取得した生データからimages/aplusImages/videosを除去してテキスト情報のみ残す
   const { images: _img, aplusImages: _aplus, videos: _vid, videoThumbnails: _vt, ...textData } = productData;
@@ -4266,11 +4331,12 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
   const jsonData = {
     ...textData,
     viewType: mode,
-    productFolderId: productParentFolderId,
+    productFolderId,
+    pdfFileName: pdfFileName || undefined,
+    pdfDriveFileId: pdfDriveFileId || undefined,
     images: imageMetadata,
     aplusImages: aplusImageMetadata.length > 0 ? aplusImageMetadata : undefined,
     videos: videoMetadata.length > 0 ? videoMetadata : undefined,
-    fileNamingRule: 'img_{連番}_{セクション}.{拡張子} / video_{連番}.{拡張子} / aplus_{連番}.{拡張子}',
     sectionDescriptions: {
       main: 'メイン画像 - 商品ページで最初に大きく表示される代表画像',
       gallery: 'ギャラリー画像 - メイン画像の下に並ぶサムネイル画像群',
@@ -4287,15 +4353,14 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
   const uploadResult = await uploadJsonToDrive(token, productFolderId, jsonFileName, cleanJsonData);
 
   const totalImageCount = imageMetadata.length + aplusImageMetadata.length;
-  const savedVideoCount = videoMetadata.filter(v => v.saved).length;
-  log(`[${productId}]${modeLabel} 保存完了（画像: ${totalImageCount}枚, 動画: ${savedVideoCount}/${videoMetadata.length}件）`, 'success', 'product');
+  log(`[${productId}]${modeLabel} 保存完了（画像PDF: ${totalImageCount}枚${pdfFileName ? '' : '（PDF生成失敗）'}）`, 'success', 'product');
 
   return {
     success: true,
     fileName: jsonFileName,
     fileId: uploadResult.id,
-    productFolderId: productParentFolderId,
-    parentFolderId: productParentFolderId,
+    productFolderId,
+    parentFolderId: productFolderId,
     baseName,
     productId,
     source: isRakuten ? 'rakuten' : 'amazon',
@@ -4303,7 +4368,7 @@ async function collectAndSaveProductInfo(tabId, mode = 'desktop', mobileOptions 
     imageCount: imageMetadata.length,
     aplusImageCount: aplusImageMetadata.length,
     videoCount: videoMetadata.length,
-    savedVideoCount,
+    pdfFileName,
     mode
   };
 }

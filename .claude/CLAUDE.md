@@ -1,4 +1,4 @@
-# レビュー収集 Chrome拡張 - プロジェクトルール
+# 収集 Chrome拡張 - プロジェクトルール
 
 ## デプロイルール
 
@@ -14,7 +14,7 @@
 1. **manifest.jsonのバージョンを更新**
 2. **ZIPファイルを作成**
    ```bash
-   zip -r レビュー収集_vX.X.X.zip manifest.json popup.html popup.js options.html options.js content.js content-amazon.js background.js icons/ -x "*.DS_Store"
+   zip -r 収集_vX.X.X.zip manifest.json popup.html popup.js options.html options.js content.js content-amazon.js content-amazon-product.js background.js pdf-lib.min.js pdf-generator.js offscreen.html offscreen.js icons/ -x "*.DS_Store"
    ```
 3. **Trelloカードに添付**
    - カード: https://trello.com/c/hQY7CJMD
@@ -23,8 +23,8 @@
      curl -X POST "https://api.trello.com/1/cards/hQY7CJMD/attachments" \
        -F "key=e0f41be83637fcefd7b041d67b9ba49a" \
        -F "token=ATTA61e53879b0a49029bf89e470749b6370b170e0255d5b8281fff87c59c0f3ad807E2A3474" \
-       -F "file=@レビュー収集_vX.X.X.zip" \
-       -F "name=レビュー収集_vX.X.X.zip"
+       -F "file=@収集_vX.X.X.zip" \
+       -F "name=収集_vX.X.X.zip"
      ```
 4. **カードの説明欄のバージョン番号を更新**
 5. **コメント欄に更新履歴とアップデート手順を追加**（必須）
