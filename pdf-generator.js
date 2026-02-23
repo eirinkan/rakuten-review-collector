@@ -30,11 +30,11 @@ async function generateProductImagesPDF(images, options) {
   // セクション定義
   const sectionOrder = ['main', 'gallery', 'product', 'description', 'aplus'];
   const sectionLabels = {
-    main: 'Main Image',
-    gallery: 'Gallery Images',
+    main: 'Thumbnail',
+    gallery: 'Flick Images',
     product: 'Product Images',
-    description: 'Description Images',
-    aplus: 'A+ Content Images'
+    description: 'LP',
+    aplus: 'A+ Content'
   };
 
   // 画像をセクション別にグループ化
