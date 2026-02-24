@@ -54,7 +54,7 @@ const AMAZON_FIELD_DEFINITIONS = [
 
 // デフォルトの収集項目
 const DEFAULT_RAKUTEN_FIELDS = ['rating', 'title', 'body', 'productUrl'];
-const DEFAULT_AMAZON_FIELDS = ['rating', 'title', 'body'];
+const DEFAULT_AMAZON_FIELDS = ['rating', 'title', 'body', 'productUrl'];
 
 /**
  * 選択されたフィールドからヘッダーとデータを生成

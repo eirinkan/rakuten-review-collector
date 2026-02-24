@@ -515,7 +515,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const rakutenFields = result.rakutenFields || defaultRakutenFields;
 
       // Amazonのデフォルト項目
-      const defaultAmazonFields = ['rating', 'title', 'body'];
+      const defaultAmazonFields = ['rating', 'title', 'body', 'productUrl'];
       const amazonFields = result.amazonFields || defaultAmazonFields;
 
       // 楽天のチェックボックスを更新
