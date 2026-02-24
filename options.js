@@ -2675,7 +2675,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // フォルダURL保存
   function saveProductInfoFolderUrl() {
     const url = productInfoFolderUrlInput ? productInfoFolderUrlInput.value.trim() : '';
-    if (url && !url.includes('drive.google.com/drive/folders/')) {
+    if (url && !url.match(/drive\.google\.com\/drive\/(u\/\d+\/)?folders\//)) {
       if (productInfoFolderUrlStatus) {
         showStatus(productInfoFolderUrlStatus, 'error', 'Google DriveのフォルダURLを入力してください');
       }
