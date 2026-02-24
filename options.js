@@ -135,6 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 商品情報収集（Drive）関連
   const productInfoFolderUrlInput = document.getElementById('productInfoFolderUrl');
   const productInfoFolderUrlStatus = document.getElementById('productInfoFolderUrlStatus');
+  const folderTitleEl = document.getElementById('folderTitle');
   const batchProductAsins = document.getElementById('batchProductAsins');
   const startBatchProductBtn = document.getElementById('startBatchProductBtn');  // 「追加」ボタン
   const startBatchProductRunBtn = document.getElementById('startBatchProductRunBtn');  // 「収集開始」ボタン
@@ -498,6 +499,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // 商品情報収集フォルダURL
       if (productInfoFolderUrlInput && result.productInfoFolderUrl) {
         productInfoFolderUrlInput.value = result.productInfoFolderUrl;
+        // フォルダ名を表示
+        fetchAndShowFolderTitle(result.productInfoFolderUrl, folderTitleEl, productInfoFolderUrlInput);
       }
       // Google Driveフォルダリンクの状態更新
       updateDriveFolderLink(result.productInfoFolderUrl);
@@ -1004,6 +1007,70 @@ document.addEventListener('DOMContentLoaded', () => {
     <path d="M14 2V8H20L14 2Z" fill="#8ED1B1"/>
     <path d="M8 13H16V14H8V13ZM8 15H16V16H8V15ZM8 17H13V18H8V17Z" fill="white"/>
   </svg>`;
+
+  // Google Driveフォルダアイコン（SVG）
+  const DRIVE_FOLDER_ICON_SVG = `<svg class="sheets-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M10 4H4C2.9 4 2 4.9 2 6V18C2 19.1 2.9 20 4 20H20C21.1 20 22 19.1 22 18V8C22 6.9 21.1 6 20 6H12L10 4Z" fill="#5f6368"/>
+  </svg>`;
+
+  // DriveフォルダURLからフォルダIDを抽出
+  function extractFolderId(url) {
+    if (!url) return '';
+    const match = url.match(/\/folders\/([a-zA-Z0-9-_]+)/);
+    return match ? match[1] : '';
+  }
+
+  // フォルダ名を取得して表示
+  async function fetchAndShowFolderTitle(url, titleEl, inputEl) {
+    if (!titleEl) return;
+
+    const setupClickHandler = () => {
+      titleEl.onclick = () => {
+        titleEl.classList.remove('show');
+        if (inputEl) {
+          inputEl.focus();
+          inputEl.select();
+        }
+      };
+    };
+
+    const folderId = extractFolderId(url);
+    if (!folderId) {
+      titleEl.classList.remove('show', 'loading', 'error');
+      titleEl.innerHTML = '';
+      return;
+    }
+
+    // ローディング表示
+    titleEl.classList.add('show', 'loading');
+    titleEl.classList.remove('error');
+    titleEl.innerHTML = '読み込み中...';
+    setupClickHandler();
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'getDriveFolderName',
+        folderId
+      });
+
+      if (response.success && response.name) {
+        titleEl.classList.add('show');
+        titleEl.classList.remove('loading', 'error');
+        titleEl.innerHTML = `${DRIVE_FOLDER_ICON_SVG}<span class="title-text">${response.name}</span><span class="edit-hint">クリックで編集</span>`;
+        setupClickHandler();
+      } else {
+        titleEl.classList.add('show', 'error');
+        titleEl.classList.remove('loading');
+        titleEl.innerHTML = (response.error || 'フォルダ名取得失敗') + '<span class="edit-hint">クリックで編集</span>';
+        setupClickHandler();
+      }
+    } catch (error) {
+      titleEl.classList.add('show', 'error');
+      titleEl.classList.remove('loading');
+      titleEl.innerHTML = 'フォルダ名取得失敗<span class="edit-hint">クリックで編集</span>';
+      setupClickHandler();
+    }
+  }
 
   // スプレッドシートのタイトルを取得して表示
   async function fetchAndShowSpreadsheetTitle(url, titleEl, inputEl) {
@@ -2612,6 +2679,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (productInfoFolderUrlStatus) {
         showStatus(productInfoFolderUrlStatus, 'error', 'Google DriveのフォルダURLを入力してください');
       }
+      // URLが無効な場合はフォルダ名表示をクリア
+      if (folderTitleEl) {
+        folderTitleEl.classList.remove('show', 'loading', 'error');
+        folderTitleEl.innerHTML = '';
+      }
       return;
     }
     chrome.storage.sync.set({ productInfoFolderUrl: url }, () => {
@@ -2624,6 +2696,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
       updateDriveFolderLink(url);
+      // フォルダ名を取得して表示
+      fetchAndShowFolderTitle(url, folderTitleEl, productInfoFolderUrlInput);
     });
   }
 

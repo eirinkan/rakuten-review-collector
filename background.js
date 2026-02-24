@@ -610,6 +610,34 @@ async function getSpreadsheetTitle(spreadsheetId) {
   return data.properties?.title || '';
 }
 
+// Google DriveフォルダIDからフォルダ名を取得
+async function getDriveFolderName(folderId) {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error('認証が必要です');
+  }
+
+  const response = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${folderId}?fields=id,name&supportsAllDrives=true`,
+    {
+      headers: { 'Authorization': `Bearer ${token}` }
+    }
+  );
+
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error('フォルダが見つかりません');
+    }
+    if (response.status === 403) {
+      throw new Error('アクセス権限がありません');
+    }
+    throw new Error('フォルダ名の取得に失敗しました');
+  }
+
+  const data = await response.json();
+  return data.name || '';
+}
+
 /**
  * ===== 認証機能ここまで =====
  */
@@ -667,6 +695,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'getSpreadsheetTitle':
       getSpreadsheetTitle(message.spreadsheetId)
         .then(title => sendResponse({ success: true, title }))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'getDriveFolderName':
+      getDriveFolderName(message.folderId)
+        .then(name => sendResponse({ success: true, name }))
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
 

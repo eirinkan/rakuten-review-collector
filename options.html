@@ -2869,7 +2869,10 @@
           <div class="form-group" style="margin-top: 8px;">
             <label>保存先フォルダURL</label>
             <div class="folder-url-row">
-              <input type="text" id="productInfoFolderUrl" placeholder="https://drive.google.com/drive/folders/...">
+              <div class="spreadsheet-input-wrapper" style="flex:1;">
+                <input type="text" id="productInfoFolderUrl" placeholder="https://drive.google.com/drive/folders/...">
+                <div id="folderTitle" class="spreadsheet-title-overlay"></div>
+              </div>
               <button type="button" id="folderPickerBtn" class="btn-folder-pick">選択</button>
             </div>
             <div id="productInfoFolderUrlStatus" class="status-message"></div>
