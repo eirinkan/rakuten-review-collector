@@ -985,6 +985,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
 
+    case 'getDriveSpreadsheets':
+      getDriveSpreadsheets(message.parentId, message.driveId)
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
     case 'createDriveFolder':
       createDriveFolder(message.name, message.parentId)
         .then(result => sendResponse(result))
@@ -4838,6 +4844,47 @@ async function getDriveFolders(parentId = 'root', driveId = null) {
   return {
     success: true,
     folders: (data.files || []).map(f => ({ id: f.id, name: f.name }))
+  };
+}
+
+/**
+ * 指定フォルダ内のスプレッドシート一覧を取得
+ * @param {string} parentId - 親フォルダID（'root'でマイドライブ直下）
+ * @param {string} driveId - 共有ドライブID（省略時はマイドライブ）
+ * @returns {Promise<Object>} { success: true, files: [...] }
+ */
+async function getDriveSpreadsheets(parentId = 'root', driveId = null) {
+  const query = `'${parentId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`;
+  const params = new URLSearchParams({
+    q: query,
+    fields: 'files(id,name)',
+    orderBy: 'name',
+    pageSize: '100'
+  });
+
+  if (driveId) {
+    params.set('includeItemsFromAllDrives', 'true');
+    params.set('supportsAllDrives', 'true');
+    params.set('corpora', 'drive');
+    params.set('driveId', driveId);
+  } else {
+    params.set('supportsAllDrives', 'true');
+  }
+
+  console.log('[getDriveSpreadsheets]', { parentId, driveId });
+  const response = await driveApiFetch(`https://www.googleapis.com/drive/v3/files?${params}`);
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    console.error('[getDriveSpreadsheets] エラー:', errorData);
+    throw new Error(errorData.error?.message || `Drive API エラー (${response.status})`);
+  }
+
+  const data = await response.json();
+  console.log('[getDriveSpreadsheets] 結果:', data.files?.length, '件');
+  return {
+    success: true,
+    files: (data.files || []).map(f => ({ id: f.id, name: f.name }))
   };
 }
 

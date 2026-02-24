@@ -2868,18 +2868,24 @@
 
           <div class="form-group">
             <label>楽天用</label>
-            <div class="spreadsheet-input-wrapper">
-              <input type="text" id="spreadsheetUrl" placeholder="https://docs.google.com/spreadsheets/d/...">
-              <div id="spreadsheetTitle" class="spreadsheet-title-overlay"></div>
+            <div class="folder-url-row">
+              <div class="spreadsheet-input-wrapper" style="flex:1;">
+                <input type="text" id="spreadsheetUrl" placeholder="https://docs.google.com/spreadsheets/d/...">
+                <div id="spreadsheetTitle" class="spreadsheet-title-overlay"></div>
+              </div>
+              <button type="button" class="btn-folder-pick" data-picker-mode="spreadsheet" data-picker-target="spreadsheetUrl">選択</button>
             </div>
             <div id="spreadsheetUrlStatus" class="status-message"></div>
           </div>
 
           <div class="form-group" style="margin-top: 12px;">
             <label>Amazon用</label>
-            <div class="spreadsheet-input-wrapper">
-              <input type="text" id="amazonSpreadsheetUrl" placeholder="https://docs.google.com/spreadsheets/d/...">
-              <div id="amazonSpreadsheetTitle" class="spreadsheet-title-overlay"></div>
+            <div class="folder-url-row">
+              <div class="spreadsheet-input-wrapper" style="flex:1;">
+                <input type="text" id="amazonSpreadsheetUrl" placeholder="https://docs.google.com/spreadsheets/d/...">
+                <div id="amazonSpreadsheetTitle" class="spreadsheet-title-overlay"></div>
+              </div>
+              <button type="button" class="btn-folder-pick" data-picker-mode="spreadsheet" data-picker-target="amazonSpreadsheetUrl">選択</button>
             </div>
             <div id="amazonSpreadsheetUrlStatus" class="status-message"></div>
           </div>
@@ -3250,7 +3256,7 @@
   <div class="fp-overlay" id="folderPickerOverlay">
     <div class="fp-modal">
       <div class="fp-header">
-        <h3>フォルダを選択</h3>
+        <h3 id="fpTitle">フォルダを選択</h3>
         <div class="fp-tabs">
           <button type="button" class="fp-tab active" id="fpTabMyDrive">マイドライブ</button>
           <button type="button" class="fp-tab" id="fpTabShared">共有ドライブ</button>

@@ -3103,9 +3103,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function initFolderPicker() {
     const pickerBtn = document.getElementById('folderPickerBtn');
-    if (!pickerBtn) return;
-
     const overlay = document.getElementById('folderPickerOverlay');
+    if (!overlay) return;
+
     const searchInput = document.getElementById('fpSearch');
     const breadcrumbs = document.getElementById('fpBreadcrumbs');
     const listEl = document.getElementById('fpList');
@@ -3118,15 +3118,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const newFolderCancel = document.getElementById('fpNewFolderCancel');
     const tabMyDrive = document.getElementById('fpTabMyDrive');
     const tabShared = document.getElementById('fpTabShared');
+    const fpTitle = document.getElementById('fpTitle');
 
     // 状態
     let currentParentId = 'root';
     let selectedFolder = null;  // nullの場合は現在のフォルダが対象
+    let selectedSpreadsheet = null; // スプレッドシートモード用
     let pathStack = [{ id: 'root', name: 'マイドライブ' }];
     let isSearchMode = false;
     let searchTimeout = null;
     let currentDriveId = null;  // nullならマイドライブ
     let currentTab = 'myDrive'; // 'myDrive' | 'shared'
+
+    // ピッカーモード管理
+    let pickerMode = 'folder';  // 'folder' | 'spreadsheet'
+    let pickerTargetInput = null; // ターゲット入力要素
+    let pickerTargetSave = null;  // 保存関数
 
     // キャッシュ（5分）
     const cache = new Map();
@@ -3148,11 +3155,16 @@ document.addEventListener('DOMContentLoaded', () => {
       return selectedFolder ? selectedFolder.id : currentParentId;
     }
 
-    // モーダルを開く
-    pickerBtn.addEventListener('click', () => {
+    // ピッカーを開く共通関数
+    function openPicker(mode, targetInput, saveFn) {
+      pickerMode = mode;
+      pickerTargetInput = targetInput;
+      pickerTargetSave = saveFn;
+
       overlay.classList.add('active');
       currentParentId = 'root';
       selectedFolder = null;
+      selectedSpreadsheet = null;
       pathStack = [{ id: 'root', name: 'マイドライブ' }];
       isSearchMode = false;
       searchInput.value = '';
@@ -3160,10 +3172,40 @@ document.addEventListener('DOMContentLoaded', () => {
       currentTab = 'myDrive';
       tabMyDrive.classList.add('active');
       tabShared.classList.remove('active');
-      selectBtn.disabled = false;  // 現在のフォルダ（マイドライブ）が常に選択可能
       newFolderRow.classList.remove('active');
+
+      // モード別の設定
+      if (mode === 'spreadsheet') {
+        selectBtn.disabled = true; // スプレッドシート未選択なので無効
+        newFolderBtn.style.display = 'none';
+        if (fpTitle) fpTitle.textContent = 'スプレッドシートを選択';
+        if (searchInput) searchInput.placeholder = 'フォルダ名・スプレッドシート名で検索...';
+      } else {
+        selectBtn.disabled = false; // 現在のフォルダ（マイドライブ）が常に選択可能
+        newFolderBtn.style.display = '';
+        if (fpTitle) fpTitle.textContent = 'フォルダを選択';
+        if (searchInput) searchInput.placeholder = 'フォルダ名で検索...';
+      }
+
       loadFolders(currentParentId);
       renderBreadcrumbs();
+    }
+
+    // フォルダピッカーボタン（既存）
+    if (pickerBtn) {
+      pickerBtn.addEventListener('click', () => {
+        openPicker('folder', productInfoFolderUrlInput, saveProductInfoFolderUrl);
+      });
+    }
+
+    // スプレッドシートピッカーボタン（新規）
+    document.querySelectorAll('[data-picker-mode="spreadsheet"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.dataset.pickerTarget;
+        const targetInput = document.getElementById(targetId);
+        const saveFn = targetId === 'spreadsheetUrl' ? saveSpreadsheetUrlAuto : saveAmazonSpreadsheetUrlAuto;
+        openPicker('spreadsheet', targetInput, saveFn);
+      });
     });
 
     // タブ切り替え: マイドライブ
@@ -3175,10 +3217,11 @@ document.addEventListener('DOMContentLoaded', () => {
       currentDriveId = null;
       currentParentId = 'root';
       selectedFolder = null;
+      selectedSpreadsheet = null;
       pathStack = [{ id: 'root', name: 'マイドライブ' }];
       isSearchMode = false;
       searchInput.value = '';
-      selectBtn.disabled = false;
+      selectBtn.disabled = (pickerMode === 'spreadsheet');
       renderBreadcrumbs();
       loadFolders(currentParentId);
     });
@@ -3192,6 +3235,7 @@ document.addEventListener('DOMContentLoaded', () => {
       currentDriveId = null;
       currentParentId = null;
       selectedFolder = null;
+      selectedSpreadsheet = null;
       pathStack = [{ id: null, name: '共有ドライブ' }];
       isSearchMode = false;
       searchInput.value = '';
@@ -3260,46 +3304,121 @@ document.addEventListener('DOMContentLoaded', () => {
       currentDriveId = drive.id;
       currentParentId = drive.id;
       selectedFolder = null;
+      selectedSpreadsheet = null;
       pathStack = [
         { id: null, name: '共有ドライブ' },
         { id: drive.id, name: drive.name }
       ];
-      selectBtn.disabled = false;  // ドライブのルートも選択可能
+      // フォルダモード: ドライブのルートも選択可能 / スプレッドシートモード: スプレッドシート未選択なので無効
+      selectBtn.disabled = (pickerMode === 'spreadsheet');
       isSearchMode = false;
       searchInput.value = '';
       renderBreadcrumbs();
       loadFolders(drive.id);
     }
 
-    // フォルダ一覧を読み込み
+    // フォルダ一覧を読み込み（スプレッドシートモードではスプレッドシートも取得）
     function loadFolders(parentId) {
       listEl.innerHTML = '<div class="fp-loading">読み込み中...</div>';
       selectedFolder = null;
-      // 現在のフォルダは常に選択可能（サブフォルダ未選択でもOK）
-      selectBtn.disabled = false;
+      selectedSpreadsheet = null;
+
+      if (pickerMode === 'folder') {
+        // フォルダモード: 現在のフォルダは常に選択可能（サブフォルダ未選択でもOK）
+        selectBtn.disabled = false;
+      } else {
+        // スプレッドシートモード: スプレッドシート未選択なので無効
+        selectBtn.disabled = true;
+      }
 
       const cacheKey = `list:${parentId}:${currentDriveId || ''}`;
       const cached = getCached(cacheKey);
-      if (cached) {
-        renderFolders(cached);
-        return;
+
+      if (pickerMode === 'spreadsheet') {
+        // スプレッドシートモード: フォルダとスプレッドシートを両方取得
+        const ssCacheKey = `ss:${parentId}:${currentDriveId || ''}`;
+        const cachedFolders = cached;
+        const cachedSS = getCached(ssCacheKey);
+
+        if (cachedFolders !== null && cachedSS !== null) {
+          renderFoldersAndSpreadsheets(cachedFolders, cachedSS);
+          return;
+        }
+
+        // 両方のAPIを呼び出し
+        let folders = cachedFolders;
+        let spreadsheets = cachedSS;
+        let completedCount = 0;
+
+        function checkBothLoaded() {
+          completedCount++;
+          if (completedCount < 2) return;
+          if (folders !== null && spreadsheets !== null) {
+            renderFoldersAndSpreadsheets(folders, spreadsheets);
+          }
+        }
+
+        // フォルダ取得
+        if (folders !== null) {
+          completedCount++;
+        } else {
+          const msg = { action: 'getDriveFolders', parentId };
+          if (currentDriveId) msg.driveId = currentDriveId;
+          chrome.runtime.sendMessage(msg, (response) => {
+            if (chrome.runtime.lastError || !response || !response.success) {
+              folders = [];
+            } else {
+              folders = response.folders;
+              setCache(cacheKey, folders);
+            }
+            checkBothLoaded();
+          });
+        }
+
+        // スプレッドシート取得
+        if (spreadsheets !== null) {
+          completedCount++;
+        } else {
+          const ssMsg = { action: 'getDriveSpreadsheets', parentId };
+          if (currentDriveId) ssMsg.driveId = currentDriveId;
+          chrome.runtime.sendMessage(ssMsg, (response) => {
+            if (chrome.runtime.lastError || !response || !response.success) {
+              spreadsheets = [];
+            } else {
+              spreadsheets = response.files;
+              setCache(ssCacheKey, spreadsheets);
+            }
+            checkBothLoaded();
+          });
+        }
+
+        // 両方キャッシュ済みの場合
+        if (completedCount >= 2) {
+          renderFoldersAndSpreadsheets(folders, spreadsheets);
+        }
+      } else {
+        // フォルダモード: 従来通りフォルダのみ取得
+        if (cached) {
+          renderFolders(cached);
+          return;
+        }
+
+        const msg = { action: 'getDriveFolders', parentId };
+        if (currentDriveId) msg.driveId = currentDriveId;
+
+        chrome.runtime.sendMessage(msg, (response) => {
+          if (chrome.runtime.lastError) {
+            listEl.innerHTML = `<div class="fp-empty">エラー: ${escapeHtml(chrome.runtime.lastError.message)}</div>`;
+            return;
+          }
+          if (!response || !response.success) {
+            listEl.innerHTML = `<div class="fp-empty">エラー: ${escapeHtml(response?.error || '取得に失敗しました')}</div>`;
+            return;
+          }
+          setCache(cacheKey, response.folders);
+          renderFolders(response.folders);
+        });
       }
-
-      const msg = { action: 'getDriveFolders', parentId };
-      if (currentDriveId) msg.driveId = currentDriveId;
-
-      chrome.runtime.sendMessage(msg, (response) => {
-        if (chrome.runtime.lastError) {
-          listEl.innerHTML = `<div class="fp-empty">エラー: ${escapeHtml(chrome.runtime.lastError.message)}</div>`;
-          return;
-        }
-        if (!response || !response.success) {
-          listEl.innerHTML = `<div class="fp-empty">エラー: ${escapeHtml(response?.error || '取得に失敗しました')}</div>`;
-          return;
-        }
-        setCache(cacheKey, response.folders);
-        renderFolders(response.folders);
-      });
     }
 
     // フォルダ検索（現在のフォルダ配下をローカルフィルタリング）
@@ -3308,39 +3427,110 @@ document.addEventListener('DOMContentLoaded', () => {
     function searchFolders(query) {
       listEl.innerHTML = '<div class="fp-loading">検索中...</div>';
       selectedFolder = null;
-      selectBtn.disabled = false;
+      selectedSpreadsheet = null;
+
+      if (pickerMode === 'folder') {
+        selectBtn.disabled = false;
+      } else {
+        selectBtn.disabled = true;
+      }
 
       const lowerQuery = query.toLowerCase();
 
-      // キャッシュがあればそこからフィルタ
-      const cacheKey = `list:${currentParentId}:${currentDriveId || ''}`;
-      const cached = getCached(cacheKey);
-      if (cached) {
-        const filtered = cached.filter(f => f.name.toLowerCase().includes(lowerQuery));
-        renderFolders(filtered, true);
-        return;
+      if (pickerMode === 'spreadsheet') {
+        // スプレッドシートモード: フォルダとスプレッドシートの両方をフィルタ
+        const cacheKey = `list:${currentParentId}:${currentDriveId || ''}`;
+        const ssCacheKey = `ss:${currentParentId}:${currentDriveId || ''}`;
+        const cachedFolders = getCached(cacheKey);
+        const cachedSS = getCached(ssCacheKey);
+
+        if (cachedFolders !== null && cachedSS !== null) {
+          const filteredFolders = cachedFolders.filter(f => f.name.toLowerCase().includes(lowerQuery));
+          const filteredSS = cachedSS.filter(f => f.name.toLowerCase().includes(lowerQuery));
+          renderFoldersAndSpreadsheets(filteredFolders, filteredSS, true);
+          return;
+        }
+
+        // キャッシュが無い場合はloadFoldersで取得（検索はキャッシュ後に再実行）
+        let folders = cachedFolders;
+        let spreadsheets = cachedSS;
+        let completedCount = 0;
+
+        function checkBothLoaded() {
+          completedCount++;
+          if (completedCount < 2) return;
+          const filteredFolders = (folders || []).filter(f => f.name.toLowerCase().includes(lowerQuery));
+          const filteredSS = (spreadsheets || []).filter(f => f.name.toLowerCase().includes(lowerQuery));
+          renderFoldersAndSpreadsheets(filteredFolders, filteredSS, true);
+        }
+
+        if (folders !== null) {
+          completedCount++;
+        } else {
+          const msg = { action: 'getDriveFolders', parentId: currentParentId };
+          if (currentDriveId) msg.driveId = currentDriveId;
+          chrome.runtime.sendMessage(msg, (response) => {
+            if (!chrome.runtime.lastError && response && response.success) {
+              folders = response.folders;
+              setCache(cacheKey, folders);
+            } else {
+              folders = [];
+            }
+            checkBothLoaded();
+          });
+        }
+
+        if (spreadsheets !== null) {
+          completedCount++;
+        } else {
+          const ssMsg = { action: 'getDriveSpreadsheets', parentId: currentParentId };
+          if (currentDriveId) ssMsg.driveId = currentDriveId;
+          chrome.runtime.sendMessage(ssMsg, (response) => {
+            if (!chrome.runtime.lastError && response && response.success) {
+              spreadsheets = response.files;
+              setCache(ssCacheKey, spreadsheets);
+            } else {
+              spreadsheets = [];
+            }
+            checkBothLoaded();
+          });
+        }
+
+        if (completedCount >= 2) {
+          const filteredFolders = (folders || []).filter(f => f.name.toLowerCase().includes(lowerQuery));
+          const filteredSS = (spreadsheets || []).filter(f => f.name.toLowerCase().includes(lowerQuery));
+          renderFoldersAndSpreadsheets(filteredFolders, filteredSS, true);
+        }
+      } else {
+        // フォルダモード: 従来通り
+        const cacheKey = `list:${currentParentId}:${currentDriveId || ''}`;
+        const cached = getCached(cacheKey);
+        if (cached) {
+          const filtered = cached.filter(f => f.name.toLowerCase().includes(lowerQuery));
+          renderFolders(filtered, true);
+          return;
+        }
+
+        const msg = { action: 'getDriveFolders', parentId: currentParentId };
+        if (currentDriveId) msg.driveId = currentDriveId;
+
+        chrome.runtime.sendMessage(msg, (response) => {
+          if (chrome.runtime.lastError) {
+            listEl.innerHTML = `<div class="fp-empty">エラー: ${escapeHtml(chrome.runtime.lastError.message)}</div>`;
+            return;
+          }
+          if (!response || !response.success) {
+            listEl.innerHTML = `<div class="fp-empty">エラー: ${escapeHtml(response?.error || '取得に失敗しました')}</div>`;
+            return;
+          }
+          setCache(cacheKey, response.folders);
+          const filtered = response.folders.filter(f => f.name.toLowerCase().includes(lowerQuery));
+          renderFolders(filtered, true);
+        });
       }
-
-      // キャッシュがなければAPIで取得してからフィルタ
-      const msg = { action: 'getDriveFolders', parentId: currentParentId };
-      if (currentDriveId) msg.driveId = currentDriveId;
-
-      chrome.runtime.sendMessage(msg, (response) => {
-        if (chrome.runtime.lastError) {
-          listEl.innerHTML = `<div class="fp-empty">エラー: ${escapeHtml(chrome.runtime.lastError.message)}</div>`;
-          return;
-        }
-        if (!response || !response.success) {
-          listEl.innerHTML = `<div class="fp-empty">エラー: ${escapeHtml(response?.error || '取得に失敗しました')}</div>`;
-          return;
-        }
-        setCache(cacheKey, response.folders);
-        const filtered = response.folders.filter(f => f.name.toLowerCase().includes(lowerQuery));
-        renderFolders(filtered, true);
-      });
     }
 
-    // フォルダ一覧を描画
+    // フォルダ一覧を描画（フォルダモード用 — 既存と同じ動作）
     function renderFolders(folders, isSearch = false) {
       if (!folders || folders.length === 0) {
         listEl.innerHTML = `<div class="fp-empty">${isSearch ? '該当するフォルダが見つかりません' : 'サブフォルダがありません'}</div>`;
@@ -3370,13 +3560,98 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
+    // フォルダ＋スプレッドシート一覧を描画（スプレッドシートモード用）
+    function renderFoldersAndSpreadsheets(folders, spreadsheets, isSearch = false) {
+      const hasFolders = folders && folders.length > 0;
+      const hasSpreadsheets = spreadsheets && spreadsheets.length > 0;
+
+      if (!hasFolders && !hasSpreadsheets) {
+        listEl.innerHTML = `<div class="fp-empty">${isSearch ? '該当する項目が見つかりません' : 'フォルダ・スプレッドシートがありません'}</div>`;
+        return;
+      }
+
+      listEl.innerHTML = '';
+
+      // フォルダを先に表示（ダブルクリックで中に入る）
+      if (hasFolders) {
+        folders.forEach(folder => {
+          const item = document.createElement('div');
+          item.className = 'fp-item';
+          item.dataset.type = 'folder';
+          item.innerHTML = `<span class="fp-item-icon">📁</span><span class="fp-item-name">${escapeHtml(folder.name)}</span>`;
+
+          // クリック = フォルダを選択（ただし選択ボタンは有効化しない）
+          item.addEventListener('click', () => {
+            listEl.querySelectorAll('.fp-item.selected').forEach(el => el.classList.remove('selected'));
+            item.classList.add('selected');
+            selectedFolder = folder;
+            selectedSpreadsheet = null;
+            // スプレッドシートモードではフォルダクリックで選択ボタンを有効化しない
+            selectBtn.disabled = true;
+          });
+
+          // ダブルクリック = フォルダの中に入る
+          item.addEventListener('dblclick', () => {
+            enterFolder(folder);
+          });
+
+          listEl.appendChild(item);
+        });
+      }
+
+      // スプレッドシートを表示
+      if (hasSpreadsheets) {
+        spreadsheets.forEach(ss => {
+          const item = document.createElement('div');
+          item.className = 'fp-item';
+          item.dataset.type = 'spreadsheet';
+          item.innerHTML = `<span class="fp-item-icon">📊</span><span class="fp-item-name">${escapeHtml(ss.name)}</span>`;
+
+          // クリック = スプレッドシートを選択
+          item.addEventListener('click', () => {
+            listEl.querySelectorAll('.fp-item.selected').forEach(el => el.classList.remove('selected'));
+            item.classList.add('selected');
+            selectedSpreadsheet = ss;
+            selectedFolder = null;
+            selectBtn.disabled = false;
+          });
+
+          // ダブルクリック = 確定（モーダルを閉じる）
+          item.addEventListener('dblclick', () => {
+            selectedSpreadsheet = ss;
+            selectedFolder = null;
+            confirmSpreadsheetSelection();
+          });
+
+          listEl.appendChild(item);
+        });
+      }
+    }
+
+    // スプレッドシート選択を確定
+    function confirmSpreadsheetSelection() {
+      if (!selectedSpreadsheet) return;
+      const url = `https://docs.google.com/spreadsheets/d/${selectedSpreadsheet.id}`;
+      if (pickerTargetInput) {
+        pickerTargetInput.value = url;
+      }
+      closeModal();
+      if (pickerTargetSave) pickerTargetSave();
+    }
+
     // フォルダに入る
     function enterFolder(folder) {
       currentParentId = folder.id;
       selectedFolder = null;
+      selectedSpreadsheet = null;
       isSearchMode = false;
       searchInput.value = '';
-      selectBtn.disabled = false;
+
+      if (pickerMode === 'folder') {
+        selectBtn.disabled = false;
+      } else {
+        selectBtn.disabled = true;
+      }
 
       pathStack.push({ id: folder.id, name: folder.name });
       renderBreadcrumbs();
@@ -3405,6 +3680,7 @@ document.addEventListener('DOMContentLoaded', () => {
             pathStack = pathStack.slice(0, index + 1);
             currentParentId = item.id;
             selectedFolder = null;
+            selectedSpreadsheet = null;
             isSearchMode = false;
             searchInput.value = '';
 
@@ -3417,7 +3693,11 @@ document.addEventListener('DOMContentLoaded', () => {
               return;
             }
 
-            selectBtn.disabled = false;
+            if (pickerMode === 'folder') {
+              selectBtn.disabled = false;
+            } else {
+              selectBtn.disabled = true;
+            }
             renderBreadcrumbs();
             loadFolders(currentParentId);
           });
@@ -3451,16 +3731,22 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 400);
     });
 
-    // 「選択」ボタン — 選択されたフォルダ、または現在のフォルダを使用
+    // 「選択」ボタン
     selectBtn.addEventListener('click', () => {
-      const folderId = getSelectedFolderId();
-      if (!folderId) return;
-      const url = `https://drive.google.com/drive/folders/${folderId}`;
-      if (productInfoFolderUrlInput) {
-        productInfoFolderUrlInput.value = url;
-        saveProductInfoFolderUrl();
+      if (pickerMode === 'spreadsheet') {
+        // スプレッドシートモード
+        confirmSpreadsheetSelection();
+      } else {
+        // フォルダモード: 選択されたフォルダ、または現在のフォルダを使用
+        const folderId = getSelectedFolderId();
+        if (!folderId) return;
+        const url = `https://drive.google.com/drive/folders/${folderId}`;
+        if (productInfoFolderUrlInput) {
+          productInfoFolderUrlInput.value = url;
+          saveProductInfoFolderUrl();
+        }
+        closeModal();
       }
-      closeModal();
     });
 
     // 「新規フォルダ」ボタン
