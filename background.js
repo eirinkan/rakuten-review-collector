@@ -750,8 +750,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case 'updateProgress':
-    case 'log':
       forwardToAll(message);
+      break;
+
+    case 'log':
+      // content scriptからのログ → ストレージに保存 + UIに転送
+      log(message.text, message.type || '', 'review');
       break;
 
     case 'updateProductTitle':
