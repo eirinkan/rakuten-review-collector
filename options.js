@@ -453,7 +453,7 @@ document.addEventListener('DOMContentLoaded', () => {
           spreadsheetLinkRakutenEl.classList.remove('disabled');
         }
         // タイトル取得
-        fetchAndShowSpreadsheetTitle(result.spreadsheetUrl, spreadsheetTitleEl, spreadsheetUrlInput);
+        fetchAndShowSpreadsheetTitle(result.spreadsheetUrl, spreadsheetTitleEl, spreadsheetUrlInput, () => saveSpreadsheetUrlAuto());
       }
       // Amazon用スプレッドシートURL
       if (result.amazonSpreadsheetUrl && amazonSpreadsheetUrlInput) {
@@ -463,7 +463,7 @@ document.addEventListener('DOMContentLoaded', () => {
           spreadsheetLinkAmazonEl.classList.remove('disabled');
         }
         // タイトル取得
-        fetchAndShowSpreadsheetTitle(result.amazonSpreadsheetUrl, amazonSpreadsheetTitleEl, amazonSpreadsheetUrlInput);
+        fetchAndShowSpreadsheetTitle(result.amazonSpreadsheetUrl, amazonSpreadsheetTitleEl, amazonSpreadsheetUrlInput, () => saveAmazonSpreadsheetUrlAuto());
       }
       // CSV機能は常に表示（スプレッドシートと併用可能）
       dataButtons.style.display = 'flex';
@@ -943,7 +943,7 @@ document.addEventListener('DOMContentLoaded', () => {
         spreadsheetLinkRakutenEl.classList.remove('disabled');
       }
       // タイトル取得
-      fetchAndShowSpreadsheetTitle(url, spreadsheetTitleEl, spreadsheetUrlInput);
+      fetchAndShowSpreadsheetTitle(url, spreadsheetTitleEl, spreadsheetUrlInput, () => saveSpreadsheetUrlAuto());
       updateSpreadsheetBtnState();
     });
   }
@@ -989,7 +989,7 @@ document.addEventListener('DOMContentLoaded', () => {
         spreadsheetLinkAmazonEl.classList.remove('disabled');
       }
       // タイトル取得
-      fetchAndShowSpreadsheetTitle(url, amazonSpreadsheetTitleEl, amazonSpreadsheetUrlInput);
+      fetchAndShowSpreadsheetTitle(url, amazonSpreadsheetTitleEl, amazonSpreadsheetUrlInput, () => saveAmazonSpreadsheetUrlAuto());
       updateSpreadsheetBtnState();
     });
   }
@@ -1024,14 +1024,43 @@ document.addEventListener('DOMContentLoaded', () => {
   async function fetchAndShowFolderTitle(url, titleEl, inputEl) {
     if (!titleEl) return;
 
-    const setupClickHandler = () => {
-      titleEl.onclick = () => {
-        titleEl.classList.remove('show');
-        if (inputEl) {
-          inputEl.focus();
-          inputEl.select();
-        }
-      };
+    const setupHandlers = (html) => {
+      titleEl.innerHTML = html;
+      // タイトル部分クリック → 編集モード
+      const titleText = titleEl.querySelector('.title-text');
+      if (titleText) {
+        titleText.style.cursor = 'pointer';
+        titleText.onclick = (e) => {
+          e.stopPropagation();
+          titleEl.classList.remove('show');
+          if (inputEl) { inputEl.focus(); inputEl.select(); }
+        };
+      }
+      const editHint = titleEl.querySelector('.edit-hint');
+      if (editHint) {
+        editHint.onclick = (e) => {
+          e.stopPropagation();
+          titleEl.classList.remove('show');
+          if (inputEl) { inputEl.focus(); inputEl.select(); }
+        };
+      }
+      // クリアボタン
+      const clearBtn = titleEl.querySelector('.clear-btn');
+      if (clearBtn) {
+        clearBtn.onclick = (e) => {
+          e.stopPropagation();
+          if (inputEl) inputEl.value = '';
+          titleEl.classList.remove('show', 'loading', 'error');
+          titleEl.innerHTML = '';
+          saveProductInfoFolderUrl();
+        };
+      }
+    };
+
+    // ローディング・エラー時はクリックで編集モード
+    titleEl.onclick = () => {
+      titleEl.classList.remove('show');
+      if (inputEl) { inputEl.focus(); inputEl.select(); }
     };
 
     const folderId = extractFolderId(url);
@@ -1045,7 +1074,6 @@ document.addEventListener('DOMContentLoaded', () => {
     titleEl.classList.add('show', 'loading');
     titleEl.classList.remove('error');
     titleEl.innerHTML = '読み込み中...';
-    setupClickHandler();
 
     try {
       const response = await chrome.runtime.sendMessage({
@@ -1056,35 +1084,61 @@ document.addEventListener('DOMContentLoaded', () => {
       if (response.success && response.name) {
         titleEl.classList.add('show');
         titleEl.classList.remove('loading', 'error');
-        titleEl.innerHTML = `${DRIVE_FOLDER_ICON_SVG}<span class="title-text">${response.name}</span><span class="edit-hint">クリックで編集</span>`;
-        setupClickHandler();
+        titleEl.onclick = null;
+        setupHandlers(`${DRIVE_FOLDER_ICON_SVG}<span class="title-text">${response.name}</span><span class="edit-hint">クリックで編集</span><button class="clear-btn" title="クリア">×</button>`);
       } else {
         titleEl.classList.add('show', 'error');
         titleEl.classList.remove('loading');
         titleEl.innerHTML = (response.error || 'フォルダ名取得失敗') + '<span class="edit-hint">クリックで編集</span>';
-        setupClickHandler();
       }
     } catch (error) {
       titleEl.classList.add('show', 'error');
       titleEl.classList.remove('loading');
       titleEl.innerHTML = 'フォルダ名取得失敗<span class="edit-hint">クリックで編集</span>';
-      setupClickHandler();
     }
   }
 
-  // スプレッドシートのタイトルを取得して表示
-  async function fetchAndShowSpreadsheetTitle(url, titleEl, inputEl) {
+  // スプレッドシートのタイトルを取得して表示（onClear: クリアボタン押下時のコールバック）
+  async function fetchAndShowSpreadsheetTitle(url, titleEl, inputEl, onClear) {
     if (!titleEl) return;
 
-    // クリックでURL編集モードに切り替え（どの状態でも有効）
-    const setupClickHandler = () => {
-      titleEl.onclick = () => {
-        titleEl.classList.remove('show');
-        if (inputEl) {
-          inputEl.focus();
-          inputEl.select();
-        }
-      };
+    const setupHandlers = (html) => {
+      titleEl.innerHTML = html;
+      // タイトル部分クリック → 編集モード
+      const titleText = titleEl.querySelector('.title-text');
+      if (titleText) {
+        titleText.style.cursor = 'pointer';
+        titleText.onclick = (e) => {
+          e.stopPropagation();
+          titleEl.classList.remove('show');
+          if (inputEl) { inputEl.focus(); inputEl.select(); }
+        };
+      }
+      const editHint = titleEl.querySelector('.edit-hint');
+      if (editHint) {
+        editHint.onclick = (e) => {
+          e.stopPropagation();
+          titleEl.classList.remove('show');
+          if (inputEl) { inputEl.focus(); inputEl.select(); }
+        };
+      }
+      // クリアボタン
+      const clearBtn = titleEl.querySelector('.clear-btn');
+      if (clearBtn) {
+        clearBtn.onclick = (e) => {
+          e.stopPropagation();
+          if (inputEl) inputEl.value = '';
+          titleEl.classList.remove('show', 'loading', 'error');
+          titleEl.innerHTML = '';
+          if (onClear) onClear();
+        };
+      }
+    };
+
+    // ローディング・エラー時はクリックで編集モード
+    titleEl.onclick = () => {
+      titleEl.classList.remove('show');
+      if (inputEl) { inputEl.focus(); inputEl.select(); }
     };
 
     const spreadsheetId = extractSpreadsheetId(url);
@@ -1098,7 +1152,6 @@ document.addEventListener('DOMContentLoaded', () => {
     titleEl.classList.add('show', 'loading');
     titleEl.classList.remove('error');
     titleEl.innerHTML = '読み込み中...';
-    setupClickHandler(); // ローディング中もクリック可能
 
     try {
       const response = await chrome.runtime.sendMessage({
@@ -1109,19 +1162,18 @@ document.addEventListener('DOMContentLoaded', () => {
       if (response.success && response.title) {
         titleEl.classList.add('show');
         titleEl.classList.remove('loading', 'error');
-        titleEl.innerHTML = `${SHEETS_ICON_SVG}<span class="title-text">${response.title}</span><span class="edit-hint">クリックで編集</span>`;
-        setupClickHandler();
+        titleEl.onclick = null;
+        const clearHtml = onClear ? '<button class="clear-btn" title="クリア">×</button>' : '';
+        setupHandlers(`${SHEETS_ICON_SVG}<span class="title-text">${response.title}</span><span class="edit-hint">クリックで編集</span>${clearHtml}`);
       } else {
         titleEl.classList.add('show', 'error');
         titleEl.classList.remove('loading');
         titleEl.innerHTML = (response.error || 'タイトル取得失敗') + '<span class="edit-hint">クリックで編集</span>';
-        setupClickHandler(); // エラー時もクリック可能
       }
     } catch (error) {
       titleEl.classList.add('show', 'error');
       titleEl.classList.remove('loading');
       titleEl.innerHTML = 'タイトル取得失敗<span class="edit-hint">クリックで編集</span>';
-      setupClickHandler(); // エラー時もクリック可能
     }
   }
 
