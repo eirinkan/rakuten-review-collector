@@ -310,7 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
       normalMode.style.display = 'none';
       rankingMode.style.display = 'block';
       // ランキング・検索結果ページでは広告除外トグルを表示
-      if (adToggleRow) adToggleRow.style.display = 'flex';
+      if (adToggleRow) adToggleRow.style.display = 'inline-flex';
     } else if (!isSupportedPage) {
       // 楽天・Amazon以外のページ — ボタンを非表示にして案内を表示
       pageWarning.style.display = 'block';

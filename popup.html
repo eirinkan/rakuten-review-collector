@@ -297,21 +297,6 @@
       background: rgba(255, 255, 255, 0.15);
     }
 
-    .btn-product-queue {
-      background: rgba(45, 52, 54, 0.08);
-      border: 1px solid rgba(45, 52, 54, 0.2);
-    }
-
-    .btn-product-queue:hover {
-      background: rgba(45, 52, 54, 0.15);
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(45, 52, 54, 0.1);
-    }
-
-    [data-theme="dark"] .btn-product-queue {
-      background: rgba(255, 255, 255, 0.08);
-      border-color: rgba(255, 255, 255, 0.15);
-    }
 
     .btn:disabled {
       background: rgba(128, 128, 128, 0.3);
@@ -501,12 +486,6 @@
       outline-offset: 2px;
     }
 
-    .ad-toggle-row {
-      display: flex;
-      justify-content: center;
-      margin-bottom: 8px;
-    }
-
     .ad-toggle-label {
       display: flex;
       align-items: center;
@@ -514,6 +493,7 @@
       font-size: 12px;
       color: var(--text-secondary);
       cursor: pointer;
+      margin-left: 4px;
     }
 
     .ad-toggle-label input[type="checkbox"] {
@@ -530,29 +510,7 @@
       animation: pulse 1.5s infinite;
     }
 
-    /* === Product Info Button === */
-    .btn-product-info {
-      background: linear-gradient(135deg, #2d3436 0%, #636e72 100%);
-      color: white;
-      box-shadow: 0 4px 15px rgba(45, 52, 54, 0.3);
-    }
-
-    .btn-product-info:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(45, 52, 54, 0.4);
-    }
-
-    /* === Both Button === */
-    .btn-both {
-      background: linear-gradient(135deg, #2d3436 0%, #636e72 100%);
-      color: white;
-      box-shadow: 0 4px 15px rgba(45, 52, 54, 0.3);
-    }
-
-    .btn-both:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(45, 52, 54, 0.4);
-    }
+    /* btn-product-info と btn-both は btn-start と同じスタイル */
 
     /* === Button Group (3ボタン横並び) === */
     .group-label {
@@ -775,8 +733,8 @@
           <div class="group-label">収集開始</div>
           <div class="btn-group" role="group" aria-label="今すぐ収集を開始">
             <button id="startBtn" class="btn btn-start" aria-label="レビューを今すぐ収集">レビュー</button>
-            <button id="productInfoBtn" class="btn btn-product-info" aria-label="商品情報を今すぐ収集">商品情報</button>
-            <button id="startBothBtn" class="btn btn-both" aria-label="レビューと商品情報を両方収集">両方</button>
+            <button id="productInfoBtn" class="btn btn-start" aria-label="商品情報を今すぐ収集">商品情報</button>
+            <button id="startBothBtn" class="btn btn-start" aria-label="レビューと商品情報を両方収集">両方</button>
           </div>
         </div>
         <button id="stopBtn" class="btn btn-stop" style="display: none;" aria-label="収集を停止">収集停止</button>
@@ -790,8 +748,8 @@
         <div class="group-label">キューに追加</div>
         <div class="btn-group" role="group" aria-label="キューに追加して後で収集">
           <button id="queueBtn" class="btn btn-queue" aria-label="レビューをキューに追加">レビュー</button>
-          <button id="productQueueBtn" class="btn btn-queue btn-product-queue" aria-label="商品情報をキューに追加">商品情報</button>
-          <button id="queueBothBtn" class="btn btn-queue btn-both" aria-label="レビューと商品情報を両方キューに追加">両方</button>
+          <button id="productQueueBtn" class="btn btn-queue" aria-label="商品情報をキューに追加">商品情報</button>
+          <button id="queueBothBtn" class="btn btn-queue" aria-label="レビューと商品情報を両方キューに追加">両方</button>
         </div>
         <div id="message" class="message" role="alert"></div>
       </div>
@@ -803,9 +761,7 @@
           <input type="number" id="rankingCount" value="10" min="1" max="999" aria-label="取得件数">
           <label>件</label>
           <button id="rankingAllBtn" class="btn-all-items">全件</button>
-        </div>
-        <div class="ad-toggle-row" id="adToggleRow" style="display:none;">
-          <label class="ad-toggle-label">
+          <label class="ad-toggle-label" id="adToggleRow" style="display:none;">
             <input type="checkbox" id="excludeAdsCheck">
             <span>広告商品除外</span>
           </label>
@@ -813,15 +769,15 @@
         <div class="group-label">収集開始</div>
         <div class="btn-group" role="group" aria-label="ランキングから今すぐ収集">
           <button id="startRankingBtn" class="btn btn-start" aria-label="ランキングのレビューを収集">レビュー</button>
-          <button id="startRankingProductBtn" class="btn btn-product-info" aria-label="ランキングの商品情報を収集">商品情報</button>
-          <button id="startRankingBothBtn" class="btn btn-both" aria-label="ランキングの両方を収集">両方</button>
+          <button id="startRankingProductBtn" class="btn btn-start" aria-label="ランキングの商品情報を収集">商品情報</button>
+          <button id="startRankingBothBtn" class="btn btn-start" aria-label="ランキングの両方を収集">両方</button>
         </div>
         <div class="section-divider"></div>
         <div class="group-label">キューに追加</div>
         <div class="btn-group" role="group" aria-label="ランキングからキューに追加">
           <button id="addRankingBtn" class="btn btn-queue" aria-label="ランキングのレビューをキューに追加">レビュー</button>
-          <button id="addRankingProductBtn" class="btn btn-queue btn-product-queue" aria-label="ランキングの商品情報をキューに追加">商品情報</button>
-          <button id="addRankingBothBtn" class="btn btn-queue btn-both" aria-label="ランキングの両方をキューに追加">両方</button>
+          <button id="addRankingProductBtn" class="btn btn-queue" aria-label="ランキングの商品情報をキューに追加">商品情報</button>
+          <button id="addRankingBothBtn" class="btn btn-queue" aria-label="ランキングの両方をキューに追加">両方</button>
         </div>
         <div id="rankingMessage" class="message" role="alert"></div>
       </div>
