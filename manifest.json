@@ -48,6 +48,7 @@
     "https://shop.r10s.jp/*",
     "https://tshop.r10s.jp/*",
     "https://thumbnail.image.rakuten.co.jp/*",
+    "https://search.rakuten.co.jp/*",
     "https://www.rakuten.ne.jp/*",
     "https://www.amazon.co.jp/*",
     "https://images-na.ssl-images-amazon.com/*",
@@ -76,6 +77,13 @@
         "https://ranking.rakuten.co.jp/*"
       ],
       "js": ["content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://search.rakuten.co.jp/*"
+      ],
+      "js": ["content-rakuten-search.js"],
       "run_at": "document_idle"
     },
     {

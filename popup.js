@@ -248,6 +248,8 @@ document.addEventListener('DOMContentLoaded', () => {
       tab.url.includes('/bestsellers/') ||
       tab.url.includes('/ranking/')
     );
+    const isAmazonSearchPage = tab.url && tab.url.includes('amazon.co.jp/s');
+    const isRakutenSearchPage = tab.url && tab.url.includes('search.rakuten.co.jp');
 
     // 商品ページの判定 - 商品情報収集ボタン用
     const isAmazonProductPage = tab.url && tab.url.includes('amazon.co.jp') && (
@@ -273,6 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 対応ページの判定
     const isSupportedPage = isRakutenPage || isAmazonPage;
     const isRankingPage = isRakutenRankingPage || isAmazonRankingPage;
+    const isSearchPage = isAmazonSearchPage || isRakutenSearchPage;
 
     if (isRakutenRankingPage) {
       // 楽天ランキングページの場合
@@ -289,8 +292,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (addRankingBothBtn) addRankingBothBtn.disabled = true;
         showRankingMessage('任意のランキングを選んでください', 'info');
       }
-    } else if (isAmazonRankingPage) {
-      // Amazonランキングページの場合
+    } else if (isAmazonRankingPage || isSearchPage) {
+      // Amazonランキング・検索結果ページの場合
       normalMode.style.display = 'none';
       rankingMode.style.display = 'block';
     } else if (!isSupportedPage) {

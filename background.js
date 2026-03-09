@@ -3100,6 +3100,8 @@ async function startSingleCollection(productInfo, tabId) {
 async function fetchRankingProducts(url, count) {
   if (url.includes('amazon.co.jp')) {
     return fetchAmazonRankingProducts(url, count);
+  } else if (url.includes('search.rakuten.co.jp')) {
+    return fetchRakutenSearchProducts(url, count);
   } else {
     return fetchRakutenRankingProducts(url, count);
   }
@@ -3123,6 +3125,50 @@ async function parseRakutenRankingPage(url, count) {
     try {
       const urlObj = new URL(match[1]);
       const cleanUrl = `${urlObj.origin}${urlObj.pathname}`;
+      if (seenUrls.has(cleanUrl)) continue;
+      seenUrls.add(cleanUrl);
+
+      const pathMatch = cleanUrl.match(/item\.rakuten\.co\.jp\/([^\/]+)\/([^\/]+)/);
+      const title = pathMatch ? `${pathMatch[1]} - ${pathMatch[2]}` : '商品';
+
+      products.push({
+        url: cleanUrl,
+        title: title.substring(0, 100),
+        addedAt: new Date().toISOString(),
+        source: 'rakuten'
+      });
+    } catch (e) {
+      continue;
+    }
+  }
+
+  return products;
+}
+
+/**
+ * 楽天検索結果HTMLから商品リストを抽出（キュー操作なし）
+ * @returns {Array} [{url, title, source: 'rakuten'}]
+ */
+async function parseRakutenSearchPage(url, count) {
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8'
+    }
+  });
+  const html = await response.text();
+
+  const products = [];
+  const seenUrls = new Set();
+
+  // 楽天検索結果から商品URLを抽出
+  const linkPattern = /href="(https?:\/\/item\.rakuten\.co\.jp\/[^"?]+)/g;
+  let match;
+
+  while ((match = linkPattern.exec(html)) !== null && products.length < count) {
+    try {
+      const cleanUrl = match[1].replace(/\/$/, '');
       if (seenUrls.has(cleanUrl)) continue;
       seenUrls.add(cleanUrl);
 
@@ -3231,6 +3277,40 @@ async function fetchRakutenRankingProducts(url, count) {
 }
 
 /**
+ * 楽天検索結果からレビューキューに追加
+ */
+async function fetchRakutenSearchProducts(url, count) {
+  try {
+    const products = await parseRakutenSearchPage(url, count);
+    if (products.length === 0) {
+      return { success: false, error: '商品が見つかりませんでした' };
+    }
+
+    const result = await chrome.storage.local.get(['queue']);
+    const queue = result.queue || [];
+    let addedCount = 0;
+    for (const product of products) {
+      if (!queue.some(item => item.url === product.url)) {
+        queue.push(product);
+        addedCount++;
+      }
+    }
+    await chrome.storage.local.set({ queue });
+    forwardToAll({ action: 'queueUpdated' });
+
+    if (addedCount > 0) {
+      log(`楽天検索結果から${addedCount}件の商品をキューに追加しました`, 'success');
+    } else {
+      log('追加する商品がありません（全て重複）', 'info');
+    }
+    return { success: true, addedCount };
+  } catch (error) {
+    log(`楽天検索結果取得エラー: ${error.message}`, 'error');
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Amazonランキングからレビューキューに追加
  */
 async function fetchAmazonRankingProducts(url, count) {
@@ -3271,15 +3351,18 @@ async function fetchAmazonRankingProducts(url, count) {
  */
 async function addRankingToProductQueue(url, count) {
   const isAmazon = url.includes('amazon.co.jp');
-  const isRakuten = url.includes('ranking.rakuten.co.jp');
+  const isRakutenRanking = url.includes('ranking.rakuten.co.jp');
+  const isRakutenSearch = url.includes('search.rakuten.co.jp');
 
-  if (!isAmazon && !isRakuten) {
-    return { success: false, error: 'Amazon・楽天ランキングページのみ対応しています' };
+  if (!isAmazon && !isRakutenRanking && !isRakutenSearch) {
+    return { success: false, error: 'Amazon・楽天のランキング/検索ページのみ対応しています' };
   }
 
   try {
     if (isAmazon) {
       return await addAmazonRankingToProductQueue(url, count);
+    } else if (isRakutenSearch) {
+      return await addRakutenSearchToProductQueue(url, count);
     } else {
       return await addRakutenRankingToProductQueue(url, count);
     }
@@ -3353,6 +3436,41 @@ async function addRakutenRankingToProductQueue(url, count) {
 
   if (addedCount > 0) {
     log(`楽天ランキングから${addedCount}件を商品キューに追加`, 'success', 'product');
+  } else {
+    log('追加する商品がありません（全て重複）', 'info', 'product');
+  }
+
+  return { success: true, addedCount, addedItems, totalCount: queue.length };
+}
+
+/**
+ * 楽天検索結果から商品キュー(batchProductQueue)に楽天URLを追加
+ */
+async function addRakutenSearchToProductQueue(url, count) {
+  const products = await parseRakutenSearchPage(url, count);
+  if (products.length === 0) {
+    return { success: false, error: '商品が見つかりませんでした' };
+  }
+
+  const result = await chrome.storage.local.get(['batchProductQueue']);
+  const queue = result.batchProductQueue || [];
+  const existingUrls = new Set(queue);
+  let addedCount = 0;
+  const addedItems = [];
+  for (const product of products) {
+    if (!existingUrls.has(product.url)) {
+      queue.push(product.url);
+      existingUrls.add(product.url);
+      addedItems.push(product.url);
+      addedCount++;
+    }
+  }
+
+  await chrome.storage.local.set({ batchProductQueue: queue });
+  forwardToAll({ action: 'batchProductQueueUpdated' });
+
+  if (addedCount > 0) {
+    log(`楽天検索結果から${addedCount}件を商品キューに追加`, 'success', 'product');
   } else {
     log('追加する商品がありません（全て重複）', 'info', 'product');
   }
