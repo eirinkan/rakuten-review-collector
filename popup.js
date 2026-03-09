@@ -287,14 +287,20 @@ document.addEventListener('DOMContentLoaded', () => {
       normalMode.style.display = 'none';
       rankingMode.style.display = 'block';
     } else if (!isSupportedPage) {
-      // 楽天・Amazon以外のページ
+      // 楽天・Amazon以外のページ — ボタンを非表示にして案内を表示
       pageWarning.style.display = 'block';
-      startBtn.disabled = true;
-      if (productInfoBtn) productInfoBtn.disabled = true;
-      if (startBothBtn) startBothBtn.disabled = true;
-      queueBtn.disabled = true;
-      if (productQueueBtn) productQueueBtn.disabled = true;
-      if (queueBothBtn) queueBothBtn.disabled = true;
+      const startGroup = document.getElementById('startGroup');
+      if (startGroup) startGroup.style.display = 'none';
+      // キューに追加セクションも非表示
+      const queueLabel = queueBtn ? queueBtn.closest('.btn-group') : null;
+      if (queueLabel) {
+        // btn-groupの前のgroup-labelとsection-dividerも非表示
+        const prev = queueLabel.previousElementSibling;
+        if (prev) prev.style.display = 'none'; // group-label
+        const prev2 = prev ? prev.previousElementSibling : null;
+        if (prev2 && prev2.classList.contains('section-divider')) prev2.style.display = 'none';
+        queueLabel.style.display = 'none';
+      }
     }
 
     // 状態を復元
