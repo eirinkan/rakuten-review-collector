@@ -3822,9 +3822,6 @@ function initCompetitorDiscovery() {
   const searchBtn = document.getElementById('cdSearchBtn');
   const keywordBtn = document.getElementById('cdKeywordBtn');
   const resultMsg = document.getElementById('cdResultMsg');
-  const rakutenCheck = document.getElementById('cdRakutenRanking');
-  const amazonRankingCheck = document.getElementById('cdAmazonRanking');
-  const amazonSearchCheck = document.getElementById('cdAmazonSearch');
   const keywordsSection = document.getElementById('cdKeywordsSection');
   const keywordsBody = document.getElementById('cdKeywordsBody');
   const selectAll = document.getElementById('cdSelectAll');
@@ -3957,7 +3954,7 @@ function initCompetitorDiscovery() {
     }
   }
 
-  // ページを開く
+  // ランキングページを開く
   function openPages() {
     const keyword = searchInput.value.trim();
     if (!keyword) {
@@ -3966,33 +3963,18 @@ function initCompetitorDiscovery() {
     }
 
     const encoded = encodeURIComponent(keyword);
-    let tabCount = 0;
 
-    if (rakutenCheck.checked) {
-      chrome.tabs.create({
-        url: `https://ranking.rakuten.co.jp/search?smd=0&stx=${encoded}&prl=&pru=&rvf=&arf=&vmd=0&ptn=1&srt=1&sgid=`,
-        active: false
-      });
-      tabCount++;
-    }
+    chrome.tabs.create({
+      url: `https://ranking.rakuten.co.jp/search?smd=0&stx=${encoded}&prl=&pru=&rvf=&arf=&vmd=0&ptn=1&srt=1&sgid=`,
+      active: false
+    });
 
-    if (amazonRankingCheck.checked) {
-      chrome.tabs.create({
-        url: `https://www.google.com/search?q=amazon%E3%83%A9%E3%83%B3%E3%82%AD%E3%83%B3%E3%82%B0+${encoded}`,
-        active: false
-      });
-      tabCount++;
-    }
+    chrome.tabs.create({
+      url: `https://www.google.com/search?q=amazon%E3%83%A9%E3%83%B3%E3%82%AD%E3%83%B3%E3%82%B0+${encoded}`,
+      active: false
+    });
 
-    if (amazonSearchCheck.checked) {
-      chrome.tabs.create({
-        url: `https://www.amazon.co.jp/s?k=${encoded}`,
-        active: false
-      });
-      tabCount++;
-    }
-
-    resultMsg.textContent = `「${keyword}」で ${tabCount} 件のタブを開きました`;
+    resultMsg.textContent = `「${keyword}」で楽天ランキング・Amazonランキングを開きました`;
   }
 
   keywordBtn.addEventListener('click', fetchKeywords);
