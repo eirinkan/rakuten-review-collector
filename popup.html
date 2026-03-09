@@ -462,19 +462,25 @@
       animation: pulse 1.5s infinite;
     }
 
-    /* === Button Group (3ボタン横並び) === */
-    .group-label {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+    /* === Button Section (グループ化) === */
+    .btn-section {
+      background: var(--bg-glass);
+      border: 1px solid var(--border-glass);
+      border-radius: 10px;
+      padding: 10px;
+      margin-bottom: 10px;
     }
 
-    /* セクション区切り */
-    .section-gap {
-      height: 16px;
+    .btn-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .group-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      letter-spacing: 0.3px;
     }
 
     .btn-group {
@@ -662,7 +668,7 @@
     <div id="mainContent" class="content" style="display: none;">
       <!-- 通常モード（商品・レビューページ） -->
       <div id="normalMode">
-        <div id="startGroup">
+        <div id="startGroup" class="btn-section">
           <div class="group-label">収集開始</div>
           <div class="btn-group" role="group" aria-label="今すぐ収集を開始">
             <button id="startBtn" class="btn btn-start" aria-label="レビューを今すぐ収集">レビュー</button>
@@ -677,12 +683,13 @@
           </div>
           <div id="productInfoProgressText" class="progress-text"></div>
         </div>
-        <div class="section-gap"></div>
-        <div class="group-label">キューに追加</div>
-        <div class="btn-group" role="group" aria-label="キューに追加して後で収集">
-          <button id="queueBtn" class="btn btn-start" aria-label="レビューをキューに追加">レビュー</button>
-          <button id="productQueueBtn" class="btn btn-start" aria-label="商品情報をキューに追加">商品情報</button>
-          <button id="queueBothBtn" class="btn btn-start" aria-label="レビューと商品情報を両方キューに追加">両方</button>
+        <div class="btn-section">
+          <div class="group-label">キューに追加</div>
+          <div class="btn-group" role="group" aria-label="キューに追加して後で収集">
+            <button id="queueBtn" class="btn btn-start" aria-label="レビューをキューに追加">レビュー</button>
+            <button id="productQueueBtn" class="btn btn-start" aria-label="商品情報をキューに追加">商品情報</button>
+            <button id="queueBothBtn" class="btn btn-start" aria-label="レビューと商品情報を両方キューに追加">両方</button>
+          </div>
         </div>
         <div id="message" class="message" role="alert"></div>
       </div>
@@ -703,18 +710,21 @@
             <span>広告商品除外</span>
           </label>
         </div>
-        <div class="group-label">収集開始</div>
-        <div class="btn-group" role="group" aria-label="ランキングから今すぐ収集">
-          <button id="startRankingBtn" class="btn btn-start" aria-label="ランキングのレビューを収集">レビュー</button>
-          <button id="startRankingProductBtn" class="btn btn-start" aria-label="ランキングの商品情報を収集">商品情報</button>
-          <button id="startRankingBothBtn" class="btn btn-start" aria-label="ランキングの両方を収集">両方</button>
+        <div class="btn-section">
+          <div class="group-label">収集開始</div>
+          <div class="btn-group" role="group" aria-label="ランキングから今すぐ収集">
+            <button id="startRankingBtn" class="btn btn-start" aria-label="ランキングのレビューを収集">レビュー</button>
+            <button id="startRankingProductBtn" class="btn btn-start" aria-label="ランキングの商品情報を収集">商品情報</button>
+            <button id="startRankingBothBtn" class="btn btn-start" aria-label="ランキングの両方を収集">両方</button>
+          </div>
         </div>
-        <div class="section-gap"></div>
-        <div class="group-label">キューに追加</div>
-        <div class="btn-group" role="group" aria-label="ランキングからキューに追加">
-          <button id="addRankingBtn" class="btn btn-start" aria-label="ランキングのレビューをキューに追加">レビュー</button>
-          <button id="addRankingProductBtn" class="btn btn-start" aria-label="ランキングの商品情報をキューに追加">商品情報</button>
-          <button id="addRankingBothBtn" class="btn btn-start" aria-label="ランキングの両方をキューに追加">両方</button>
+        <div class="btn-section">
+          <div class="group-label">キューに追加</div>
+          <div class="btn-group" role="group" aria-label="ランキングからキューに追加">
+            <button id="addRankingBtn" class="btn btn-start" aria-label="ランキングのレビューをキューに追加">レビュー</button>
+            <button id="addRankingProductBtn" class="btn btn-start" aria-label="ランキングの商品情報をキューに追加">商品情報</button>
+            <button id="addRankingBothBtn" class="btn btn-start" aria-label="ランキングの両方をキューに追加">両方</button>
+          </div>
         </div>
         <div id="rankingMessage" class="message" role="alert"></div>
       </div>

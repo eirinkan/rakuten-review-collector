@@ -357,14 +357,11 @@ document.addEventListener('DOMContentLoaded', () => {
           rankingCountInput.style.opacity = '0.25';
           if (countLabel1) countLabel1.style.opacity = '0.25';
           if (countLabel2) countLabel2.style.opacity = '0.25';
-          rankingCountInput.dataset.prevValue = rankingCountInput.value;
-          rankingCountInput.value = 999;
         } else {
           rankingCountInput.disabled = false;
           rankingCountInput.style.opacity = '';
           if (countLabel1) countLabel1.style.opacity = '';
           if (countLabel2) countLabel2.style.opacity = '';
-          rankingCountInput.value = rankingCountInput.dataset.prevValue || 10;
         }
       });
     }
@@ -642,7 +639,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function startRankingCollection() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const count = parseInt(rankingCountInput.value) || 10;
+    const count = rankingAllCheck?.checked ? 999 : (parseInt(rankingCountInput.value) || 10);
 
     startRankingBtn.disabled = true;
     addRankingBtn.disabled = true;
@@ -696,7 +693,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function addRankingToQueue() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const count = parseInt(rankingCountInput.value) || 10;
+    const count = rankingAllCheck?.checked ? 999 : (parseInt(rankingCountInput.value) || 10);
 
     addRankingBtn.disabled = true;
     startRankingBtn.disabled = true;
@@ -722,7 +719,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function addRankingToProductQueue() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const count = parseInt(rankingCountInput.value) || 10;
+    const count = rankingAllCheck?.checked ? 999 : (parseInt(rankingCountInput.value) || 10);
 
     addRankingProductBtn.disabled = true;
     addRankingBtn.disabled = true;
@@ -753,7 +750,7 @@ document.addEventListener('DOMContentLoaded', () => {
    */
   async function startRankingProductCollection() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const count = parseInt(rankingCountInput.value) || 10;
+    const count = rankingAllCheck?.checked ? 999 : (parseInt(rankingCountInput.value) || 10);
 
     if (startRankingProductBtn) startRankingProductBtn.disabled = true;
     startRankingBtn.disabled = true;
@@ -802,7 +799,7 @@ document.addEventListener('DOMContentLoaded', () => {
    */
   async function addRankingBothToQueue() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const count = parseInt(rankingCountInput.value) || 10;
+    const count = rankingAllCheck?.checked ? 999 : (parseInt(rankingCountInput.value) || 10);
 
     // 全ボタン無効化
     if (addRankingBothBtn) addRankingBothBtn.disabled = true;
@@ -847,7 +844,7 @@ document.addEventListener('DOMContentLoaded', () => {
    */
   async function startRankingBothCollection() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const count = parseInt(rankingCountInput.value) || 10;
+    const count = rankingAllCheck?.checked ? 999 : (parseInt(rankingCountInput.value) || 10);
 
     // 全ボタン無効化
     if (startRankingBothBtn) { startRankingBothBtn.disabled = true; startRankingBothBtn.textContent = '準備中...'; }
