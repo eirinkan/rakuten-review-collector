@@ -309,8 +309,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // Amazonランキング・検索結果ページの場合
       normalMode.style.display = 'none';
       rankingMode.style.display = 'block';
-      // 検索結果ページでは広告除外トグルを表示
-      if (isSearchPage && adToggleRow) adToggleRow.style.display = 'flex';
+      // ランキング・検索結果ページでは広告除外トグルを表示
+      if (adToggleRow) adToggleRow.style.display = 'flex';
     } else if (!isSupportedPage) {
       // 楽天・Amazon以外のページ — ボタンを非表示にして案内を表示
       pageWarning.style.display = 'block';
@@ -822,7 +822,8 @@ document.addEventListener('DOMContentLoaded', () => {
       chrome.runtime.sendMessage({
         action: 'addRankingToProductQueue',
         url: tab.url,
-        count: count
+        count: count,
+        excludeAds: excludeAdsCheck?.checked || false
       }, (productRes) => {
         // ボタン復帰
         if (addRankingBothBtn) { addRankingBothBtn.disabled = false; addRankingBothBtn.textContent = '両方'; }
@@ -865,7 +866,8 @@ document.addEventListener('DOMContentLoaded', () => {
       chrome.runtime.sendMessage({
         action: 'addRankingToProductQueue',
         url: tab.url,
-        count: count
+        count: count,
+        excludeAds: excludeAdsCheck?.checked || false
       }, (productRes) => {
         const reviewCount = (reviewRes && reviewRes.success) ? reviewRes.addedCount : 0;
         const productCount = (productRes && productRes.success) ? productRes.addedCount : 0;
