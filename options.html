@@ -2717,32 +2717,41 @@
     .cd-keywords-check-controls {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 4px;
       margin-bottom: 8px;
-      font-size: 12px;
-      color: var(--text-secondary);
+      font-size: 11px;
+      color: var(--text-muted);
+      flex-wrap: wrap;
     }
 
     .cd-check-btn {
-      padding: 3px 8px;
+      padding: 4px 10px;
       background: var(--bg-glass);
       border: 1px solid var(--border-color);
       border-radius: 4px;
       font-size: 11px;
       cursor: pointer;
       transition: background var(--transition);
+      white-space: nowrap;
     }
 
     .cd-check-btn:hover {
       background: var(--bg-hover);
     }
 
+    .cd-check-separator {
+      width: 1px;
+      height: 16px;
+      background: var(--border-color);
+      margin: 0 4px;
+    }
+
     .cd-check-top-input {
-      width: 48px;
-      padding: 2px 4px;
+      width: 40px;
+      padding: 3px 2px;
       border: 1px solid var(--border-color);
       border-radius: 4px;
-      font-size: 12px;
+      font-size: 11px;
       text-align: center;
     }
 
@@ -2880,9 +2889,10 @@
           <div class="cd-keywords-check-controls">
             <button class="cd-check-btn" id="cdCheckAll">全てつける</button>
             <button class="cd-check-btn" id="cdUncheckAll">全て外す</button>
-            <span class="cd-check-top">上位</span>
+            <span class="cd-check-separator"></span>
+            <span>上位</span>
             <input type="number" class="cd-check-top-input" id="cdCheckTopN" value="10" min="1" max="100">
-            <span class="cd-check-top">件つける</span>
+            <span>件</span>
             <button class="cd-check-btn" id="cdCheckTopBtn">適用</button>
           </div>
           <div class="cd-keywords-table-wrap">
