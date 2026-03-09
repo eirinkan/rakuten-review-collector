@@ -84,6 +84,13 @@
       ],
       "js": ["content-amazon.js", "content-amazon-product.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.amazon.co.jp/s*"
+      ],
+      "js": ["content-amazon-search.js"],
+      "run_at": "document_idle"
     }
   ],
   "icons": {
