@@ -334,16 +334,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // 全件ボタン
     if (rankingAllBtn) {
       let allMode = false;
+      const countLabel1 = rankingCountInput.previousElementSibling; // 「上位」ラベル
+      const countLabel2 = rankingCountInput.nextElementSibling; // 「件」ラベル
       rankingAllBtn.addEventListener('click', () => {
         allMode = !allMode;
         if (allMode) {
           rankingAllBtn.classList.add('active');
-          rankingCountInput.disabled = true;
+          rankingCountInput.style.display = 'none';
+          if (countLabel1) countLabel1.style.display = 'none';
+          if (countLabel2) countLabel2.style.display = 'none';
           rankingCountInput.dataset.prevValue = rankingCountInput.value;
           rankingCountInput.value = 999;
         } else {
           rankingAllBtn.classList.remove('active');
-          rankingCountInput.disabled = false;
+          rankingCountInput.style.display = '';
+          if (countLabel1) countLabel1.style.display = '';
+          if (countLabel2) countLabel2.style.display = '';
           rankingCountInput.value = rankingCountInput.dataset.prevValue || 10;
         }
       });
