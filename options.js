@@ -1729,6 +1729,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const time = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     appendToLog({ time, text, type }, category);
   }
+  window._addLog = addLog;
 
   function showStatus(element, type, message) {
     element.textContent = message;
@@ -3977,8 +3978,6 @@ function initCompetitorDiscovery() {
   const addToQueueBtn = document.getElementById('cdAddToQueueBtn');
   const queueCountInput = document.getElementById('cdQueueCount');
   const queueAllBtn = document.getElementById('cdQueueAllBtn');
-  const queueProgress = document.getElementById('cdQueueProgress');
-  const queueProgressText = document.getElementById('cdQueueProgressText');
   let queueAllMode = false;
 
   if (queueAllBtn) {
@@ -3986,7 +3985,6 @@ function initCompetitorDiscovery() {
       queueAllMode = !queueAllMode;
       queueAllBtn.classList.toggle('active', queueAllMode);
       if (queueCountInput) queueCountInput.style.display = queueAllMode ? 'none' : '';
-      // 「件」ラベルも非表示
       const labels = queueAllBtn.parentElement.querySelectorAll('span');
       labels.forEach(s => {
         if (s.textContent === '件' || s.textContent.includes('上位')) {
@@ -4012,14 +4010,13 @@ function initCompetitorDiscovery() {
       });
 
       addToQueueBtn.disabled = true;
-      queueProgress.style.display = 'block';
-      queueProgressText.textContent = '';
+      window._addLog(`キーワード検索からキュー追加開始（${selectedKeywords.length}キーワード）`, 'info');
       let totalAdded = 0;
 
       for (let i = 0; i < selectedKeywords.length; i++) {
         const kw = selectedKeywords[i];
         const url = `https://www.amazon.co.jp/s?k=${encodeURIComponent(kw)}`;
-        queueProgressText.textContent = `(${i + 1}/${selectedKeywords.length}) 「${kw}」を検索中...`;
+        window._addLog(`(${i + 1}/${selectedKeywords.length}) 「${kw}」を検索中...`, 'info');
 
         try {
           const result = await new Promise((resolve, reject) => {
@@ -4033,17 +4030,17 @@ function initCompetitorDiscovery() {
           });
           const added = result.addedCount || 0;
           totalAdded += added;
-          queueProgressText.textContent = `(${i + 1}/${selectedKeywords.length}) 「${kw}」→ ${added}件追加`;
+          window._addLog(`「${kw}」→ ${added}件追加`, 'success');
         } catch (err) {
-          queueProgressText.textContent = `(${i + 1}/${selectedKeywords.length}) 「${kw}」→ エラー: ${err.message}`;
+          window._addLog(`「${kw}」→ エラー: ${err.message}`, 'error');
         }
 
-        // API負荷軽減のため少し待つ
         if (i < selectedKeywords.length - 1) {
           await new Promise(r => setTimeout(r, 1000));
         }
       }
 
+      window._addLog(`完了: ${selectedKeywords.length}キーワードから合計${totalAdded}件追加`, 'success');
       resultMsg.textContent = `${selectedKeywords.length}キーワードから合計 ${totalAdded} 件をキューに追加しました`;
       addToQueueBtn.disabled = false;
     });

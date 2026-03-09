@@ -2679,20 +2679,13 @@
 
     .cd-action-buttons {
       display: flex;
-      flex-direction: column;
       gap: 6px;
       margin-top: 8px;
     }
 
     .cd-amazon-open-btn {
-      width: 100%;
+      flex: 1;
       text-align: center;
-    }
-
-    .cd-queue-add-row {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
     }
 
     .cd-queue-count-row {
@@ -2702,6 +2695,7 @@
       font-size: 12px;
       color: var(--text-secondary);
       justify-content: flex-end;
+      margin-top: 4px;
     }
 
     .cd-queue-count-input {
@@ -2725,18 +2719,6 @@
       color: var(--success);
     }
 
-    .cd-queue-progress {
-      margin-top: 6px;
-      padding: 8px 12px;
-      background: #fff;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 12px;
-      font-family: 'SF Mono', 'Menlo', monospace;
-      color: #333;
-      max-height: 120px;
-      overflow-y: auto;
-    }
 
     .cd-keywords-check-controls {
       display: flex;
@@ -2920,19 +2902,14 @@
             </table>
           </div>
           <div class="cd-action-buttons">
-            <button class="cd-search-btn cd-amazon-open-btn" id="cdOpenSelectedBtn">選択したキーワードでAmazonを開く</button>
-            <div class="cd-queue-add-row">
-              <button class="cd-search-btn cd-amazon-open-btn" id="cdAddToQueueBtn">選択したキーワードのAmazon検索結果からキューに追加</button>
-              <div class="cd-queue-count-row">
-                <span>各キーワード上位</span>
-                <input type="number" class="cd-queue-count-input" id="cdQueueCount" value="5" min="1" max="100">
-                <span>件</span>
-                <button class="cd-check-btn cd-queue-all-btn" id="cdQueueAllBtn">全て</button>
-              </div>
-            </div>
+            <button class="cd-search-btn cd-amazon-open-btn" id="cdOpenSelectedBtn">Amazonを開く</button>
+            <button class="cd-search-btn cd-amazon-open-btn" id="cdAddToQueueBtn">キューに追加</button>
           </div>
-          <div class="cd-queue-progress" id="cdQueueProgress" style="display:none;">
-            <div class="cd-queue-progress-text" id="cdQueueProgressText"></div>
+          <div class="cd-queue-count-row">
+            <span>各キーワード上位</span>
+            <input type="number" class="cd-queue-count-input" id="cdQueueCount" value="5" min="1" max="100">
+            <span>件</span>
+            <button class="cd-check-btn cd-queue-all-btn" id="cdQueueAllBtn">全て</button>
           </div>
         </div>
       </div>
