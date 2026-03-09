@@ -2677,25 +2677,29 @@
       gap: 6px;
     }
 
-    .cd-action-buttons {
+    .cd-action-row {
       display: flex;
+      align-items: center;
       gap: 6px;
       margin-top: 8px;
     }
 
-    .cd-amazon-open-btn {
-      flex: 1;
-      text-align: center;
+    .cd-action-btn {
+      padding: 8px 14px;
+      font-size: 13px;
     }
 
-    .cd-queue-count-row {
-      display: flex;
-      align-items: center;
-      gap: 4px;
+    .cd-action-separator {
+      width: 1px;
+      height: 20px;
+      background: var(--border-subtle);
+      margin: 0 2px;
+    }
+
+    .cd-action-label {
       font-size: 12px;
       color: var(--text-secondary);
-      justify-content: flex-end;
-      margin-top: 4px;
+      white-space: nowrap;
     }
 
     .cd-queue-count-input {
@@ -2901,14 +2905,13 @@
               <tbody id="cdKeywordsBody"></tbody>
             </table>
           </div>
-          <div class="cd-action-buttons">
-            <button class="cd-search-btn cd-amazon-open-btn" id="cdOpenSelectedBtn">Amazonを開く</button>
-            <button class="cd-search-btn cd-amazon-open-btn" id="cdAddToQueueBtn">キューに追加</button>
-          </div>
-          <div class="cd-queue-count-row">
-            <span>各キーワード上位</span>
+          <div class="cd-action-row">
+            <button class="cd-search-btn cd-action-btn" id="cdOpenSelectedBtn">Amazonを開く</button>
+            <button class="cd-search-btn cd-action-btn" id="cdAddToQueueBtn">キューに追加</button>
+            <span class="cd-action-separator"></span>
+            <span class="cd-action-label">上位</span>
             <input type="number" class="cd-queue-count-input" id="cdQueueCount" value="5" min="1" max="100">
-            <span>件</span>
+            <span class="cd-action-label">件</span>
             <button class="cd-check-btn cd-queue-all-btn" id="cdQueueAllBtn">全て</button>
           </div>
         </div>
