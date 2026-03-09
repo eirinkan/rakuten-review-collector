@@ -2672,22 +2672,20 @@
       font-size: 13px;
       font-weight: 600;
       color: var(--text-secondary);
+      flex-wrap: wrap;
+      gap: 6px;
     }
 
-    .cd-keywords-header .cd-search-btn {
-      margin: 0;
-      font-size: 11px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity var(--transition);
+    .cd-amazon-open-btn {
+      width: 100%;
+      margin-top: 8px;
+      text-align: center;
     }
-
 
     .cd-keywords-check-controls {
       display: flex;
       align-items: center;
       gap: 4px;
-      margin-bottom: 8px;
       font-size: 11px;
       color: var(--text-muted);
       flex-wrap: wrap;
@@ -2843,16 +2841,15 @@
         <div class="cd-keywords-section" id="cdKeywordsSection" style="display:none;">
           <div class="cd-keywords-header">
             <span>関連キーワード</span>
-            <button class="cd-search-btn" id="cdOpenSelectedBtn">Amazonを開く</button>
-          </div>
-          <div class="cd-keywords-check-controls">
-            <button class="cd-check-btn" id="cdCheckAll">全てつける</button>
-            <button class="cd-check-btn" id="cdUncheckAll">全て外す</button>
-            <span class="cd-check-separator"></span>
-            <span>上位</span>
-            <input type="number" class="cd-check-top-input" id="cdCheckTopN" value="10" min="1" max="100">
-            <span>件</span>
-            <button class="cd-check-btn" id="cdCheckTopBtn">適用</button>
+            <div class="cd-keywords-check-controls">
+              <button class="cd-check-btn" id="cdCheckAll">全てつける</button>
+              <button class="cd-check-btn" id="cdUncheckAll">全て外す</button>
+              <span class="cd-check-separator"></span>
+              <span>上位</span>
+              <input type="number" class="cd-check-top-input" id="cdCheckTopN" value="10" min="1" max="100">
+              <span>件</span>
+              <button class="cd-check-btn" id="cdCheckTopBtn">適用</button>
+            </div>
           </div>
           <div class="cd-keywords-table-wrap">
             <table class="cd-keywords-table">
@@ -2866,6 +2863,7 @@
               <tbody id="cdKeywordsBody"></tbody>
             </table>
           </div>
+          <button class="cd-search-btn cd-amazon-open-btn" id="cdOpenSelectedBtn">選択したキーワードでAmazonを開く</button>
         </div>
       </div>
     </div>
