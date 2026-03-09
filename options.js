@@ -3820,6 +3820,7 @@ function initCompetitorDiscovery() {
   const body = document.getElementById('cdBody');
   const searchInput = document.getElementById('cdSearchInput');
   const searchBtn = document.getElementById('cdSearchBtn');
+  const keywordBtn = document.getElementById('cdKeywordBtn');
   const resultMsg = document.getElementById('cdResultMsg');
   const rakutenCheck = document.getElementById('cdRakutenRanking');
   const amazonRankingCheck = document.getElementById('cdAmazonRanking');
@@ -3909,8 +3910,14 @@ function initCompetitorDiscovery() {
   }
 
   // キーワード取得
-  async function fetchKeywords(keyword) {
+  async function fetchKeywords() {
+    const keyword = searchInput.value.trim();
+    if (!keyword) {
+      resultMsg.textContent = '一般名称を入力してください';
+      return;
+    }
     try {
+      keywordBtn.disabled = true;
       resultMsg.textContent = 'キーワードを取得中...';
       const resp = await fetch(KEYWORD_API_URL, {
         method: 'POST',
@@ -3920,22 +3927,25 @@ function initCompetitorDiscovery() {
       if (!resp.ok) throw new Error(`API error: ${resp.status}`);
       const data = await resp.json();
       if (data.error) throw new Error(data.error);
-      currentKeywords = data.keywords || [];
+      // 上位10件に絞る
+      currentKeywords = (data.keywords || []).slice(0, 10);
       if (currentKeywords.length > 0) {
         renderKeywords(currentKeywords);
-        resultMsg.textContent += ` — ${currentKeywords.length} 件のキーワードが見つかりました`;
+        resultMsg.textContent = `「${keyword}」の関連キーワード ${currentKeywords.length} 件`;
       } else {
         keywordsSection.style.display = 'none';
+        resultMsg.textContent = 'キーワードが見つかりませんでした';
       }
     } catch (err) {
       console.error('Keyword API error:', err);
-      // キーワード取得に失敗してもページ検索は成功しているので、エラーは控えめに表示
-      resultMsg.textContent += '（キーワード取得に失敗）';
+      resultMsg.textContent = 'キーワード取得に失敗しました';
+    } finally {
+      keywordBtn.disabled = false;
     }
   }
 
-  // 検索実行
-  function executeSearch() {
+  // ページを開く
+  function openPages() {
     const keyword = searchInput.value.trim();
     if (!keyword) {
       resultMsg.textContent = '一般名称を入力してください';
@@ -3945,7 +3955,6 @@ function initCompetitorDiscovery() {
     const encoded = encodeURIComponent(keyword);
     let tabCount = 0;
 
-    // 楽天ランキング検索
     if (rakutenCheck.checked) {
       chrome.tabs.create({
         url: `https://ranking.rakuten.co.jp/search?smd=0&stx=${encoded}&prl=&pru=&rvf=&arf=&vmd=0&ptn=1&srt=1&sgid=`,
@@ -3954,7 +3963,6 @@ function initCompetitorDiscovery() {
       tabCount++;
     }
 
-    // Amazonランキング（Google検索経由）
     if (amazonRankingCheck.checked) {
       chrome.tabs.create({
         url: `https://www.google.com/search?q=amazon%E3%83%A9%E3%83%B3%E3%82%AD%E3%83%B3%E3%82%B0+${encoded}`,
@@ -3963,7 +3971,6 @@ function initCompetitorDiscovery() {
       tabCount++;
     }
 
-    // Amazon検索
     if (amazonSearchCheck.checked) {
       chrome.tabs.create({
         url: `https://www.amazon.co.jp/s?k=${encoded}`,
@@ -3973,13 +3980,11 @@ function initCompetitorDiscovery() {
     }
 
     resultMsg.textContent = `「${keyword}」で ${tabCount} 件のタブを開きました`;
-
-    // 関連キーワード取得（非同期）
-    fetchKeywords(keyword);
   }
 
-  searchBtn.addEventListener('click', executeSearch);
+  keywordBtn.addEventListener('click', fetchKeywords);
+  searchBtn.addEventListener('click', openPages);
   searchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') executeSearch();
+    if (e.key === 'Enter') openPages();
   });
 }
