@@ -3856,33 +3856,17 @@ function initCompetitorDiscovery() {
     });
   }
 
-  // チェック操作ボタン
-  const checkAllBtn = document.getElementById('cdCheckAll');
-  const uncheckAllBtn = document.getElementById('cdUncheckAll');
-  const checkTopBtn = document.getElementById('cdCheckTopBtn');
+  // 上位N件の自動適用
   const checkTopN = document.getElementById('cdCheckTopN');
 
-  if (checkAllBtn) {
-    checkAllBtn.addEventListener('click', () => {
-      keywordsBody.querySelectorAll('.cd-kw-check').forEach(c => c.checked = true);
-      if (selectAll) selectAll.checked = true;
-    });
-  }
-
-  if (uncheckAllBtn) {
-    uncheckAllBtn.addEventListener('click', () => {
-      keywordsBody.querySelectorAll('.cd-kw-check').forEach(c => c.checked = false);
-      if (selectAll) selectAll.checked = false;
-    });
-  }
-
-  if (checkTopBtn && checkTopN) {
-    checkTopBtn.addEventListener('click', () => {
+  if (checkTopN) {
+    const applyTopN = () => {
       const n = parseInt(checkTopN.value) || 10;
       const checks = keywordsBody.querySelectorAll('.cd-kw-check');
       checks.forEach((c, i) => c.checked = i < n);
       if (selectAll) selectAll.checked = (n >= checks.length);
-    });
+    };
+    checkTopN.addEventListener('input', applyTopN);
   }
 
   // 選択したキーワードでAmazon検索を開く
