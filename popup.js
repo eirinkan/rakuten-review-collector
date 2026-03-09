@@ -399,11 +399,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateUI(state) {
     const startGroup = document.getElementById('startGroup');
+    const pageWarningVisible = pageWarning && pageWarning.style.display === 'block';
     if (state.isRunning) {
       if (startGroup) startGroup.style.display = 'none';
       stopBtn.style.display = 'block';
     } else {
-      if (startGroup) startGroup.style.display = 'block';
+      // 非対応ページでは startGroup を非表示のまま維持
+      if (startGroup && !pageWarningVisible) startGroup.style.display = 'block';
       stopBtn.style.display = 'none';
     }
   }
