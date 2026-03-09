@@ -85,9 +85,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const addRankingProductBtn = document.getElementById('addRankingProductBtn');
   const addRankingBothBtn = document.getElementById('addRankingBothBtn');
   const rankingCountInput = document.getElementById('rankingCount');
-  const rankingAllBtn = document.getElementById('rankingAllBtn');
+  const rankingAllCheck = document.getElementById('rankingAllCheck');
   const excludeAdsCheck = document.getElementById('excludeAdsCheck');
   const adToggleRow = document.getElementById('adToggleRow');
+  const adToggleSep = document.getElementById('adToggleSep');
 
   // 広告除外設定の読み込み・保存
   chrome.storage.local.get(['excludeAds'], (result) => {
@@ -311,6 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
       rankingMode.style.display = 'block';
       // ランキング・検索結果ページでは広告除外トグルを表示
       if (adToggleRow) adToggleRow.style.display = 'inline-flex';
+      if (adToggleSep) adToggleSep.style.display = '';
     } else if (!isSupportedPage) {
       // 楽天・Amazon以外のページ — ボタンを非表示にして案内を表示
       pageWarning.style.display = 'block';
@@ -323,7 +325,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const prev = queueLabel.previousElementSibling;
         if (prev) prev.style.display = 'none'; // group-label
         const prev2 = prev ? prev.previousElementSibling : null;
-        if (prev2 && prev2.classList.contains('section-divider')) prev2.style.display = 'none';
+        if (prev2 && (prev2.classList.contains('section-divider') || prev2.classList.contains('section-gap'))) prev2.style.display = 'none';
         queueLabel.style.display = 'none';
       }
     }
@@ -345,22 +347,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (addRankingProductBtn) addRankingProductBtn.addEventListener('click', addRankingToProductQueue);
     if (addRankingBothBtn) addRankingBothBtn.addEventListener('click', addRankingBothToQueue);
 
-    // 全件ボタン
-    if (rankingAllBtn) {
-      let allMode = false;
+    // 全件チェックボックス
+    if (rankingAllCheck) {
       const countLabel1 = rankingCountInput.previousElementSibling; // 「上位」ラベル
       const countLabel2 = rankingCountInput.nextElementSibling; // 「件」ラベル
-      rankingAllBtn.addEventListener('click', () => {
-        allMode = !allMode;
-        if (allMode) {
-          rankingAllBtn.classList.add('active');
+      rankingAllCheck.addEventListener('change', () => {
+        if (rankingAllCheck.checked) {
           rankingCountInput.style.display = 'none';
           if (countLabel1) countLabel1.style.display = 'none';
           if (countLabel2) countLabel2.style.display = 'none';
           rankingCountInput.dataset.prevValue = rankingCountInput.value;
           rankingCountInput.value = 999;
         } else {
-          rankingAllBtn.classList.remove('active');
           rankingCountInput.style.display = '';
           if (countLabel1) countLabel1.style.display = '';
           if (countLabel2) countLabel2.style.display = '';

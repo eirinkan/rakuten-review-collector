@@ -218,7 +218,7 @@
 
     /* === Content === */
     .content {
-      padding: 16px 16px 10px;
+      padding: 14px 16px 8px;
     }
 
     /* === Buttons === */
@@ -272,31 +272,6 @@
       transform: translateY(-2px);
       box-shadow: 0 6px 20px rgba(220, 53, 69, 0.4);
     }
-
-    .btn-queue {
-      background: rgba(45, 52, 54, 0.08);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      color: var(--text-primary);
-      border: 1px solid rgba(45, 52, 54, 0.2);
-    }
-
-    .btn-queue:hover {
-      background: rgba(45, 52, 54, 0.15);
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
-    }
-
-    [data-theme="dark"] .btn-queue {
-      color: var(--text-primary);
-      background: rgba(255, 255, 255, 0.08);
-      border-color: rgba(255, 255, 255, 0.15);
-    }
-
-    [data-theme="dark"] .btn-queue:hover {
-      background: rgba(255, 255, 255, 0.15);
-    }
-
 
     .btn:disabled {
       background: rgba(128, 128, 128, 0.3);
@@ -395,7 +370,7 @@
       padding: 10px 12px;
       border-radius: 8px;
       font-size: 13px;
-      margin-top: 10px;
+      margin-top: 8px;
       display: none;
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
@@ -423,8 +398,8 @@
       color: #5fd47a;
     }
 
-    /* === Ranking Input === */
-    .ranking-input {
+    /* === Options Row (件数・全件・広告除外) === */
+    .options-row {
       display: flex;
       align-items: center;
       gap: 8px;
@@ -434,9 +409,9 @@
       color: var(--text-secondary);
     }
 
-    .ranking-input input {
+    .options-row input[type="number"] {
       width: 64px;
-      padding: 10px 12px;
+      padding: 8px 10px;
       background: var(--bg-glass);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
@@ -447,57 +422,40 @@
       font-weight: 600;
       color: var(--text-primary);
       transition: all var(--transition);
-      min-height: 44px;
+      min-height: 38px;
     }
 
-    .btn-all-items {
-      padding: 8px 16px;
-      background: var(--bg-glass);
-      border: 1px solid var(--border-glass);
-      border-radius: 8px;
-      font-size: 13px;
-      color: var(--text-secondary);
-      cursor: pointer;
-      transition: all var(--transition);
-      min-height: 44px;
-    }
-
-    .btn-all-items:hover {
-      background: var(--bg-glass-hover);
-    }
-
-    .btn-all-items.active {
-      background: rgba(9, 132, 227, 0.15);
-      border-color: rgba(9, 132, 227, 0.4);
-      color: #0984e3;
-      font-weight: 600;
-      padding: 10px 24px;
-      font-size: 14px;
-    }
-
-    .ranking-input input:focus {
+    .options-row input[type="number"]:focus {
       outline: none;
       border-color: var(--rakuten-red);
       box-shadow: 0 0 0 3px rgba(191, 0, 0, 0.15);
     }
 
-    .ranking-input input:focus-visible {
+    .options-row input[type="number"]:focus-visible {
       outline: 2px solid #4A90D9;
       outline-offset: 2px;
     }
 
-    .ad-toggle-label {
+    .option-check {
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 4px;
       font-size: 12px;
       color: var(--text-secondary);
       cursor: pointer;
-      margin-left: 4px;
+      white-space: nowrap;
     }
 
-    .ad-toggle-label input[type="checkbox"] {
+    .option-check input[type="checkbox"] {
       accent-color: var(--rakuten-red);
+      cursor: pointer;
+    }
+
+    .options-separator {
+      width: 1px;
+      height: 18px;
+      background: var(--border-glass);
+      flex-shrink: 0;
     }
 
     /* === Animations === */
@@ -510,8 +468,6 @@
       animation: pulse 1.5s infinite;
     }
 
-    /* btn-product-info と btn-both は btn-start と同じスタイル */
-
     /* === Button Group (3ボタン横並び) === */
     .group-label {
       font-size: 11px;
@@ -522,21 +478,14 @@
       letter-spacing: 0.5px;
     }
 
-    /* セクション区切り線 */
-    .section-divider {
-      height: 1px;
-      background: var(--border-glass);
-      margin: 12px 0;
-    }
-
-    [data-theme="dark"] .section-divider {
-      background: rgba(255, 255, 255, 0.08);
+    /* セクション区切り */
+    .section-gap {
+      height: 16px;
     }
 
     .btn-group {
       display: flex;
       gap: 8px;
-      margin-bottom: 12px;
     }
 
     .btn-group .btn {
@@ -555,7 +504,7 @@
     /* === Progress Bar === */
     .progress-container {
       display: none;
-      margin-top: 10px;
+      margin-top: 8px;
     }
 
     .progress-bar-wrapper {
@@ -654,22 +603,15 @@
       color: #ff6b7a;
     }
 
-    /* === User Info Bar === */
-    .user-info {
+    /* === Footer (ログアウト・バージョン) === */
+    .footer {
       display: none;
       align-items: center;
       justify-content: center;
       gap: 8px;
-      padding: 8px 12px;
+      padding: 4px 12px 6px;
       font-size: 12px;
       color: var(--text-muted);
-    }
-
-    .user-email {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      max-width: 150px;
     }
 
     .btn-logout {
@@ -678,10 +620,9 @@
       color: var(--text-muted);
       font-size: 12px;
       cursor: pointer;
-      padding: 8px 12px;
+      padding: 4px 8px;
       border-radius: 6px;
       transition: all var(--transition);
-      min-height: 36px;
     }
 
     .btn-logout:hover {
@@ -690,11 +631,9 @@
     }
 
     .version-info {
-      text-align: center;
       font-size: 9px;
       color: var(--text-muted);
       opacity: 0.5;
-      padding: 2px 0 6px;
     }
 
   </style>
@@ -744,24 +683,28 @@
           </div>
           <div id="productInfoProgressText" class="progress-text"></div>
         </div>
-        <div class="section-divider"></div>
+        <div class="section-gap"></div>
         <div class="group-label">キューに追加</div>
         <div class="btn-group" role="group" aria-label="キューに追加して後で収集">
-          <button id="queueBtn" class="btn btn-queue" aria-label="レビューをキューに追加">レビュー</button>
-          <button id="productQueueBtn" class="btn btn-queue" aria-label="商品情報をキューに追加">商品情報</button>
-          <button id="queueBothBtn" class="btn btn-queue" aria-label="レビューと商品情報を両方キューに追加">両方</button>
+          <button id="queueBtn" class="btn btn-start" aria-label="レビューをキューに追加">レビュー</button>
+          <button id="productQueueBtn" class="btn btn-start" aria-label="商品情報をキューに追加">商品情報</button>
+          <button id="queueBothBtn" class="btn btn-start" aria-label="レビューと商品情報を両方キューに追加">両方</button>
         </div>
         <div id="message" class="message" role="alert"></div>
       </div>
 
       <!-- ランキングモード -->
       <div id="rankingMode" style="display: none;">
-        <div class="ranking-input">
+        <div class="options-row">
           <label for="rankingCount">上位</label>
           <input type="number" id="rankingCount" value="10" min="1" max="999" aria-label="取得件数">
           <label>件</label>
-          <button id="rankingAllBtn" class="btn-all-items">全件</button>
-          <label class="ad-toggle-label" id="adToggleRow" style="display:none;">
+          <label class="option-check">
+            <input type="checkbox" id="rankingAllCheck">
+            <span>全件</span>
+          </label>
+          <span class="options-separator" id="adToggleSep" style="display:none;"></span>
+          <label class="option-check" id="adToggleRow" style="display:none;">
             <input type="checkbox" id="excludeAdsCheck">
             <span>広告商品除外</span>
           </label>
@@ -772,12 +715,12 @@
           <button id="startRankingProductBtn" class="btn btn-start" aria-label="ランキングの商品情報を収集">商品情報</button>
           <button id="startRankingBothBtn" class="btn btn-start" aria-label="ランキングの両方を収集">両方</button>
         </div>
-        <div class="section-divider"></div>
+        <div class="section-gap"></div>
         <div class="group-label">キューに追加</div>
         <div class="btn-group" role="group" aria-label="ランキングからキューに追加">
-          <button id="addRankingBtn" class="btn btn-queue" aria-label="ランキングのレビューをキューに追加">レビュー</button>
-          <button id="addRankingProductBtn" class="btn btn-queue" aria-label="ランキングの商品情報をキューに追加">商品情報</button>
-          <button id="addRankingBothBtn" class="btn btn-queue" aria-label="ランキングの両方をキューに追加">両方</button>
+          <button id="addRankingBtn" class="btn btn-start" aria-label="ランキングのレビューをキューに追加">レビュー</button>
+          <button id="addRankingProductBtn" class="btn btn-start" aria-label="ランキングの商品情報をキューに追加">商品情報</button>
+          <button id="addRankingBothBtn" class="btn btn-start" aria-label="ランキングの両方をキューに追加">両方</button>
         </div>
         <div id="rankingMessage" class="message" role="alert"></div>
       </div>
@@ -793,12 +736,11 @@
       </div>
     </div>
 
-    <!-- ユーザー情報バー -->
-    <div id="userInfo" class="user-info">
+    <!-- フッター（ログアウト・バージョン） -->
+    <div id="userInfo" class="footer">
       <button id="logoutBtn" class="btn-logout">ログアウト</button>
+      <span class="version-info" id="versionInfo"></span>
     </div>
-
-    <div class="version-info" id="versionInfo"></div>
   </div>
 
   <script src="popup.js"></script>
