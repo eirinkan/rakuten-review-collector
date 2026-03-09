@@ -3863,11 +3863,40 @@ function initCompetitorDiscovery() {
     selectAll.checked = true;
   }
 
-  // 全選択/全解除
+  // ヘッダーチェックボックス（全選択/全解除）
   if (selectAll) {
     selectAll.addEventListener('change', () => {
       const checks = keywordsBody.querySelectorAll('.cd-kw-check');
       checks.forEach(c => c.checked = selectAll.checked);
+    });
+  }
+
+  // チェック操作ボタン
+  const checkAllBtn = document.getElementById('cdCheckAll');
+  const uncheckAllBtn = document.getElementById('cdUncheckAll');
+  const checkTopBtn = document.getElementById('cdCheckTopBtn');
+  const checkTopN = document.getElementById('cdCheckTopN');
+
+  if (checkAllBtn) {
+    checkAllBtn.addEventListener('click', () => {
+      keywordsBody.querySelectorAll('.cd-kw-check').forEach(c => c.checked = true);
+      if (selectAll) selectAll.checked = true;
+    });
+  }
+
+  if (uncheckAllBtn) {
+    uncheckAllBtn.addEventListener('click', () => {
+      keywordsBody.querySelectorAll('.cd-kw-check').forEach(c => c.checked = false);
+      if (selectAll) selectAll.checked = false;
+    });
+  }
+
+  if (checkTopBtn && checkTopN) {
+    checkTopBtn.addEventListener('click', () => {
+      const n = parseInt(checkTopN.value) || 10;
+      const checks = keywordsBody.querySelectorAll('.cd-kw-check');
+      checks.forEach((c, i) => c.checked = i < n);
+      if (selectAll) selectAll.checked = (n >= checks.length);
     });
   }
 
@@ -3911,8 +3940,8 @@ function initCompetitorDiscovery() {
       if (!resp.ok) throw new Error(`API error: ${resp.status}`);
       const data = await resp.json();
       if (data.error) throw new Error(data.error);
-      // 上位10件に絞る
-      currentKeywords = (data.keywords || []).slice(0, 10);
+      // 上位30件に絞る
+      currentKeywords = (data.keywords || []).slice(0, 30);
       if (currentKeywords.length > 0) {
         renderKeywords(currentKeywords);
         resultMsg.textContent = `「${keyword}」の関連キーワード ${currentKeywords.length} 件`;

@@ -85,6 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const addRankingProductBtn = document.getElementById('addRankingProductBtn');
   const addRankingBothBtn = document.getElementById('addRankingBothBtn');
   const rankingCountInput = document.getElementById('rankingCount');
+  const rankingAllBtn = document.getElementById('rankingAllBtn');
 
   // ログインボタン
   if (loginBtn) {
@@ -329,6 +330,24 @@ document.addEventListener('DOMContentLoaded', () => {
     addRankingBtn.addEventListener('click', addRankingToQueue);
     if (addRankingProductBtn) addRankingProductBtn.addEventListener('click', addRankingToProductQueue);
     if (addRankingBothBtn) addRankingBothBtn.addEventListener('click', addRankingBothToQueue);
+
+    // 全件ボタン
+    if (rankingAllBtn) {
+      let allMode = false;
+      rankingAllBtn.addEventListener('click', () => {
+        allMode = !allMode;
+        if (allMode) {
+          rankingAllBtn.classList.add('active');
+          rankingCountInput.disabled = true;
+          rankingCountInput.dataset.prevValue = rankingCountInput.value;
+          rankingCountInput.value = 999;
+        } else {
+          rankingAllBtn.classList.remove('active');
+          rankingCountInput.disabled = false;
+          rankingCountInput.value = rankingCountInput.dataset.prevValue || 10;
+        }
+      });
+    }
 
     // バックグラウンドからのメッセージ
     chrome.runtime.onMessage.addListener(handleMessage);
