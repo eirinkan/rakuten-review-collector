@@ -3973,6 +3973,82 @@ function initCompetitorDiscovery() {
     resultMsg.textContent = `「${keyword}」で楽天ランキング・Amazonランキングを開きました`;
   }
 
+  // 選択したキーワードのAmazon検索結果からキューに追加
+  const addToQueueBtn = document.getElementById('cdAddToQueueBtn');
+  const queueCountInput = document.getElementById('cdQueueCount');
+  const queueAllBtn = document.getElementById('cdQueueAllBtn');
+  const queueProgress = document.getElementById('cdQueueProgress');
+  const queueProgressText = document.getElementById('cdQueueProgressText');
+  let queueAllMode = false;
+
+  if (queueAllBtn) {
+    queueAllBtn.addEventListener('click', () => {
+      queueAllMode = !queueAllMode;
+      queueAllBtn.classList.toggle('active', queueAllMode);
+      if (queueCountInput) queueCountInput.style.display = queueAllMode ? 'none' : '';
+      // 「件」ラベルも非表示
+      const labels = queueAllBtn.parentElement.querySelectorAll('span');
+      labels.forEach(s => {
+        if (s.textContent === '件' || s.textContent.includes('上位')) {
+          s.style.display = queueAllMode ? 'none' : '';
+        }
+      });
+    });
+  }
+
+  if (addToQueueBtn) {
+    addToQueueBtn.addEventListener('click', async () => {
+      const checks = keywordsBody.querySelectorAll('.cd-kw-check:checked');
+      if (checks.length === 0) {
+        resultMsg.textContent = 'キーワードを選択してください';
+        return;
+      }
+
+      const count = queueAllMode ? 999 : (parseInt(queueCountInput.value) || 5);
+      const selectedKeywords = [];
+      checks.forEach(c => {
+        const kw = currentKeywords[parseInt(c.dataset.index)];
+        if (kw) selectedKeywords.push(kw.keyword);
+      });
+
+      addToQueueBtn.disabled = true;
+      queueProgress.style.display = 'block';
+      queueProgressText.textContent = '';
+      let totalAdded = 0;
+
+      for (let i = 0; i < selectedKeywords.length; i++) {
+        const kw = selectedKeywords[i];
+        const url = `https://www.amazon.co.jp/s?k=${encodeURIComponent(kw)}`;
+        queueProgressText.textContent = `(${i + 1}/${selectedKeywords.length}) 「${kw}」を検索中...`;
+
+        try {
+          const result = await new Promise((resolve, reject) => {
+            chrome.runtime.sendMessage(
+              { action: 'fetchRanking', url, count },
+              (resp) => {
+                if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+                else resolve(resp);
+              }
+            );
+          });
+          const added = result.addedCount || 0;
+          totalAdded += added;
+          queueProgressText.textContent = `(${i + 1}/${selectedKeywords.length}) 「${kw}」→ ${added}件追加`;
+        } catch (err) {
+          queueProgressText.textContent = `(${i + 1}/${selectedKeywords.length}) 「${kw}」→ エラー: ${err.message}`;
+        }
+
+        // API負荷軽減のため少し待つ
+        if (i < selectedKeywords.length - 1) {
+          await new Promise(r => setTimeout(r, 1000));
+        }
+      }
+
+      resultMsg.textContent = `${selectedKeywords.length}キーワードから合計 ${totalAdded} 件をキューに追加しました`;
+      addToQueueBtn.disabled = false;
+    });
+  }
+
   searchBtn.addEventListener('click', openPages);
   searchInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') fetchKeywords();
