@@ -3969,6 +3969,6 @@ function initCompetitorDiscovery() {
   keywordBtn.addEventListener('click', fetchKeywords);
   searchBtn.addEventListener('click', openPages);
   searchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') openPages();
+    if (e.key === 'Enter') fetchKeywords();
   });
 }
