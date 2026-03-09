@@ -252,14 +252,14 @@
     }
 
     .btn-start {
-      background: linear-gradient(135deg, var(--success) 0%, var(--success-light) 100%);
+      background: linear-gradient(135deg, #2d3436 0%, #636e72 100%);
       color: white;
-      box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+      box-shadow: 0 4px 15px rgba(45, 52, 54, 0.3);
     }
 
     .btn-start:hover {
       transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+      box-shadow: 0 6px 20px rgba(45, 52, 54, 0.4);
     }
 
     .btn-stop {
@@ -274,37 +274,43 @@
     }
 
     .btn-queue {
-      background: var(--bg-glass);
+      background: rgba(45, 52, 54, 0.08);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       color: var(--text-primary);
-      border: 1px solid var(--border-glass);
+      border: 1px solid rgba(45, 52, 54, 0.2);
     }
 
     .btn-queue:hover {
-      background: var(--bg-glass-hover);
+      background: rgba(45, 52, 54, 0.15);
       transform: translateY(-2px);
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
     }
 
     [data-theme="dark"] .btn-queue {
       color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    [data-theme="dark"] .btn-queue:hover {
+      background: rgba(255, 255, 255, 0.15);
     }
 
     .btn-product-queue {
-      background: rgba(108, 92, 231, 0.12);
-      border: 1px solid rgba(108, 92, 231, 0.3);
+      background: rgba(45, 52, 54, 0.08);
+      border: 1px solid rgba(45, 52, 54, 0.2);
     }
 
     .btn-product-queue:hover {
-      background: rgba(108, 92, 231, 0.2);
+      background: rgba(45, 52, 54, 0.15);
       transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(108, 92, 231, 0.15);
+      box-shadow: 0 6px 20px rgba(45, 52, 54, 0.1);
     }
 
     [data-theme="dark"] .btn-product-queue {
-      background: rgba(108, 92, 231, 0.15);
-      border-color: rgba(108, 92, 231, 0.3);
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.15);
     }
 
     .btn:disabled {
@@ -526,26 +532,26 @@
 
     /* === Product Info Button === */
     .btn-product-info {
-      background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+      background: linear-gradient(135deg, #2d3436 0%, #636e72 100%);
       color: white;
-      box-shadow: 0 4px 15px rgba(108, 92, 231, 0.3);
+      box-shadow: 0 4px 15px rgba(45, 52, 54, 0.3);
     }
 
     .btn-product-info:hover {
       transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(108, 92, 231, 0.4);
+      box-shadow: 0 6px 20px rgba(45, 52, 54, 0.4);
     }
 
-    /* === Both Button (青系グラデーション) === */
+    /* === Both Button === */
     .btn-both {
-      background: linear-gradient(135deg, #0984e3 0%, #74b9ff 100%);
+      background: linear-gradient(135deg, #2d3436 0%, #636e72 100%);
       color: white;
-      box-shadow: 0 4px 15px rgba(9, 132, 227, 0.3);
+      box-shadow: 0 4px 15px rgba(45, 52, 54, 0.3);
     }
 
     .btn-both:hover {
       transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(9, 132, 227, 0.4);
+      box-shadow: 0 6px 20px rgba(45, 52, 54, 0.4);
     }
 
     /* === Button Group (3ボタン横並び) === */
@@ -801,7 +807,7 @@
         <div class="ad-toggle-row" id="adToggleRow" style="display:none;">
           <label class="ad-toggle-label">
             <input type="checkbox" id="excludeAdsCheck">
-            <span>広告を除外</span>
+            <span>広告商品除外</span>
           </label>
         </div>
         <div class="group-label">収集開始</div>
