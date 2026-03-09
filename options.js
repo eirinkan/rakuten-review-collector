@@ -62,6 +62,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // クイックスタートガイド（初回表示）
   initQuickStartGuide();
 
+  // 競合発見セクション
+  initCompetitorDiscovery();
+
   // DOM要素
   const queueRemaining = document.getElementById('queueRemaining');
   const spreadsheetLinkRakutenEl = document.getElementById('spreadsheetLinkRakuten');
@@ -3807,3 +3810,79 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
 });
+
+// === 競合発見セクション ===
+function initCompetitorDiscovery() {
+  const toggleHeader = document.getElementById('cdToggleHeader');
+  const toggleIcon = document.getElementById('cdToggleIcon');
+  const body = document.getElementById('cdBody');
+  const searchInput = document.getElementById('cdSearchInput');
+  const searchBtn = document.getElementById('cdSearchBtn');
+  const resultMsg = document.getElementById('cdResultMsg');
+  const rakutenCheck = document.getElementById('cdRakutenRanking');
+  const amazonRankingCheck = document.getElementById('cdAmazonRanking');
+  const amazonSearchCheck = document.getElementById('cdAmazonSearch');
+
+  if (!toggleHeader || !body) return;
+
+  // 開閉状態を復元
+  chrome.storage.local.get('cdSectionOpen', (data) => {
+    if (data.cdSectionOpen) {
+      body.classList.add('open');
+      toggleIcon.classList.add('open');
+    }
+  });
+
+  // 開閉トグル
+  toggleHeader.addEventListener('click', () => {
+    const isOpen = body.classList.toggle('open');
+    toggleIcon.classList.toggle('open');
+    chrome.storage.local.set({ cdSectionOpen: isOpen });
+  });
+
+  // 検索実行
+  function executeSearch() {
+    const keyword = searchInput.value.trim();
+    if (!keyword) {
+      resultMsg.textContent = '一般名称を入力してください';
+      return;
+    }
+
+    const encoded = encodeURIComponent(keyword);
+    let tabCount = 0;
+
+    // 楽天ランキング検索
+    if (rakutenCheck.checked) {
+      chrome.tabs.create({
+        url: `https://ranking.rakuten.co.jp/search?smd=0&stx=${encoded}&prl=&pru=&rvf=&arf=&vmd=0&ptn=1&srt=1&sgid=`,
+        active: false
+      });
+      tabCount++;
+    }
+
+    // Amazonランキング（Google検索経由）
+    if (amazonRankingCheck.checked) {
+      chrome.tabs.create({
+        url: `https://www.google.com/search?q=amazon%E3%83%A9%E3%83%B3%E3%82%AD%E3%83%B3%E3%82%B0+${encoded}`,
+        active: false
+      });
+      tabCount++;
+    }
+
+    // Amazon検索
+    if (amazonSearchCheck.checked) {
+      chrome.tabs.create({
+        url: `https://www.amazon.co.jp/s?k=${encoded}`,
+        active: false
+      });
+      tabCount++;
+    }
+
+    resultMsg.textContent = `「${keyword}」で ${tabCount} 件のタブを開きました`;
+  }
+
+  searchBtn.addEventListener('click', executeSearch);
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') executeSearch();
+  });
+}
