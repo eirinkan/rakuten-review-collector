@@ -3813,6 +3813,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // === 競合発見セクション ===
 function initCompetitorDiscovery() {
+  const KEYWORD_API_URL = 'https://keyword-planner.delicate-mode-0b52.workers.dev';
+
   const toggleHeader = document.getElementById('cdToggleHeader');
   const toggleIcon = document.getElementById('cdToggleIcon');
   const body = document.getElementById('cdBody');
@@ -3822,6 +3824,10 @@ function initCompetitorDiscovery() {
   const rakutenCheck = document.getElementById('cdRakutenRanking');
   const amazonRankingCheck = document.getElementById('cdAmazonRanking');
   const amazonSearchCheck = document.getElementById('cdAmazonSearch');
+  const keywordsSection = document.getElementById('cdKeywordsSection');
+  const keywordsBody = document.getElementById('cdKeywordsBody');
+  const selectAll = document.getElementById('cdSelectAll');
+  const openSelectedBtn = document.getElementById('cdOpenSelectedBtn');
 
   if (!toggleHeader || !body) return;
 
@@ -3839,6 +3845,94 @@ function initCompetitorDiscovery() {
     toggleIcon.classList.toggle('open');
     chrome.storage.local.set({ cdSectionOpen: isOpen });
   });
+
+  // 競合性の日本語変換
+  function competitionLabel(c) {
+    if (c === 'HIGH') return '高';
+    if (c === 'MEDIUM') return '中';
+    if (c === 'LOW') return '低';
+    return '—';
+  }
+
+  function competitionClass(c) {
+    if (c === 'HIGH') return 'cd-competition-high';
+    if (c === 'MEDIUM') return 'cd-competition-medium';
+    if (c === 'LOW') return 'cd-competition-low';
+    return '';
+  }
+
+  // キーワードテーブルを描画
+  function renderKeywords(keywords) {
+    keywordsBody.innerHTML = '';
+    keywords.forEach((kw, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="checkbox" class="cd-kw-check" data-index="${i}" checked></td>
+        <td>${kw.keyword}</td>
+        <td>${kw.volume.toLocaleString()}</td>
+        <td><span class="${competitionClass(kw.competition)}">${competitionLabel(kw.competition)}</span></td>
+      `;
+      keywordsBody.appendChild(tr);
+    });
+    keywordsSection.style.display = 'block';
+    selectAll.checked = true;
+  }
+
+  // 全選択/全解除
+  if (selectAll) {
+    selectAll.addEventListener('change', () => {
+      const checks = keywordsBody.querySelectorAll('.cd-kw-check');
+      checks.forEach(c => c.checked = selectAll.checked);
+    });
+  }
+
+  // 選択したキーワードでAmazon検索を開く
+  let currentKeywords = [];
+  if (openSelectedBtn) {
+    openSelectedBtn.addEventListener('click', () => {
+      const checks = keywordsBody.querySelectorAll('.cd-kw-check:checked');
+      let opened = 0;
+      checks.forEach(c => {
+        const kw = currentKeywords[parseInt(c.dataset.index)];
+        if (kw) {
+          chrome.tabs.create({
+            url: `https://www.amazon.co.jp/s?k=${encodeURIComponent(kw.keyword)}`,
+            active: false
+          });
+          opened++;
+        }
+      });
+      if (opened > 0) {
+        resultMsg.textContent = `${opened} 件のAmazon検索タブを開きました`;
+      }
+    });
+  }
+
+  // キーワード取得
+  async function fetchKeywords(keyword) {
+    try {
+      resultMsg.textContent = 'キーワードを取得中...';
+      const resp = await fetch(KEYWORD_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword }),
+      });
+      if (!resp.ok) throw new Error(`API error: ${resp.status}`);
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error);
+      currentKeywords = data.keywords || [];
+      if (currentKeywords.length > 0) {
+        renderKeywords(currentKeywords);
+        resultMsg.textContent += ` — ${currentKeywords.length} 件のキーワードが見つかりました`;
+      } else {
+        keywordsSection.style.display = 'none';
+      }
+    } catch (err) {
+      console.error('Keyword API error:', err);
+      // キーワード取得に失敗してもページ検索は成功しているので、エラーは控えめに表示
+      resultMsg.textContent += '（キーワード取得に失敗）';
+    }
+  }
 
   // 検索実行
   function executeSearch() {
@@ -3879,6 +3973,9 @@ function initCompetitorDiscovery() {
     }
 
     resultMsg.textContent = `「${keyword}」で ${tabCount} 件のタブを開きました`;
+
+    // 関連キーワード取得（非同期）
+    fetchKeywords(keyword);
   }
 
   searchBtn.addEventListener('click', executeSearch);
