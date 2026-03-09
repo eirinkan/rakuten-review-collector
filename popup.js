@@ -51,6 +51,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // テーマ管理を初期化
   new ThemeManager();
 
+  // バージョン情報を表示
+  const versionInfo = document.getElementById('versionInfo');
+  if (versionInfo) {
+    const manifest = chrome.runtime.getManifest();
+    versionInfo.textContent = `v${manifest.version}`;
+  }
+
   const loginScreen = document.getElementById('loginScreen');
   const mainContent = document.getElementById('mainContent');
   const loginBtn = document.getElementById('loginBtn');
