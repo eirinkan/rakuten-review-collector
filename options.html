@@ -1143,7 +1143,7 @@
 
     .url-textarea::placeholder {
       color: var(--text-muted);
-      font-size: 11px;
+      font-size: 13px;
     }
 
     .btn-add {
@@ -2574,12 +2574,10 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      cursor: pointer;
-      user-select: none;
     }
 
     .competitor-discovery-header h2 {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 600;
       color: var(--text-primary);
       display: flex;
@@ -2587,23 +2585,10 @@
       gap: 8px;
     }
 
-    .competitor-discovery-toggle {
-      font-size: 12px;
-      color: var(--text-muted);
-      transition: transform var(--transition);
-    }
-
-    .competitor-discovery-toggle.open {
-      transform: rotate(180deg);
-    }
 
     .competitor-discovery-body {
-      display: none;
-      margin-top: 12px;
-    }
-
-    .competitor-discovery-body.open {
       display: block;
+      margin-top: 12px;
     }
 
     .cd-search-row {
@@ -2619,7 +2604,7 @@
       border-radius: 8px;
       background: var(--bg-input);
       color: var(--text-primary);
-      font-size: 14px;
+      font-size: 13px;
       outline: none;
       transition: border-color var(--transition);
     }
@@ -2630,6 +2615,7 @@
 
     .cd-search-input::placeholder {
       color: var(--text-muted);
+      font-size: 13px;
     }
 
     .cd-search-btn {
@@ -2884,11 +2870,10 @@
 
     <!-- 対象 -->
     <div class="competitor-discovery">
-      <div class="competitor-discovery-header" id="cdToggleHeader">
+      <div class="competitor-discovery-header">
         <h2>対象</h2>
-        <span class="competitor-discovery-toggle" id="cdToggleIcon">▼</span>
       </div>
-      <div class="competitor-discovery-body" id="cdBody">
+      <div class="competitor-discovery-body">
         <div class="cd-search-row">
           <input type="text" class="cd-search-input" id="cdSearchInput" placeholder="一般名称を入力（例：自動ゴミ箱）">
           <button class="cd-search-btn" id="cdSearchBtn">ランキングページを開く</button>

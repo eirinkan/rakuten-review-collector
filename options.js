@@ -3813,9 +3813,6 @@ document.addEventListener('DOMContentLoaded', () => {
 function initCompetitorDiscovery() {
   const KEYWORD_API_URL = 'https://keyword-planner.delicate-mode-0b52.workers.dev';
 
-  const toggleHeader = document.getElementById('cdToggleHeader');
-  const toggleIcon = document.getElementById('cdToggleIcon');
-  const body = document.getElementById('cdBody');
   const searchInput = document.getElementById('cdSearchInput');
   const searchBtn = document.getElementById('cdSearchBtn');
   const resultMsg = document.getElementById('cdResultMsg');
@@ -3834,23 +3831,6 @@ function initCompetitorDiscovery() {
       chrome.storage.local.set({ excludeAds: excludeAdsCheck.checked });
     });
   }
-
-  if (!toggleHeader || !body) return;
-
-  // 開閉状態を復元
-  chrome.storage.local.get('cdSectionOpen', (data) => {
-    if (data.cdSectionOpen) {
-      body.classList.add('open');
-      toggleIcon.classList.add('open');
-    }
-  });
-
-  // 開閉トグル
-  toggleHeader.addEventListener('click', () => {
-    const isOpen = body.classList.toggle('open');
-    toggleIcon.classList.toggle('open');
-    chrome.storage.local.set({ cdSectionOpen: isOpen });
-  });
 
   // キーワードテーブルを描画
   function renderKeywords(keywords) {
