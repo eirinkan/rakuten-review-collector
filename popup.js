@@ -353,15 +353,17 @@ document.addEventListener('DOMContentLoaded', () => {
       const countLabel2 = rankingCountInput.nextElementSibling; // 「件」ラベル
       rankingAllCheck.addEventListener('change', () => {
         if (rankingAllCheck.checked) {
-          rankingCountInput.style.display = 'none';
-          if (countLabel1) countLabel1.style.display = 'none';
-          if (countLabel2) countLabel2.style.display = 'none';
+          rankingCountInput.disabled = true;
+          rankingCountInput.style.opacity = '0.25';
+          if (countLabel1) countLabel1.style.opacity = '0.25';
+          if (countLabel2) countLabel2.style.opacity = '0.25';
           rankingCountInput.dataset.prevValue = rankingCountInput.value;
           rankingCountInput.value = 999;
         } else {
-          rankingCountInput.style.display = '';
-          if (countLabel1) countLabel1.style.display = '';
-          if (countLabel2) countLabel2.style.display = '';
+          rankingCountInput.disabled = false;
+          rankingCountInput.style.opacity = '';
+          if (countLabel1) countLabel1.style.opacity = '';
+          if (countLabel2) countLabel2.style.opacity = '';
           rankingCountInput.value = rankingCountInput.dataset.prevValue || 10;
         }
       });
