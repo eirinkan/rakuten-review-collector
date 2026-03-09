@@ -670,16 +670,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       return title;
     } else if (source === 'rakuten') {
+      // 商品情報キューと同じ形式: shop/itemcode/
+      if (item.url) {
+        const pathMatch = item.url.match(/item\.rakuten\.co\.jp\/(.+)/);
+        if (pathMatch) return pathMatch[1];
+      }
       const itemCode = extractRakutenItemCodeFromUrl(item.url);
-      // titleが商品管理番号と同じ、または「商品」の場合は商品管理番号だけ表示
-      if (!title || title === itemCode || title === '商品') {
-        return itemCode || title || '商品';
-      }
-      // 正常な場合: 商品管理番号：商品名
-      if (itemCode) {
-        return `${itemCode}：${title}`;
-      }
-      return title;
+      return itemCode || title || '商品';
     }
     return title || '商品';
   }
