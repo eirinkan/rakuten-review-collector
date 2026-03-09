@@ -36,8 +36,25 @@
     .shushu-queue-btn.added:hover {
       background: #067d62;
     }
+    .shushu-ad-badge {
+      display: inline-block;
+      background: #e67e22;
+      color: #fff;
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      margin-left: 4px;
+      vertical-align: middle;
+    }
   `;
   document.head.appendChild(style);
+
+  // 広告判定: data-card-type="cpc" または data-track-doc-type="rpp"
+  function isAdCard(card) {
+    if (card.getAttribute('data-card-type') === 'cpc') return true;
+    if (card.getAttribute('data-track-doc-type') === 'rpp') return true;
+    return false;
+  }
 
   // 商品カードからURLを取得
   function getProductUrl(card) {
@@ -54,7 +71,7 @@
   // 商品カードからタイトルを取得
   function getTitle(card) {
     const el = card.querySelector('.searchresultitem .content.title a, .dui-card .title-link--3Ho6z, a[href*="item.rakuten.co.jp"]');
-    return el ? el.textContent.trim().substring(0, 100) : '';
+    return el ? el.textContent.trim().replace(/^\[PR\]\s*/, '').substring(0, 100) : '';
   }
 
   // キューに追加
@@ -91,8 +108,9 @@
     // 楽天検索結果の商品カードセレクタ
     const cards = document.querySelectorAll('.searchresultitem:not(.shushu-processed), .dui-card:not(.shushu-processed), [data-ratid]:not(.shushu-processed)');
 
-    chrome.storage.local.get(['queue'], (result) => {
+    chrome.storage.local.get(['queue', 'excludeAds'], (result) => {
       const queue = result.queue || [];
+      const excludeAds = result.excludeAds || false;
       const queuedUrls = new Set(
         queue.filter(item => item.source === 'rakuten')
              .map(item => item.url)
@@ -103,6 +121,11 @@
 
         const url = getProductUrl(card);
         if (!url) return;
+
+        const isAd = isAdCard(card);
+
+        // 広告除外設定ONの場合、広告商品はスキップ
+        if (excludeAds && isAd) return;
 
         const title = getTitle(card);
 
@@ -124,6 +147,14 @@
             e.stopPropagation();
             addToQueue(url, title, btn);
           });
+        }
+
+        // 広告バッジを追加
+        if (isAd) {
+          const badge = document.createElement('span');
+          badge.className = 'shushu-ad-badge';
+          badge.textContent = '広告';
+          btn.appendChild(badge);
         }
 
         priceArea.parentNode.insertBefore(btn, priceArea.nextSibling);

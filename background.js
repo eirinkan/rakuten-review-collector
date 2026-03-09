@@ -754,13 +754,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case 'fetchRanking':
-      fetchRankingProducts(message.url, message.count)
+      fetchRankingProducts(message.url, message.count, message.excludeAds)
         .then(result => sendResponse(result))
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
 
     case 'addRankingToProductQueue':
-      addRankingToProductQueue(message.url, message.count)
+      addRankingToProductQueue(message.url, message.count, message.excludeAds)
         .then(result => sendResponse(result))
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
@@ -3097,11 +3097,11 @@ async function startSingleCollection(productInfo, tabId) {
  * ランキングから商品を取得してキューに追加
  * URLに応じて楽天またはAmazonのパーサーを呼び出す
  */
-async function fetchRankingProducts(url, count) {
+async function fetchRankingProducts(url, count, excludeAds = false) {
   if (url.includes('amazon.co.jp')) {
-    return fetchAmazonRankingProducts(url, count);
+    return fetchAmazonRankingProducts(url, count, excludeAds);
   } else if (url.includes('search.rakuten.co.jp')) {
-    return fetchRakutenSearchProducts(url, count);
+    return fetchRakutenSearchProducts(url, count, excludeAds);
   } else {
     return fetchRakutenRankingProducts(url, count);
   }
@@ -3149,7 +3149,7 @@ async function parseRakutenRankingPage(url, count) {
  * 楽天検索結果HTMLから商品リストを抽出（キュー操作なし）
  * @returns {Array} [{url, title, source: 'rakuten'}]
  */
-async function parseRakutenSearchPage(url, count) {
+async function parseRakutenSearchPage(url, count, excludeAds = false) {
   const response = await fetch(url, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -3162,6 +3162,16 @@ async function parseRakutenSearchPage(url, count) {
   const products = [];
   const seenUrls = new Set();
 
+  // 広告除外: data-card-type="cpc" ブロック内の商品URLを収集
+  const adUrls = new Set();
+  if (excludeAds) {
+    const adBlockPattern = /data-card-type="cpc"[^]*?href="(https?:\/\/item\.rakuten\.co\.jp\/[^"?]+)/gi;
+    let adMatch;
+    while ((adMatch = adBlockPattern.exec(html)) !== null) {
+      adUrls.add(adMatch[1].replace(/\/$/, ''));
+    }
+  }
+
   // 楽天検索結果から商品URLを抽出
   const linkPattern = /href="(https?:\/\/item\.rakuten\.co\.jp\/[^"?]+)/g;
   let match;
@@ -3170,6 +3180,7 @@ async function parseRakutenSearchPage(url, count) {
     try {
       const cleanUrl = match[1].replace(/\/$/, '');
       if (seenUrls.has(cleanUrl)) continue;
+      if (excludeAds && adUrls.has(cleanUrl)) continue;
       seenUrls.add(cleanUrl);
 
       const pathMatch = cleanUrl.match(/item\.rakuten\.co\.jp\/([^\/]+)\/([^\/]+)/);
@@ -3193,7 +3204,7 @@ async function parseRakutenSearchPage(url, count) {
  * AmazonランキングHTMLからASIN/商品リストを抽出（キュー操作なし）
  * @returns {Array} [{url, title, asin, source: 'amazon'}]
  */
-async function parseAmazonRankingPage(url, count) {
+async function parseAmazonRankingPage(url, count, excludeAds = false) {
   const response = await fetch(url, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -3206,12 +3217,32 @@ async function parseAmazonRankingPage(url, count) {
   const products = [];
   const seenAsins = new Set();
 
+  // 検索結果ページの場合、広告ASINを収集して除外用に使う
+  const adAsins = new Set();
+  if (excludeAds && url.includes('/s?')) {
+    // AdHolderクラスを持つ要素のdata-asinを抽出
+    const adPattern = /class="[^"]*AdHolder[^"]*"[^>]*data-asin="([A-Z0-9]{10})"|data-asin="([A-Z0-9]{10})"[^>]*class="[^"]*AdHolder[^"]*"/gi;
+    let adMatch;
+    while ((adMatch = adPattern.exec(html)) !== null) {
+      const asin = (adMatch[1] || adMatch[2] || '').toUpperCase();
+      if (asin) adAsins.add(asin);
+    }
+    // スポンサーラベルの近くにあるASINも検出
+    const sponsoredPattern = /data-asin="([A-Z0-9]{10})"[^]*?puis-sponsored-label-text/gi;
+    let spMatch;
+    while ((spMatch = sponsoredPattern.exec(html)) !== null) {
+      const asin = spMatch[1].toUpperCase();
+      if (asin) adAsins.add(asin);
+    }
+  }
+
   // data-asin属性からASINを抽出
   const asinPattern = /data-asin="([A-Z0-9]{10})"/g;
   let match;
   while ((match = asinPattern.exec(html)) !== null && products.length < count) {
     const asin = match[1].toUpperCase();
     if (!asin || seenAsins.has(asin)) continue;
+    if (excludeAds && adAsins.has(asin)) continue;
     seenAsins.add(asin);
     products.push({
       url: `https://www.amazon.co.jp/dp/${asin}`,
@@ -3228,6 +3259,7 @@ async function parseAmazonRankingPage(url, count) {
     while ((match = dpPattern.exec(html)) !== null && products.length < count) {
       const asin = match[1].toUpperCase();
       if (!asin || seenAsins.has(asin)) continue;
+      if (excludeAds && adAsins.has(asin)) continue;
       seenAsins.add(asin);
       products.push({
         url: `https://www.amazon.co.jp/dp/${asin}`,
@@ -3279,9 +3311,9 @@ async function fetchRakutenRankingProducts(url, count) {
 /**
  * 楽天検索結果からレビューキューに追加
  */
-async function fetchRakutenSearchProducts(url, count) {
+async function fetchRakutenSearchProducts(url, count, excludeAds = false) {
   try {
-    const products = await parseRakutenSearchPage(url, count);
+    const products = await parseRakutenSearchPage(url, count, excludeAds);
     if (products.length === 0) {
       return { success: false, error: '商品が見つかりませんでした' };
     }
@@ -3313,9 +3345,9 @@ async function fetchRakutenSearchProducts(url, count) {
 /**
  * Amazonランキングからレビューキューに追加
  */
-async function fetchAmazonRankingProducts(url, count) {
+async function fetchAmazonRankingProducts(url, count, excludeAds = false) {
   try {
-    const products = await parseAmazonRankingPage(url, count);
+    const products = await parseAmazonRankingPage(url, count, excludeAds);
     if (products.length === 0) {
       return { success: false, error: '商品が見つかりませんでした' };
     }
@@ -3349,7 +3381,7 @@ async function fetchAmazonRankingProducts(url, count) {
  * Amazon: ASINを直接追加
  * 楽天: 商品URLからASINは取得不可のため、URLベースで追加（商品情報収集はスキップ）
  */
-async function addRankingToProductQueue(url, count) {
+async function addRankingToProductQueue(url, count, excludeAds = false) {
   const isAmazon = url.includes('amazon.co.jp');
   const isRakutenRanking = url.includes('ranking.rakuten.co.jp');
   const isRakutenSearch = url.includes('search.rakuten.co.jp');
@@ -3360,9 +3392,9 @@ async function addRankingToProductQueue(url, count) {
 
   try {
     if (isAmazon) {
-      return await addAmazonRankingToProductQueue(url, count);
+      return await addAmazonRankingToProductQueue(url, count, excludeAds);
     } else if (isRakutenSearch) {
-      return await addRakutenSearchToProductQueue(url, count);
+      return await addRakutenSearchToProductQueue(url, count, excludeAds);
     } else {
       return await addRakutenRankingToProductQueue(url, count);
     }
@@ -3376,8 +3408,8 @@ async function addRankingToProductQueue(url, count) {
  * Amazonランキングから商品キュー(batchProductQueue)にASINを追加
  * ※ レビューキュー(queue)には触れない
  */
-async function addAmazonRankingToProductQueue(url, count) {
-  const products = await parseAmazonRankingPage(url, count);
+async function addAmazonRankingToProductQueue(url, count, excludeAds = false) {
+  const products = await parseAmazonRankingPage(url, count, excludeAds);
   if (products.length === 0) {
     return { success: false, error: '商品が見つかりませんでした' };
   }
@@ -3446,8 +3478,8 @@ async function addRakutenRankingToProductQueue(url, count) {
 /**
  * 楽天検索結果から商品キュー(batchProductQueue)に楽天URLを追加
  */
-async function addRakutenSearchToProductQueue(url, count) {
-  const products = await parseRakutenSearchPage(url, count);
+async function addRakutenSearchToProductQueue(url, count, excludeAds = false) {
+  const products = await parseRakutenSearchPage(url, count, excludeAds);
   if (products.length === 0) {
     return { success: false, error: '商品が見つかりませんでした' };
   }

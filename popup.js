@@ -86,6 +86,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const addRankingBothBtn = document.getElementById('addRankingBothBtn');
   const rankingCountInput = document.getElementById('rankingCount');
   const rankingAllBtn = document.getElementById('rankingAllBtn');
+  const excludeAdsCheck = document.getElementById('excludeAdsCheck');
+  const adToggleRow = document.getElementById('adToggleRow');
+
+  // 広告除外設定の読み込み・保存
+  chrome.storage.local.get(['excludeAds'], (result) => {
+    if (excludeAdsCheck) excludeAdsCheck.checked = result.excludeAds || false;
+  });
+  if (excludeAdsCheck) {
+    excludeAdsCheck.addEventListener('change', () => {
+      chrome.storage.local.set({ excludeAds: excludeAdsCheck.checked });
+    });
+  }
 
   // ログインボタン
   if (loginBtn) {
@@ -297,6 +309,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // Amazonランキング・検索結果ページの場合
       normalMode.style.display = 'none';
       rankingMode.style.display = 'block';
+      // 検索結果ページでは広告除外トグルを表示
+      if (isSearchPage && adToggleRow) adToggleRow.style.display = 'flex';
     } else if (!isSupportedPage) {
       // 楽天・Amazon以外のページ — ボタンを非表示にして案内を表示
       pageWarning.style.display = 'block';
@@ -636,7 +650,8 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.runtime.sendMessage({
       action: 'fetchRanking',
       url: tab.url,
-      count: count
+      count: count,
+      excludeAds: excludeAdsCheck?.checked || false
     }, (response) => {
       // キューの状態を確認
       chrome.storage.local.get(['queue'], (result) => {
@@ -688,7 +703,8 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.runtime.sendMessage({
       action: 'fetchRanking',
       url: tab.url,
-      count: count
+      count: count,
+      excludeAds: excludeAdsCheck?.checked || false
     }, (response) => {
       addRankingBtn.disabled = false;
       startRankingBtn.disabled = false;
@@ -714,7 +730,8 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.runtime.sendMessage({
       action: 'addRankingToProductQueue',
       url: tab.url,
-      count: count
+      count: count,
+      excludeAds: excludeAdsCheck?.checked || false
     }, (response) => {
       addRankingProductBtn.disabled = false;
       addRankingBtn.disabled = false;
@@ -746,7 +763,8 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.runtime.sendMessage({
       action: 'addRankingToProductQueue',
       url: tab.url,
-      count: count
+      count: count,
+      excludeAds: excludeAdsCheck?.checked || false
     }, (response) => {
       if (response && response.success && response.addedCount > 0) {
         showRankingMessage(`${response.addedCount}件追加、商品情報収集開始...`, 'success');
@@ -797,7 +815,8 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.runtime.sendMessage({
       action: 'fetchRanking',
       url: tab.url,
-      count: count
+      count: count,
+      excludeAds: excludeAdsCheck?.checked || false
     }, (reviewRes) => {
       // 商品キューに追加
       chrome.runtime.sendMessage({
@@ -839,7 +858,8 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.runtime.sendMessage({
       action: 'fetchRanking',
       url: tab.url,
-      count: count
+      count: count,
+      excludeAds: excludeAdsCheck?.checked || false
     }, (reviewRes) => {
       // 商品キューに追加
       chrome.runtime.sendMessage({

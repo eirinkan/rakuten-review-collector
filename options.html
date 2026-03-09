@@ -2703,6 +2703,23 @@
       white-space: nowrap;
     }
 
+    .cd-ad-toggle {
+      margin-bottom: 8px;
+    }
+
+    .cd-ad-toggle-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+
+    .cd-ad-toggle-label input[type="checkbox"] {
+      accent-color: var(--info);
+    }
+
     .cd-queue-count-input {
       width: 48px;
       padding: 3px 6px;
@@ -2879,6 +2896,12 @@
         <div class="cd-search-row">
           <input type="text" class="cd-search-input" id="cdSearchInput" placeholder="一般名称を入力（例：自動ゴミ箱）">
           <button class="cd-search-btn" id="cdSearchBtn">ランキングページを開く</button>
+        </div>
+        <div class="cd-ad-toggle">
+          <label class="cd-ad-toggle-label">
+            <input type="checkbox" id="cdExcludeAds">
+            <span>広告（スポンサー）を除外</span>
+          </label>
         </div>
         <div class="cd-result-msg" id="cdResultMsg"></div>
         <div class="cd-keywords-section" id="cdKeywordsSection" style="display:none;">

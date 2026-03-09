@@ -3823,6 +3823,17 @@ function initCompetitorDiscovery() {
   const keywordsBody = document.getElementById('cdKeywordsBody');
   const selectAll = document.getElementById('cdSelectAll');
   const openSelectedBtn = document.getElementById('cdOpenSelectedBtn');
+  const excludeAdsCheck = document.getElementById('cdExcludeAds');
+
+  // 広告除外設定の読み込み・保存
+  if (excludeAdsCheck) {
+    chrome.storage.local.get(['excludeAds'], (result) => {
+      excludeAdsCheck.checked = result.excludeAds || false;
+    });
+    excludeAdsCheck.addEventListener('change', () => {
+      chrome.storage.local.set({ excludeAds: excludeAdsCheck.checked });
+    });
+  }
 
   if (!toggleHeader || !body) return;
 
@@ -4018,7 +4029,7 @@ function initCompetitorDiscovery() {
         try {
           const result = await new Promise((resolve, reject) => {
             chrome.runtime.sendMessage(
-              { action: 'fetchRanking', url, count },
+              { action: 'fetchRanking', url, count, excludeAds: excludeAdsCheck?.checked || false },
               (resp) => {
                 if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
                 else resolve(resp);

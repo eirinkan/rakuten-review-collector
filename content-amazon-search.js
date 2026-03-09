@@ -43,8 +43,25 @@
     .shushu-queue-btn.added:hover {
       background: #067d62;
     }
+    .shushu-ad-badge {
+      display: inline-block;
+      background: #e67e22;
+      color: #fff;
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      margin-left: 4px;
+      vertical-align: middle;
+    }
   `;
   document.head.appendChild(style);
+
+  // 広告判定: AdHolderクラスまたはスポンサーラベルの存在
+  function isAdCard(card) {
+    if (card.classList.contains('AdHolder')) return true;
+    if (card.querySelector('.puis-sponsored-label-text')) return true;
+    return false;
+  }
 
   // 商品カードからASINを取得
   function getAsin(card) {
@@ -93,9 +110,10 @@
   function injectButtons() {
     const cards = document.querySelectorAll('[data-asin]:not([data-asin=""]):not(.shushu-processed)');
 
-    // 現在のキューを取得して重複判定
-    chrome.storage.local.get(['queue'], (result) => {
+    // 現在のキューと設定を取得
+    chrome.storage.local.get(['queue', 'excludeAds'], (result) => {
       const queue = result.queue || [];
+      const excludeAds = result.excludeAds || false;
       const queuedAsins = new Set(
         queue.filter(item => item.source === 'amazon' && item.productId)
              .map(item => item.productId)
@@ -107,7 +125,11 @@
         const asin = getAsin(card);
         if (!asin || asin.length !== 10) return;
 
-        // 広告・スポンサー枠はスキップ（必要に応じて収集したい場合もあるのでスキップしない）
+        const isAd = isAdCard(card);
+
+        // 広告除外設定ONの場合、広告商品はスキップ
+        if (excludeAds && isAd) return;
+
         const title = getTitle(card);
 
         // ボタンの挿入先を探す
@@ -129,6 +151,14 @@
             e.stopPropagation();
             addToQueue(asin, title, btn);
           });
+        }
+
+        // 広告バッジを追加
+        if (isAd) {
+          const badge = document.createElement('span');
+          badge.className = 'shushu-ad-badge';
+          badge.textContent = '広告';
+          btn.appendChild(badge);
         }
 
         // 価格の後ろに挿入
