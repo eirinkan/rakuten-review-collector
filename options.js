@@ -3847,21 +3847,6 @@ function initCompetitorDiscovery() {
     chrome.storage.local.set({ cdSectionOpen: isOpen });
   });
 
-  // 競合性の日本語変換
-  function competitionLabel(c) {
-    if (c === 'HIGH') return '高';
-    if (c === 'MEDIUM') return '中';
-    if (c === 'LOW') return '低';
-    return '—';
-  }
-
-  function competitionClass(c) {
-    if (c === 'HIGH') return 'cd-competition-high';
-    if (c === 'MEDIUM') return 'cd-competition-medium';
-    if (c === 'LOW') return 'cd-competition-low';
-    return '';
-  }
-
   // キーワードテーブルを描画
   function renderKeywords(keywords) {
     keywordsBody.innerHTML = '';
@@ -3871,7 +3856,6 @@ function initCompetitorDiscovery() {
         <td><input type="checkbox" class="cd-kw-check" data-index="${i}" checked></td>
         <td>${kw.keyword}</td>
         <td>${kw.volume.toLocaleString()}</td>
-        <td><span class="${competitionClass(kw.competition)}">${competitionLabel(kw.competition)}</span></td>
       `;
       keywordsBody.appendChild(tr);
     });
