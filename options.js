@@ -3820,7 +3820,6 @@ function initCompetitorDiscovery() {
   const body = document.getElementById('cdBody');
   const searchInput = document.getElementById('cdSearchInput');
   const searchBtn = document.getElementById('cdSearchBtn');
-  const keywordBtn = document.getElementById('cdKeywordBtn');
   const resultMsg = document.getElementById('cdResultMsg');
   const keywordsSection = document.getElementById('cdKeywordsSection');
   const keywordsBody = document.getElementById('cdKeywordsBody');
@@ -3927,7 +3926,6 @@ function initCompetitorDiscovery() {
       return;
     }
     try {
-      keywordBtn.disabled = true;
       resultMsg.textContent = 'キーワードを取得中...';
       const resp = await fetch(KEYWORD_API_URL, {
         method: 'POST',
@@ -3949,8 +3947,6 @@ function initCompetitorDiscovery() {
     } catch (err) {
       console.error('Keyword API error:', err);
       resultMsg.textContent = 'キーワード取得に失敗しました';
-    } finally {
-      keywordBtn.disabled = false;
     }
   }
 
@@ -3977,7 +3973,6 @@ function initCompetitorDiscovery() {
     resultMsg.textContent = `「${keyword}」で楽天ランキング・Amazonランキングを開きました`;
   }
 
-  keywordBtn.addEventListener('click', fetchKeywords);
   searchBtn.addEventListener('click', openPages);
   searchInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') fetchKeywords();
